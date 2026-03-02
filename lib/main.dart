@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:pluto_grid/pluto_grid.dart';
+import 'package:stat_flow/features/dataset/dataset.dart';
+import 'package:stat_flow/features/statistics/statistic_calculator.dart';
+import 'package:stat_flow/features/statistics/statistic_result.dart';
+import 'package:stat_flow/features/statistics/statistic_widget.dart';
 import 'package:stat_flow/features/table/pluto_grid_converter.dart';
 import 'features/file_import/file_import.dart';
 
@@ -18,11 +23,20 @@ class MyApp extends StatelessWidget {
         primarySwatch: Colors.blue,
         useMaterial3: true,
       ),
+      localizationsDelegates: [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: [
+        const Locale('ru', 'RU'),
+      ],
       home: const FileLoaderScreen(),
     );
   }
 }
 
+/// Главный экран приложения для загрузки и отображения файлов.
 class FileLoaderScreen extends StatefulWidget {
   const FileLoaderScreen({super.key});
 
@@ -40,6 +54,17 @@ class _FileLoaderScreenState extends State<FileLoaderScreen> {
   // Данные для таблицы
   PlutoGridData? _plutoGridData; 
 
+  // Статистические данные
+  StatisticResult? _statisticResult;
+
+  // Состояние для показа статистики
+  bool _showStatistics = false;
+  
+  // Состояние для плавающего окна
+  Offset _windowPosition = const Offset(80, 80);
+  Size _windowSize = const Size(720, 520);
+  final Size _minSize = const Size(380, 280);
+
   /// Загружает файл и обновляет состояние
   /// 
   /// Показывает индикатор загрузки, обрабатывает ошибки
@@ -47,25 +72,32 @@ class _FileLoaderScreenState extends State<FileLoaderScreen> {
   Future<void> _loadFile() async {
     setState(() {
       _isLoading = true;
+      _showStatistics = false;
     });
 
     try {
-      /// Загружаем датасет
+      // Загружаем датасет
       final loadedDataset = await _fileLoader.getDataset();
       
       // Конвертируем в формат PlutoGridData
       final converter = PlutoGridConverter();
       final gridData = converter.convert(loadedDataset);
-      
+
+      final calculator = StatisticCalculator();
+      final numColumn = loadedDataset.columns
+        .where((column) => column.type == ColumnType.numeric).toList();
+      final values = numColumn.first.values.map((v) => v as num?).toList();
+      final result = calculator.calculate(values);
+      debugPrint(result.toString());
       setState(() {
         _isLoading = false;
         _plutoGridData = gridData;
+        _statisticResult = result;
+        _windowPosition = const Offset(80, 80);
+        _windowSize = const Size(720, 520);
       });
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
-      
+      setState(() => _isLoading = false);
       _showErrorSnackBar(e);
     }
   }
@@ -86,7 +118,9 @@ class _FileLoaderScreenState extends State<FileLoaderScreen> {
     );
   }
 
-  /// Строит экран приветствия с кнопкой загрузки
+  /// Строит экран приветствия с кнопкой загрузки.
+  ///
+  /// Отображается, когда данные еще не загружены.
   Widget _buildEmptyState() {
     return Center(
       child: Padding(
@@ -101,7 +135,6 @@ class _FileLoaderScreenState extends State<FileLoaderScreen> {
             ),
             
             const SizedBox(height: 20),
-            
             const Text(
               'Загрузите CSV файл',
               style: TextStyle(
@@ -110,9 +143,7 @@ class _FileLoaderScreenState extends State<FileLoaderScreen> {
               ),
               textAlign: TextAlign.center,
             ),
-            
             const SizedBox(height: 10),
-            
             const Text(
               'Выберите CSV файл для загрузки и анализа данных',
               style: TextStyle(
@@ -121,9 +152,7 @@ class _FileLoaderScreenState extends State<FileLoaderScreen> {
               ),
               textAlign: TextAlign.center,
             ),
-            
             const SizedBox(height: 40),
-            
             ElevatedButton(
               onPressed: _loadFile,
               style: ElevatedButton.styleFrom(
@@ -148,22 +177,118 @@ class _FileLoaderScreenState extends State<FileLoaderScreen> {
     );
   }
 
+  /// Строит плавающее окно с таблицей данных.
+  ///
+  /// Окно можно:
+  /// - Перетаскивать за заголовок
+  /// - Закрыть кнопкой закрытия
+  /// - Изменять размер через отдельный хендлер
+  Widget _buildFloatingTable() {
+    return Positioned(
+      left: _windowPosition.dx,
+      top: _windowPosition.dy,
+      width: _windowSize.width,
+      height: _windowSize.height,
+      child: Material(
+        elevation: 8, // Тень для эффекта "парения"
+        borderRadius: BorderRadius.circular(12),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            // Заголовок + перетаскивание
+            GestureDetector(
+              // Перетаскивание за заголовок
+              onPanUpdate: (details) {
+                setState(() {
+                  _windowPosition += details.delta; // Обновляем позицию  
+                });
+              },
+              child: Container(
+                color: Colors.blueGrey[800],
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        "Таблица данных",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white),
+                      onPressed: () {
+                        setState(() {
+                          _plutoGridData = null; // Закрываем окно
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
 
-  /// Строит таблицу с загруженными данными
-  Widget _buildTableView() {
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: PlutoGrid(
-        columns: _plutoGridData!.columns,
-        rows: _plutoGridData!.rows,
-        columnGroups: _plutoGridData!.columnGroups,
-        onLoaded: (PlutoGridOnLoadedEvent event) {
-          // Сохраняем ссылку на stateManager если понадобится
-          // final stateManager = event.stateManager;
+            // Таблица
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: PlutoGrid(
+                  columns: _plutoGridData!.columns,
+                  rows: _plutoGridData!.rows,
+                  columnGroups: _plutoGridData!.columnGroups,
+                  onLoaded: (event) {},
+                  configuration: const PlutoGridConfiguration(
+                    columnSize: PlutoGridColumnSizeConfig(
+                      autoSizeMode: PlutoAutoSizeMode.scale, // Автомасштабирование колонок
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Строит хендлер для изменения размера плавающего окна.
+  ///
+  /// Расположен в правом нижнем углу окна и позволяет
+  /// изменять размер с учетом минимальных ограничений.
+  Widget _buildResizeHandle() {
+    return Positioned(
+      right: 0,
+      bottom: 0,
+      child: GestureDetector(
+        // Изменение размера
+        onPanUpdate: (details) {
+          setState(() {
+            double newWidth = _windowSize.width + details.delta.dx;
+            double newHeight = _windowSize.height + details.delta.dy;
+
+            // Ограничения минимального размера
+            newWidth = newWidth.clamp(_minSize.width, double.infinity);
+            newHeight = newHeight.clamp(_minSize.height, double.infinity);
+
+            _windowSize = Size(newWidth, newHeight);
+          });
         },
-        configuration: const PlutoGridConfiguration(
-          columnSize: PlutoGridColumnSizeConfig(
-            autoSizeMode: PlutoAutoSizeMode.scale,
+        child: Container(
+          width: 32,
+          height: 32,
+          decoration: const BoxDecoration(
+            color: Colors.blueGrey,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(16),
+            ),
+          ),
+          child: const Icon(
+            Icons.open_in_full,
+            color: Colors.white,
+            size: 20,
           ),
         ),
       ),
@@ -183,29 +308,203 @@ class _FileLoaderScreenState extends State<FileLoaderScreen> {
                 IconButton(
                   icon: const Icon(Icons.refresh),
                   onPressed: () {
-                    setState(() {
-                      _plutoGridData = null;
-                    });
+                    setState(() => _plutoGridData = null);
                   },
                   tooltip: 'Загрузить другой файл',
                 ),
               ]
             : null,
       ),
-      body: _buildBody(),
+      body: SingleChildScrollView(
+        child: Stack(
+          children: [
+            // Основной контент
+            _buildMainContent(),
+
+            // Плавающее окно с таблицей
+            if (_plutoGridData != null) ...[
+              _buildFloatingTable(),
+              _buildResizeHandle(),
+            ],
+          ],
+        ),
+      ),
+      
+      drawer: Drawer(
+        width: 200,
+        child: _buildDrawerContent(),
+      ),
     );
   }
 
-  /// Выбирает, что отображать(загрузку, пустой экран или таблицу)
-  Widget _buildBody() {
+  /// Строит содержимое бокового меню (drawer).
+  ///
+  /// Содержит:
+  /// - Заголовок с информацией о состоянии
+  /// - Пункты навигации и управления
+  /// - Информацию о программе
+  Widget _buildDrawerContent() {
+    return Column(
+      children: [
+        DrawerHeader(
+          decoration: BoxDecoration(
+            color: Colors.blue,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              const Text(
+                'Stat Flow',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _plutoGridData != null ? 'Данные загружены' : 'Нет данных',
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: ListView(
+            padding: EdgeInsets.zero,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.upload_file),
+                title: const Text('Загрузить данные'),
+                onTap: () {
+                  Navigator.pop(context); // Закрываем drawer
+                  _loadFile();
+                },
+              ),
+              if (_plutoGridData != null) ...[
+                const Divider(),
+                ListTile(
+                  leading: const Icon(Icons.table_chart),
+                  title: const Text('Показать таблицу'),
+                  subtitle: const Text('Плавающее окно'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    // Фокус на таблицу (она уже видна)
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Таблица уже открыта'),
+                        duration: Duration(seconds: 1),
+                      ),
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: Icon(
+                    Icons.bar_chart,
+                    color: _showStatistics ? Colors.blue : null,
+                  ),
+                  title: Text(
+                    'Статистика',
+                    style: TextStyle(
+                      fontWeight: _showStatistics ? FontWeight.bold : null,
+                      color: _showStatistics ? Colors.blue : null,
+                    ),
+                  ),
+                  subtitle: const Text('Анализ числовых данных'),
+                  trailing: _showStatistics
+                      ? const Icon(Icons.check_circle, color: Colors.green, size: 16)
+                      : null,
+                  onTap: () {
+                    Navigator.pop(context);
+                    setState(() {
+                      _showStatistics = !_showStatistics;
+                    });
+                  },
+                ),
+              ],
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.info_outline),
+                title: const Text('О программе'),
+                subtitle: const Text('Версия 1.0.0'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showAboutDialog();
+                },
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+
+  /// Показывает диалог с информацией о программе.
+  void _showAboutDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('О программе Stat Flow'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Text('Версия: 1.0.0'),
+            SizedBox(height: 8),
+            Text(
+              'Приложение для загрузки и анализа CSV файлов. '
+              'Позволяет просматривать данные в плавающей таблице '
+              'и рассчитывать статистические показатели.',
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Строит основное содержимое экрана в зависимости от состояния.
+  ///
+  /// Возможные состояния:
+  /// - Загрузка: показывает индикатор прогресса
+  /// - Нет данных: показывает пустое состояние с кнопкой загрузки
+  /// - Данные загружены: показывает информацию и статистику
+  Widget _buildMainContent() {
     if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
-    } else if (_plutoGridData != null) {
-      return _buildTableView();
-    } else {
+      return const Center(child: CircularProgressIndicator());
+    } else if (_plutoGridData == null) {
       return _buildEmptyState();
+    } else {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.table_chart, size: 80, color: Colors.green),
+            const SizedBox(height: 16),
+            const Text(
+              'Таблица открыта в плавающем окне',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 8),
+            const Text('Перетаскивай за заголовок • Меняй размер за угол'),
+            
+            // Отображаем статистику только если включено и данные есть
+            StatisticWidget(
+              statisticResult: _statisticResult!
+            ),
+          ],
+        ),
+      );
     }
   }
 }

@@ -49,4 +49,9 @@ class StatisticResult {
     if(totalCount == 0 && validCount == null) return 0;
     return (validCount! / totalCount) * 100;
   }
+
+  @override
+  String toString() {
+    return "StatisticResult: $totalCount, $validCount, $emptyCount, $min, $max, $mean, $median, $std";
+  }
 }

@@ -1,4 +1,4 @@
-import 'dart:nativewrappers/_internal/vm/lib/math_patch.dart';
+import 'dart:math';
 
 import 'statistic_result.dart';
 
@@ -18,7 +18,6 @@ class StatisticCalculator {
   /// Возвращает [StatisticResult] со всеми рассчитанными метриками.
   /// Если передан пустой список, возвращается результат только с общим количеством.
   StatisticResult calculate(List<num?> values) {
-    // Обработка пустого списка
     if (values.isEmpty) {
       return StatisticResult(totalCount: 0);
     }
@@ -53,7 +52,7 @@ class StatisticCalculator {
   /// Возвращает null, если список пуст.
   double? _calculateMin(List<double> values) {
     if (values.isEmpty) return null;
-    return values.reduce(min);
+    return values.reduce((a, b) => a < b ? a : b);
   }
 
   /// Вычисляет максимальное значение в списке
@@ -61,7 +60,7 @@ class StatisticCalculator {
   /// Возвращает null, если список пуст.
   double? _calculateMax(List<double> values) {
     if (values.isEmpty) return null;
-    return values.reduce(max);
+    return values.reduce((a, b) => a > b ? a : b);
   }
 
   /// Вычисляет среднее арифметическое
@@ -110,6 +109,6 @@ class StatisticCalculator {
       return sum + diff * diff;
     });
     
-    return sumSquaredDiff / values.length;
+    return sqrt(sumSquaredDiff / values.length);
   }
 }

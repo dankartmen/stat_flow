@@ -29,10 +29,15 @@ environment:
 # versions available, run `flutter pub outdated`.
 dependencies:
   cupertino_icons: ^1.0.8
+  draggable_overlay_window: ^1.0.0
+  draggable_widget: ^2.0.0
   file_picker: ^10.3.10
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
   http: ^1.6.0
+  intl: ^0.20.2
   pluto_grid: ^8.1.0
 
 dev_dependencies:
