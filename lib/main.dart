@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:pluto_grid/pluto_grid.dart';
+import 'package:stat_flow/features/charts/chart_screenshot_wrapper.dart';
+import 'package:stat_flow/features/charts/heatmap/correlation_heatmap.dart';
+import 'package:stat_flow/features/charts/heatmap/correlation_matrix.dart';
 import 'package:stat_flow/features/dataset/dataset.dart';
 import 'package:stat_flow/features/statistics/statistic_calculator.dart';
 import 'package:stat_flow/features/statistics/statistic_result.dart';
@@ -57,6 +60,8 @@ class _FileLoaderScreenState extends State<FileLoaderScreen> {
   // Статистические данные
   StatisticResult? _statisticResult;
 
+  // Датасет
+  Dataset? _dataset;
   // Состояние для показа статистики
   bool _showStatistics = false;
   
@@ -91,6 +96,8 @@ class _FileLoaderScreenState extends State<FileLoaderScreen> {
       debugPrint(result.toString());
       setState(() {
         _isLoading = false;
+        _showStatistics = true;
+        _dataset = loadedDataset;
         _plutoGridData = gridData;
         _statisticResult = result;
         _windowPosition = const Offset(80, 80);
@@ -308,27 +315,29 @@ class _FileLoaderScreenState extends State<FileLoaderScreen> {
                 IconButton(
                   icon: const Icon(Icons.refresh),
                   onPressed: () {
-                    setState(() => _plutoGridData = null);
+                    setState(() {
+                      _plutoGridData = null;
+                      _showStatistics = false;
+                    });
                   },
                   tooltip: 'Загрузить другой файл',
                 ),
               ]
             : null,
       ),
-      body: SingleChildScrollView(
-        child: Stack(
-          children: [
-            // Основной контент
-            _buildMainContent(),
+      body: Stack(
+        children: [
+          // Основной контент
+          _buildMainContent(),
 
-            // Плавающее окно с таблицей
-            if (_plutoGridData != null) ...[
-              _buildFloatingTable(),
-              _buildResizeHandle(),
-            ],
+          // Плавающее окно с таблицей
+          if (_plutoGridData != null) ...[
+            _buildFloatingTable(),
+            _buildResizeHandle(),
           ],
-        ),
+        ],
       ),
+      
       
       drawer: Drawer(
         width: 200,
@@ -486,23 +495,33 @@ class _FileLoaderScreenState extends State<FileLoaderScreen> {
       return _buildEmptyState();
     } else {
       return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.table_chart, size: 80, color: Colors.green),
-            const SizedBox(height: 16),
-            const Text(
-              'Таблица открыта в плавающем окне',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w500),
-            ),
-            const SizedBox(height: 8),
-            const Text('Перетаскивай за заголовок • Меняй размер за угол'),
-            
-            // Отображаем статистику только если включено и данные есть
-            StatisticWidget(
-              statisticResult: _statisticResult!
-            ),
-          ],
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.table_chart, size: 80, color: Colors.green),
+              const SizedBox(height: 16),
+              const Text(
+                'Таблица открыта в плавающем окне',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 8),
+              const Text('Перетаскивай за заголовок • Меняй размер за угол'),
+              
+              if (_showStatistics) ...[
+                const SizedBox(height: 24),
+
+                SizedBox(
+                  height: 500,
+                  child: ChartScreenshotWrapper(
+                    child: CorrelationHeatmap(
+                      correlationMatrix: CorrelationMatrix.fromColumns(_dataset!.columns)
+                    )
+                  )
+                )
+              ],
+            ],
+          ),
         ),
       );
     }

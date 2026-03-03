@@ -8,6 +8,7 @@ class StatisticWidget extends StatelessWidget{
   /// Результат статистических вычислений для отображения.
   final StatisticResult statisticResult;
 
+  /// {@macro statistic_widget}
   const StatisticWidget({
     super.key, 
     required this.statisticResult
