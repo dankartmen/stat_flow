@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:pluto_grid/pluto_grid.dart';
 import 'package:stat_flow/features/charts/chart_screenshot_wrapper.dart';
-import 'package:stat_flow/features/charts/heatmap/correlation_heatmap.dart';
-import 'package:stat_flow/features/charts/heatmap/correlation_matrix.dart';
+import 'package:stat_flow/features/charts/heatmap/widgets/heatmap_view.dart';
+import 'package:stat_flow/features/charts/heatmap/model/correlation_matrix.dart';
 import 'package:stat_flow/features/dataset/dataset.dart';
 import 'package:stat_flow/features/statistics/statistic_calculator.dart';
 import 'package:stat_flow/features/statistics/statistic_result.dart';
-import 'package:stat_flow/features/statistics/statistic_widget.dart';
 import 'package:stat_flow/features/table/pluto_grid_converter.dart';
+import 'features/charts/heatmap/widgets/heatmap_section.dart';
 import 'features/file_import/file_import.dart';
 
 void main() {
@@ -48,24 +48,27 @@ class FileLoaderScreen extends StatefulWidget {
 }
 
 class _FileLoaderScreenState extends State<FileLoaderScreen> {
-  // Сервис для загрузки файлов
+  /// Сервис для загрузки файлов
   final FileLoader _fileLoader = FileLoader();
 
-  // Флаг состояния загрузки
+  /// Флаг состояния загрузки
   bool _isLoading = false;
 
-  // Данные для таблицы
+  /// Флаг для показа таблицы
+  bool _isTableVisible = false;
+  
+  /// Данные для таблицы
   PlutoGridData? _plutoGridData; 
 
-  // Статистические данные
+  /// Статистические данные
   StatisticResult? _statisticResult;
 
-  // Датасет
+  /// Датасет
   Dataset? _dataset;
-  // Состояние для показа статистики
+  /// Состояние для показа статистики
   bool _showStatistics = false;
   
-  // Состояние для плавающего окна
+  /// Состояние для плавающего окна
   Offset _windowPosition = const Offset(80, 80);
   Size _windowSize = const Size(720, 520);
   final Size _minSize = const Size(380, 280);
@@ -96,6 +99,7 @@ class _FileLoaderScreenState extends State<FileLoaderScreen> {
       debugPrint(result.toString());
       setState(() {
         _isLoading = false;
+        _isTableVisible = true;
         _showStatistics = true;
         _dataset = loadedDataset;
         _plutoGridData = gridData;
@@ -229,7 +233,7 @@ class _FileLoaderScreenState extends State<FileLoaderScreen> {
                       icon: const Icon(Icons.close, color: Colors.white),
                       onPressed: () {
                         setState(() {
-                          _plutoGridData = null; // Закрываем окно
+                          _isTableVisible = false;
                         });
                       },
                     ),
@@ -331,7 +335,7 @@ class _FileLoaderScreenState extends State<FileLoaderScreen> {
           _buildMainContent(),
 
           // Плавающее окно с таблицей
-          if (_plutoGridData != null) ...[
+          if (_isTableVisible == true) ...[
             _buildFloatingTable(),
             _buildResizeHandle(),
           ],
@@ -401,14 +405,19 @@ class _FileLoaderScreenState extends State<FileLoaderScreen> {
                   title: const Text('Показать таблицу'),
                   subtitle: const Text('Плавающее окно'),
                   onTap: () {
-                    Navigator.pop(context);
-                    // Фокус на таблицу (она уже видна)
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Таблица уже открыта'),
-                        duration: Duration(seconds: 1),
-                      ),
-                    );
+                    if (_isTableVisible == true){
+                      Navigator.pop(context);
+                      // Фокус на таблицу (она уже видна)
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Таблица уже открыта'),
+                          duration: Duration(seconds: 1),
+                        ),
+                      );
+                    }
+                    else{
+                      setState(() => _isTableVisible = true);
+                    }
                   },
                 ),
                 ListTile(
@@ -491,39 +500,34 @@ class _FileLoaderScreenState extends State<FileLoaderScreen> {
   Widget _buildMainContent() {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
-    } else if (_plutoGridData == null) {
-      return _buildEmptyState();
-    } else {
-      return Center(
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.table_chart, size: 80, color: Colors.green),
-              const SizedBox(height: 16),
-              const Text(
-                'Таблица открыта в плавающем окне',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w500),
-              ),
-              const SizedBox(height: 8),
-              const Text('Перетаскивай за заголовок • Меняй размер за угол'),
-              
-              if (_showStatistics) ...[
-                const SizedBox(height: 24),
+    }
 
-                SizedBox(
-                  height: 500,
-                  child: ChartScreenshotWrapper(
-                    child: CorrelationHeatmap(
-                      correlationMatrix: CorrelationMatrix.fromColumns(_dataset!.columns)
-                    )
-                  )
-                )
+    if (_plutoGridData == null) {
+      return _buildEmptyState();
+    }
+
+    return SingleChildScrollView(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1100),
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+      
+                const SizedBox(height: 20),
+      
+                if (_showStatistics) ...[
+                  HeatmapSection(
+                    matrix: CorrelationMatrix.fromColumns(_dataset!.columns),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
-      );
-    }
+      ),
+    );
   }
 }

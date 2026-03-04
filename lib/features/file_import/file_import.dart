@@ -55,11 +55,6 @@ class FileLoader {
     for (var i = 0; i < headers.length; i++) {
       log('  [${i+1}] ${headers[i]}', name: "FileLoader");
     }
-    
-    log('Первые 5 строк данных:', name: "FileLoader");
-    for (var i = 0; i < (dataRows.length > 5 ? 5 : dataRows.length); i++) {
-      log('  Строка ${i+1}: ${dataRows[i]}', name: "FileLoader");
-    }
     log('=== КОНЕЦ ИНФОРМАЦИИ ===', name: "FileLoader");
 
     // Создаем колонки для Dataset
@@ -67,23 +62,34 @@ class FileLoader {
 
     for (int i = 0; i < headers.length; i++) {
       // Собираем все значения для текущей колонки
-      final List<dynamic> columnValues = [];
-      for (var row in dataRows) {
-        if (i < row.length) {
-          columnValues.add(_tryParseValue(row[i]));
-        } else {
-          columnValues.add(null); // Добавляем null для пропущенных значений
+      final List<dynamic> rawValues = [];
+        for (var row in dataRows) {
+          if (i < row.length) {
+            rawValues.add(_tryParseValue(row[i]));
+          } else {
+            rawValues.add(null);
+          }
         }
-      }
 
-      // Определяем тип колонки на основе первого не-null значения
-      final columnType = _determineColumnType(columnValues);
+      // Определяем тип на основе всех значений
+      final columnType = _determineColumnType(rawValues);
       
+      // Для числовых колонок - приводим всё к double
+      List<dynamic> cleanValues;
+      if (columnType == ColumnType.numeric) {
+        cleanValues = rawValues.map((v) {
+          if (v is num) return v.toDouble(); 
+          if (v is String && double.tryParse(v) != null) return double.parse(v); 
+          return null; // всё остальное в null
+        }).toList();
+      } else {
+        cleanValues = rawValues; // для остальных типов оставляем как есть
+      }
       // Создаем колонку
       columns.add(DataColumn(
         name: headers[i],
         type: columnType,
-        values: columnValues,
+        values: cleanValues,
       ));
     }
 
@@ -117,28 +123,31 @@ class FileLoader {
   
   /// Определяет тип колонки на основе значений
   ColumnType _determineColumnType(List<dynamic> values) {
-    // Ищем первое не-null значение для определения типа
-    for (var value in values) {
-      if (value == null) continue;
+    bool allNull = true;
+    bool allNumeric = true;
+    bool allDateTime = true;
+    final nonNullValues = <dynamic>[];
+    
+    for (var v in values) {
+      if (v == null) continue;
       
-      if (value is num) {
-        return ColumnType.numeric;
-      } else if (value is DateTime) {
-        return ColumnType.datetime;
-      } else if (value is String) {
-        // Проверяем, может это категориальный тип (мало уникальных значений)
-        final uniqueValues = values.where((v) => v != null).toSet().length;
-        final totalValues = values.where((v) => v != null).length;
-        
-        // Если уникальных значений меньше 20% от общего количества, считаем категориальным
-        if (uniqueValues < totalValues * 0.2) {
-          return ColumnType.categorical;
-        }
-        return ColumnType.text;
-      }
+      allNull = false;
+      nonNullValues.add(v);
+      
+      if (v is! num) allNumeric = false;
+      if (v is! DateTime) allDateTime = false;
     }
     
-    // Если все значения null, возвращаем text как тип по умолчанию
+    if (allNull) return ColumnType.text;
+    if (allNumeric) return ColumnType.numeric;
+    if (allDateTime) return ColumnType.datetime;
+    
+    // Если смесь типов или строки - проверяем на категориальность
+    final uniqueValues = nonNullValues.toSet().length;
+    if (uniqueValues < nonNullValues.length * 0.2) {
+      return ColumnType.categorical;
+    }
+    
     return ColumnType.text;
   }
 }
