@@ -38,6 +38,7 @@ dependencies:
     sdk: flutter
   http: ^1.6.0
   intl: ^0.20.2
+  path_provider: ^2.1.5
   pluto_grid: ^8.1.0
   screenshot: ^3.0.0
   syncfusion_flutter_charts: ^32.2.8

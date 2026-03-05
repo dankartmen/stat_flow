@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:stat_flow/features/charts/chart_conteiner.dart';
+import 'package:stat_flow/features/charts/heatmap/widgets/heatmap_controls.dart';
 
+import '../color/heatmap_color_mapper.dart';
+import '../color/heatmap_palette.dart';
 import '../model/correlation_matrix.dart';
 import 'heatmap_view.dart';
 
@@ -7,7 +11,7 @@ import 'heatmap_view.dart';
 /// Секция страницы, содержащая тепловую карту корреляции с заголовком
 /// и описанием.
 /// {@endtemplate}
-class HeatmapSection extends StatelessWidget {
+class HeatmapSection extends StatefulWidget {
   /// Матрица корреляции для отображения
   final CorrelationMatrix matrix;
 
@@ -18,44 +22,38 @@ class HeatmapSection extends StatelessWidget {
   });
 
   @override
+  State<HeatmapSection> createState() => _HeatmapSectionState();
+}
+
+class _HeatmapSectionState extends State<HeatmapSection> {
+  HeatmapPalette palette = HeatmapPalette.redBlue;
+  int segments = 10;
+  bool triangleMode = false;
+  bool clusterEnabled = false;
+  HeatmapColorMode colorMode = HeatmapColorMode.discrete;
+
+  @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
+    return ChartContainer(
+      title: "Тепловая матрица корреляций", 
+      child: HeatmapView(matrix: widget.matrix),
+    //   controls: HeatmapControls(
+    //     palette: palette,
+    //     segments: segments,
+    //     upperTriangle: triangleMode,
+    //     clusterEnabled: clusterEnabled,
+    //     colorMode: colorMode, 
 
-        // Заголовок секции
-        const Text(
-          "Корреляционная тепловая карта",
-          style: TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+    //     onPaletteChanged: (p) => setState(() => palette = p),
 
-        const SizedBox(height: 8),
+    //     onSegmentsChanged: (s) => setState(() => segments = s),
 
-        // Подзаголовок
-        const Text(
-          "Визуализация корреляций между числовыми параметрами",
-          style: TextStyle(
-            fontSize: 16,
-            color: Colors.grey,
-          ),
-        ),
+    //     onUpperTriangleChanged: (v) => setState(() => triangleMode = v),
 
-        const SizedBox(height: 32),
+    //     onClusterPressed: () => setState(() => clusterEnabled = !clusterEnabled),
 
-        // Карточка с тепловой картой
-        Card(
-          elevation: 6,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: HeatmapView(matrix: matrix),
-          ),
-        ),
-      ],
+    //     onColorModeChanged: (m) => setState(() => colorMode = m),
+    // ),
     );
   }
 }

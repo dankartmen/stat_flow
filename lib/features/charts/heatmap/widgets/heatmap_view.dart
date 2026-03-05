@@ -102,25 +102,15 @@ class _HeatmapViewState extends State<HeatmapView>
         const SizedBox(height: 12),
 
         // Тепловая карта с прокруткой
-        Center(
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.vertical,
-              child: SizedBox(
-                width: widget.matrix.size * 60,
-                height: widget.matrix.size * 60,
-                child: _buildHeatmap(),
-              ),
-            ),
-          ),
+        SizedBox(
+          height: 600,
+          child: ClipRect(child: _buildHeatmap()),
         ),
-
-        const SizedBox(height: 12),
+        
         
         // Легенда
         HeatmapLegend(
-          mapper: _currentMapper, 
+          mapper: _currentMapper,   
           min: -1, 
           max: 1, 
           segments: _segments
@@ -208,34 +198,31 @@ class _HeatmapViewState extends State<HeatmapView>
   Widget _buildHeatmap() {
     final matrix = _getDisplayMatrix();
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final size = constraints.maxWidth;
-        final cellSize =
-            (size / (matrix.size + 1)).clamp(20.0, 80.0);
-        final totalSize = cellSize * (matrix.size + 1);
+    const double cellSize = 40;
 
-        return InteractiveViewer(
-          minScale: 0.5,
-          maxScale: 3,
-          trackpadScrollCausesScale: false,
-          child: AnimatedBuilder(
-            animation: _controller,
-            builder:(context, child) => CustomPaint(
-              size: Size(totalSize, totalSize),
-              painter: HeatmapPainter(
-                matrix: _getDisplayMatrix(),
-                colorMapper: _currentMapper,
-                previousMapper: _previousMapper,
-                animationValue: _controller.value,
-                cellSize: cellSize,
-                showValues: true,
-                triangleMode: _triangleMode,
-              ),
-            ),
+    final totalSize = matrix.size * cellSize;
+
+    return InteractiveViewer(
+      constrained: false,
+      minScale: 0.5,
+      maxScale: 5,
+      trackpadScrollCausesScale: false,
+      boundaryMargin: const EdgeInsets.all(40),
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder:(context, child) => CustomPaint(
+          size: Size(totalSize, totalSize),
+          painter: HeatmapPainter(
+            matrix: _getDisplayMatrix(),
+            colorMapper: _currentMapper,
+            previousMapper: _previousMapper,
+            animationValue: _controller.value,
+            cellSize: cellSize,
+            showValues: true,
+            triangleMode: _triangleMode,
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }

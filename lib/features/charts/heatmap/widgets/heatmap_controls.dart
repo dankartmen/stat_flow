@@ -88,9 +88,9 @@ class HeatmapControls extends StatelessWidget {
           DropdownButton<int>(
             value: segments,
             items: const [
-              DropdownMenuItem(value: 5, child: Text("5")),
-              DropdownMenuItem(value: 10, child: Text("10")),
-              DropdownMenuItem(value: 20, child: Text("20")),
+              DropdownMenuItem(value: 5, child: Text("0.4")),
+              DropdownMenuItem(value: 10, child: Text("0.2")),
+              DropdownMenuItem(value: 20, child: Text("0.1")),
             ],
             onChanged: (v) => onSegmentsChanged(v!),
           ),
