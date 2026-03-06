@@ -6,20 +6,47 @@ import '../model/correlation_matrix.dart';
 import '../color/heatmap_color_mapper.dart';
 import '../painter/heatmap_painter.dart';
 import '../color/heatmap_palette.dart';
-import 'heatmap_controls.dart';
 
 /// {@template heatmap_view}
 /// Основной виджет для отображения интерактивной тепловой карты
 /// с поддержкой настройки цветов, кластеризации и анимации.
+///
+/// Особенности:
+/// - Интерактивное масштабирование через InteractiveViewer
+/// - Подсветка ячейки при наведении мыши
+/// - Плавная анимация при смене цветовых схем
+/// - Кластеризация матрицы для выявления паттернов
+/// - Автоматическое обновление при изменении параметров
 /// {@endtemplate}
 class HeatmapView extends StatefulWidget {
   /// Матрица корреляции для отображения
   final CorrelationMatrix matrix;
 
+  /// Выбранная цветовая палитра 
+  final HeatmapPalette palette;
+
+  /// Количество сегментов для дискретного режима отображения
+  final int segments;
+
+  /// Режим отображения только верхнего треугольника матрицы
+  final bool triangleMode;
+
+  /// Включена ли кластеризация строк и столбцов
+  /// для группировки похожих переменных
+  final bool clusterEnabled;
+
+  /// Режим отображения цветов: дискретный (segments) или градиентный
+  final HeatmapColorMode colorMode;
+
   /// {@macro heatmap_view}
   const HeatmapView({
     super.key,
     required this.matrix,
+    required this.palette,
+    required this.segments,
+    required this.triangleMode,
+    required this.clusterEnabled,
+    required this.colorMode,
   });
 
   @override
@@ -28,39 +55,67 @@ class HeatmapView extends StatefulWidget {
 
 class _HeatmapViewState extends State<HeatmapView>
     with SingleTickerProviderStateMixin {
-  // Состояние интерактивности
+
+  /// Индекс строки под курсором мыши (для подсветки)
   int? hoverRow;
+
+  /// Индекс колонки под курсором мыши (для подсветки)
   int? hoverCol;
-  Offset? hoverPosition;
-  double selectedStep = 0.2;
-  
-  // Настройки отображения
-  HeatmapColorMode colorMode = HeatmapColorMode.discrete;
-  bool clusterEnabled = false;
-  
-  // Мапперы и анимация
+
+  /// Текущий маппер цветов на основе настроек (палитра, сегменты, режим)
   late HeatmapColorMapper _currentMapper;
+
+  /// Контроллер анимации для плавных переходов между цветовыми схемами
   late AnimationController _controller;
-  late HeatmapPalette _palette;
-  late int _segments;
-  late bool _triangleMode;
+
+  /// Предыдущий маппер для интерполяции во время анимации
   late HeatmapColorMapper _previousMapper;
-  
-  // Кэшированная кластеризованная матрица
+
+
+  /// Кэшированная кластеризованная матрица.
+  /// Перестраивается только при изменении исходной матрицы или
+  /// при включении/выключении кластеризации.
   CorrelationMatrix? _clusteredMatrix;
 
   @override
   void initState() {
     super.initState();
-    _palette = HeatmapPalette.redBlue;
+
+
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 400),
     );
-    _segments = 10;
-    _triangleMode = false;
+
+    // Создание начального маппера на основе текущих настроек
     _currentMapper = _createMapper();
-    _previousMapper = _currentMapper;
+    _previousMapper = _currentMapper; // Начальное состояние без анимации
+  }
+
+  @override
+  void didUpdateWidget(covariant HeatmapView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // Проверяем, изменились ли параметры, влияющие на цветовую схему
+    if (oldWidget.palette != widget.palette ||
+        oldWidget.segments != widget.segments ||
+        oldWidget.colorMode != widget.colorMode) {
+
+      // Сохраняем текущий маппер как предыдущий для анимации перехода
+      _previousMapper = _currentMapper;
+
+      // Создаем новый маппер с обновленными настройками
+      _currentMapper = _createMapper();
+
+      // Запускаем анимацию перехода от старой цветовой схемы к новой
+      _controller.forward(from: 0);
+    }
+
+    // При изменении состояния кластеризации сбрасываем кэш,
+    // чтобы при следующем обращении матрица была перекластеризована
+    if (oldWidget.clusterEnabled != widget.clusterEnabled) {
+      _clusteredMatrix = null;
+    }
   }
 
   @override
@@ -71,155 +126,158 @@ class _HeatmapViewState extends State<HeatmapView>
 
   @override
   Widget build(BuildContext context) {
+    // Проверка на пустую матрицу - показываем информационное сообщение
     if (widget.matrix.isEmpty) {
-      return const Center(child: Text('Нет данных'));
+      return const Center(
+        child: Text(
+          'Нет данных для отображения',
+          style: TextStyle(fontSize: 16, color: Colors.grey),
+        ),
+      );
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Панель управления
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.grey.shade100,
-            borderRadius: BorderRadius.circular(12)
-          ),
-          child: HeatmapControls(
-            upperTriangle: _triangleMode,
-            onUpperTriangleChanged: _updateTriangle,
-            segments: _segments,
-            onSegmentsChanged: _updateSegments,
-            palette: _palette,
-            onPaletteChanged: _updatePallete,
-            colorMode: colorMode,
-            onColorModeChanged: _updateColorMode,
-            clusterEnabled: clusterEnabled,
-            onClusterPressed: _toggleCluster,
-          ),
-        ),
-        
-        const SizedBox(height: 12),
-
-        // Тепловая карта с прокруткой
         SizedBox(
-          height: 600,
-          child: ClipRect(child: _buildHeatmap()),
+          height: 600, 
+          child: ClipRect(
+            child: _buildHeatmap(),
+          ),
         ),
-        
-        
-        // Легенда
+
+        // Легенда цветовой шкалы
+        // Отображает соответствие между цветами и значениями корреляции
         HeatmapLegend(
-          mapper: _currentMapper,   
-          min: -1, 
-          max: 1, 
-          segments: _segments
+          mapper: _currentMapper,
+          min: -1, // Корреляция всегда находится в диапазоне [-1, 1]
+          max: 1,
+          segments: widget.segments,
         ),
       ],
     );
   }
-  
-  /// Создание маппера цветов на основе текущих настроек
+
+  /// Создание маппера цветов на основе текущих настроек.
+  ///
+  /// Поддерживает два режима:
+  /// - [HeatmapColorMode.discrete]: равномерные сегменты с четкими границами
+  ///   (полезно для выявления точных значений)
+  /// - [HeatmapColorMode.gradient]: плавный переход между цветами
+  ///   (лучше для визуального восприятия общей структуры)
   HeatmapColorMapper _createMapper() {
-    switch (colorMode) {
+    switch (widget.colorMode) {
       case HeatmapColorMode.discrete:
-        final base = HeatmapPaletteFactory.baseColors(_palette);
+        // Получаем базовые цвета для выбранной палитры
+        final base = HeatmapPaletteFactory.baseColors(widget.palette);
 
         return DiscreteColorMapper(
           min: -1,
           max: 1,
-          segments: _segments,
+          segments: widget.segments,
           baseColors: base,
         );
 
       case HeatmapColorMode.gradient:
         return GradientColorMapper(
-          paletteType: _palette,
+          paletteType: widget.palette,
         );
     }
   }
 
-  /// Обновление цветовой палитры с анимацией
-  void _updatePallete(HeatmapPalette palette) {
-    setState(() {
-      _palette = palette;
-      _previousMapper = _currentMapper;
-      _currentMapper = _createMapper();
-      _controller.forward(from: 0);
-    });
-  }
-
-  /// Обновление количества сегментов
-  void _updateSegments(int segments) {
-    setState(() {
-      _segments = segments;
-      _previousMapper = _currentMapper;
-      _currentMapper = _createMapper(); 
-    });
-  }
-
-  /// Обновление режима треугольника
-  void _updateTriangle(bool value) {
-    setState(() {
-      _triangleMode = value;
-    });
-  }
-
-  /// Обновление режима цветов с анимацией
-  void _updateColorMode(HeatmapColorMode mode) {
-    setState(() {
-      colorMode = mode;
-      _previousMapper = _currentMapper;
-      _currentMapper = _createMapper();
-      _controller.forward(from: 0);
-    });
-  }
-
-  /// Переключение режима кластеризации
-  void _toggleCluster() {
-    setState(() {
-      clusterEnabled = !clusterEnabled;
-      _clusteredMatrix = null;
-    });
-  }
-
-  /// Получение актуальной матрицы для отображения
-  /// (исходной или кластеризованной)
+  /// Получение актуальной матрицы для отображения.
+  ///
+  /// Возвращает либо исходную матрицу, либо кластеризованную,
+  /// в зависимости от настройки [clusterEnabled].
+  /// 
+  /// Результат кластеризации кэшируется для оптимизации производительности,
+  /// так как операция кластеризации может быть вычислительно затратной
+  /// для больших матриц.
   CorrelationMatrix _getDisplayMatrix() {
-    if (!clusterEnabled) return widget.matrix;
+    if (!widget.clusterEnabled) return widget.matrix;
 
-    _clusteredMatrix ??=
-        CorrelationClusterer.cluster(widget.matrix);
+    // Ленивая инициализация: кластеризуем только при первом запросе
+    _clusteredMatrix ??= CorrelationClusterer.cluster(widget.matrix);
 
     return _clusteredMatrix!;
   }
 
-  /// Построение виджета тепловой карты с поддержкой масштабирования
+  /// Построение виджета тепловой карты с поддержкой масштабирования.
+  ///
+  /// Использует [InteractiveViewer] для обеспечения:
+  /// - Панорамирования (перетаскивания) по большой матрице
+  /// - Масштабирования жестами или двойным щелчком
+  /// - Плавного скроллинга
+  ///
+  /// Также реализует интерактивную подсветку ячеек при наведении мыши
+  /// (для десктопных и веб-версий).
   Widget _buildHeatmap() {
     final matrix = _getDisplayMatrix();
 
+    // Фиксированный базовый размер ячейки для предсказуемого отображения
     const double cellSize = 40;
 
+    // Общий размер холста (без учета отступа для подписей,
+    // так как отступ обрабатывается в HeatmapPainter)
     final totalSize = matrix.size * cellSize;
 
     return InteractiveViewer(
-      constrained: false,
-      minScale: 0.5,
-      maxScale: 5,
-      trackpadScrollCausesScale: false,
-      boundaryMargin: const EdgeInsets.all(40),
-      child: AnimatedBuilder(
-        animation: _controller,
-        builder:(context, child) => CustomPaint(
-          size: Size(totalSize, totalSize),
-          painter: HeatmapPainter(
-            matrix: _getDisplayMatrix(),
-            colorMapper: _currentMapper,
-            previousMapper: _previousMapper,
-            animationValue: _controller.value,
-            cellSize: cellSize,
-            showValues: true,
-            triangleMode: _triangleMode,
+      constrained: false, 
+      minScale: 0.5, // Минимальное увеличение 
+      maxScale: 5.0, // Максимальное увеличение 
+      trackpadScrollCausesScale: false, // Скролл для перемещения, а не масштаба
+      boundaryMargin: const EdgeInsets.all(40), // Отступы от границ для удобства
+
+      child: MouseRegion(
+        // Отслеживание мыши для интерактивной подсветки
+        onHover: (event) {
+          final localPos = event.localPosition;
+
+          // Вычисляем индекс ячейки под курсором.
+          // Вычитаем cellSize для учета отступа под подписи осей,
+          // который добавляется в HeatmapPainter.
+          final row = ((localPos.dy - cellSize) / cellSize).floor();
+          final col = ((localPos.dx - cellSize) / cellSize).floor();
+
+          // Проверяем, что курсор находится в пределах матрицы
+          if (row >= 0 && row < matrix.size && col >= 0 && col < matrix.size) {
+            // Обновляем состояние для подсветки ячейки
+            setState(() {
+              hoverRow = row;
+              hoverCol = col;
+            });
+          } else {
+            // Курсор вне матрицы - убираем подсветку
+            setState(() {
+              hoverRow = null;
+              hoverCol = null;
+            });
+          }
+        },
+        // Сброс подсветки при уходе мыши с виджета
+        onExit: (_) {
+          setState(() {
+            hoverRow = null;
+            hoverCol = null;
+          });
+        },
+
+        child: AnimatedBuilder(
+          // Анимируем переходы между цветовыми схемами
+          animation: _controller,
+          builder: (context, child) => CustomPaint(
+            size: Size(totalSize, totalSize),
+            painter: HeatmapPainter(
+              matrix: _getDisplayMatrix(),
+              colorMapper: _currentMapper,
+              previousMapper: _previousMapper,
+              animationValue: _controller.value, 
+              cellSize: cellSize,
+              showValues: true, // Отображаем числовые значения в ячейках
+              triangleMode: widget.triangleMode,
+              hoverRow: hoverRow,
+              hoverCol: hoverCol,
+            ),
           ),
         ),
       ),

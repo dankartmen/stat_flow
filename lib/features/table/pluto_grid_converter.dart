@@ -58,7 +58,10 @@ class PlutoGridConverter {
         enableEditingMode: false,   // Запрещаем редактирование
         enableSorting: true,        // Разрешаем сортировку
         enableFilterMenuItem: true, // Разрешаем фильтрацию
-
+        enableAutoEditing: true,     // Включаем авто-редактирование при клике
+        enableColumnDrag: true,     // Разрешаем перетаскивание колонок
+        enableContextMenu: true,    // Разрешаем контекстное меню
+        enableHideColumnMenuItem: true, // Разрешаем скрывать колонки
       );
     }).toList();
   }

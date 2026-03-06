@@ -57,7 +57,11 @@ class _ChartContainerState extends State<ChartContainer> {
       MaterialPageRoute(
         builder: (_) => Scaffold(
           appBar: AppBar(title: Text(widget.title)),
-          body: Center(child: widget.child),
+          body: Center(child: SizedBox(
+            width: double.infinity,
+            height: double.infinity,
+            child: widget.child,
+          )),
         ),
       ),
     );
