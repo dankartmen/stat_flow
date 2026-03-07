@@ -2,7 +2,12 @@ import 'package:pluto_grid/pluto_grid.dart';
 import '../dataset/dataset.dart';
 
 /// {@template pluto_grid_data}
-/// Вспомогательный класс для возврата данных, подготовленных для отображения в PlutoGrid
+/// Контейнер для данных, подготовленных к отображению в таблице PlutoGrid
+/// 
+/// Содержит все необходимые компоненты для рендеринга таблицы:
+/// - Колонки с настройками отображения
+/// - Строки с данными
+/// - Группы колонок для визуальной организации
 /// {@endtemplate}
 class PlutoGridData {
   /// Список колонок для отображения в PlutoGrid
@@ -11,7 +16,7 @@ class PlutoGridData {
   /// Список строк для отображения в PlutoGrid
   final List<PlutoRow> rows;
 
-  /// Список групп колонок для отображения в PlutoGrid(опционально)
+  /// Список групп колонок для отображения в PlutoGrid (опционально)
   /// 
   /// Позволяет визуально группировать связанные колонки (например, все числовые колонки вместе)
   final List<PlutoColumnGroup>? columnGroups;
@@ -25,100 +30,148 @@ class PlutoGridData {
 }
 
 /// {@template pluto_grid_converter}
-/// Класс для конвертации данных для [PlutoGrid] из [Dataset] 
+/// Конвертер для преобразования [Dataset] в формат, совместимый с таблицей PlutoGrid
+/// 
+/// Отвечает за:
+/// - Маппинг типов данных из модели в типы PlutoGrid
+/// - Формирование структуры колонок с соответствующими настройками
+/// - Преобразование строк данных в формат PlutoRow
+/// - Создание визуальных групп колонок по типам данных
 /// {@endtemplate}
 class PlutoGridConverter {
-
   /// Основной метод конвертации всего датасета
   /// 
-  /// Принимает [Dataset] и возвращает [PlutoGridData], готовый для отображения в таблице
+  /// Принимает:
+  /// - [dataset] — исходный датасет для конвертации
+  /// 
+  /// Возвращает:
+  /// - [PlutoGridData] — данные, готовые для отображения в таблице
+  /// 
+  /// Особенности:
+  /// - Автоматически определяет типы колонок
+  /// - Настраивает возможности сортировки и фильтрации
+  /// - Создает группы для визуальной организации
   PlutoGridData convert(Dataset dataset){
-    final columns = convertColumns(dataset.columns);
-    final rows = convertRows(dataset.columns);
-    final columnGroups = convertColumnGroups(dataset.columns);
+    final columns = _convertColumns(dataset.columns);
+    final rows = _convertRows(dataset.columns);
+    final columnGroups = _convertColumnGroups(dataset.columns);
     return PlutoGridData(columns: columns, rows: rows, columnGroups: columnGroups);
   }
 
   /// Преобразует колонки датасета в формат PlutoGrid
-  List<PlutoColumn> convertColumns(List<DataColumn> columns) {
+  /// 
+  /// Принимает:
+  /// - [columns] — список колонок датасета
+  /// 
+  /// Возвращает:
+  /// - [List<PlutoColumn>] — колонки с настройками для PlutoGrid
+  /// 
+  /// Особенности:
+  /// - Для каждой колонки настраивается соответствующий тип данных
+  /// - Включаются возможности сортировки и фильтрации
+  /// - Редактирование отключено (только просмотр)
+  List<PlutoColumn> _convertColumns(List<DataColumn> columns) {
     return columns.map((column) {
-       // Определяем заголовок: либо имя колонки, либо "Колонка N"
-      final String title = column.name ?? 'Колонка ${columns.indexOf(column) + 1}';
+      final title = column.name;
+      final field = column.name;
+      final type = _mapColumnType(column);
 
-      // Определяем поле для привязки данных
-      final String field = column.name ?? 'column_${columns.indexOf(column)}';
-      
-      // Определяем тип колонки 
-      final PlutoColumnType type = _mapColumnType(column);
-      
       return PlutoColumn(
         title: title,
         field: field,
         type: type,
-        enableEditingMode: false,   // Запрещаем редактирование
-        enableSorting: true,        // Разрешаем сортировку
-        enableFilterMenuItem: true, // Разрешаем фильтрацию
-        enableAutoEditing: true,     // Включаем авто-редактирование при клике
-        enableColumnDrag: true,     // Разрешаем перетаскивание колонок
-        enableContextMenu: true,    // Разрешаем контекстное меню
-        enableHideColumnMenuItem: true, // Разрешаем скрывать колонки
+        enableEditingMode: false,
+        enableSorting: true,
+        enableFilterMenuItem: true,
+        enableAutoEditing: true,
+        enableColumnDrag: true,
+        enableContextMenu: true,
+        enableHideColumnMenuItem: true,
       );
     }).toList();
   }
 
-  /// Вспомогательный метод для определения типов
-   PlutoColumnType _mapColumnType(DataColumn column) {
-    switch (column.type) {
-      case ColumnType.numeric:
-        return PlutoColumnType.number(
-          // Форматирование для чисел
-          format: '#,###.##',
-        );
-        
-      case ColumnType.datetime:
-        return PlutoColumnType.date(
-          // Указываем формат даты
-          format: 'yyyy-MM-dd',
-        );
-        
-      case ColumnType.categorical:
-        // Для категориальных данных используем select с уникальными значениями
-        final uniqueValues = _getUniqueValues(column);
-        return PlutoColumnType.select(uniqueValues);
-        
-      case ColumnType.text:
-        return PlutoColumnType.text();
-        
-      default:
-        return PlutoColumnType.text();
+  /// Вспомогательный метод для определения типов колонок PlutoGrid
+  /// 
+  /// Принимает:
+  /// - [column] — колонка датасета
+  /// 
+  /// Возвращает:
+  /// - [PlutoColumnType] — соответствующий тип для PlutoGrid
+  /// 
+  /// Особенности:
+  /// - [NumericColumn] → число с форматированием
+  /// - [DateTimeColumn] → дата
+  /// - [CategoricalColumn] → выпадающий список
+  /// - Остальные → текст
+  PlutoColumnType _mapColumnType(DataColumn column) {
+    if (column is NumericColumn) {
+      return PlutoColumnType.number(format: '#,###.##');
     }
+
+    if (column is DateTimeColumn) {
+      return PlutoColumnType.date(format: 'yyyy-MM-dd');
+    }
+
+    if (column is CategoricalColumn) {
+      return PlutoColumnType.select(_getUniqueValues(column));
+    }
+
+    return PlutoColumnType.text();
   }
 
   /// Получение уникальных значений для категориальной колонки
-   List<String> _getUniqueValues(DataColumn column) {
-    return column.values
-        .where((value) => value != null)
-        .map((value) => value.toString())
+  /// 
+  /// Принимает:
+  /// - [column] — категориальная колонка
+  /// 
+  /// Возвращает:
+  /// - [List<String>] — отсортированный список уникальных значений
+  List<String> _getUniqueValues(CategoricalColumn column) {
+    return column.data
+        .whereType<String>()
         .toSet()
         .toList()
         ..sort(); 
   }
 
-  /// Преобразует данные в строки PlutoGrid
-  List<PlutoRow> convertRows(List<DataColumn> columns){
+  /// Преобразует строки датасета в формат PlutoRow
+  /// 
+  /// Принимает:
+  /// - [columns] — список колонок датасета
+  /// 
+  /// Возвращает:
+  /// - [List<PlutoRow>] — строки данных для PlutoGrid
+  /// 
+  /// Особенности:
+  /// - Количество строк определяется по первой колонке
+  /// - Для каждой ячейки создается PlutoCell с соответствующим значением
+  List<PlutoRow> _convertRows(List<DataColumn> columns) {
+    final rowCount = columns.first.length;
     final rows = <PlutoRow>[];
-    for (var i = 0; i < columns.first.values.length; i++) {
+
+    for (int i = 0; i < rowCount; i++) {
       final cells = <String, PlutoCell>{};
-      for (var column in columns) {
-        final cellValue = column.values[i];
-        cells[column.name ?? column.values.first.toString()] = PlutoCell(value: cellValue);
+
+      for (final column in columns) {
+        cells[column.name] = PlutoCell(
+          value: column[i],
+        );
       }
+
       rows.add(PlutoRow(cells: cells));
     }
+
     return rows;
   }
 
   /// Создает группы колонок для визуальной организации
+  /// 
+  /// Принимает:
+  /// - [columns] — список колонок датасета
+  /// 
+  /// Возвращает:
+  /// - [List<PlutoColumnGroup>] — группы колонок по типам данных
   /// 
   /// Группирует колонки по их типу данных:
   /// - Числовые
@@ -127,25 +180,36 @@ class PlutoGridConverter {
   /// - Категориальные
   /// 
   /// Это улучшает навигацию по таблице с большим количеством колонок
-  List<PlutoColumnGroup> convertColumnGroups(List<DataColumn> columns){
-    /// Группируем колонки по типу данных
+  List<PlutoColumnGroup> _convertColumnGroups(List<DataColumn> columns){
     final groups = <PlutoColumnGroup>[];
-    final numericColumns = columns.where((col) => col.type == ColumnType.numeric).toList();
-    final datetimeColumns = columns.where((col) => col.type == ColumnType.datetime).toList();
-    final textColumns = columns.where((col) => col.type == ColumnType.text).toList();
-    final categoricalColumns = columns.where((col) => col.type == ColumnType.categorical).toList();
+    final numericColumns = columns.whereType<NumericColumn>().toList();
+    final dateTimeColumns = columns.whereType<DateTimeColumn>().toList();
+    final textColumns = columns.whereType<TextColumn>().toList();
+    final categoricalColumns = columns.whereType<CategoricalColumn>().toList();
 
     if (numericColumns.isNotEmpty) {
-      groups.add(PlutoColumnGroup(title: 'Числовые', fields: numericColumns.map((col) => col.name ?? col.values.first.toString()).toList()));
+      groups.add(PlutoColumnGroup(
+        title: 'Числовые', 
+        fields: numericColumns.map((col) => col.name).toList()
+      ));
     }
-    if (datetimeColumns.isNotEmpty) {
-      groups.add(PlutoColumnGroup(title: 'Дата/Время', fields: datetimeColumns.map((col) => col.name ?? col.values.first.toString()).toList()));
+    if (dateTimeColumns.isNotEmpty) {
+      groups.add(PlutoColumnGroup(
+        title: 'Дата/Время', 
+        fields: dateTimeColumns.map((col) => col.name).toList()
+      ));
     }
     if (textColumns.isNotEmpty) {
-      groups.add(PlutoColumnGroup(title: 'Текстовые', fields: textColumns.map((col) => col.name ?? col.values.first.toString()).toList()));
+      groups.add(PlutoColumnGroup(
+        title: 'Текстовые', 
+        fields: textColumns.map((col) => col.name).toList()
+      ));
     }
     if (categoricalColumns.isNotEmpty) {
-      groups.add(PlutoColumnGroup(title: 'Категориальные', fields: categoricalColumns.map((col) => col.name ?? col.values.first.toString()).toList()));
+      groups.add(PlutoColumnGroup(
+        title: 'Категориальные', 
+        fields: categoricalColumns.map((col) => col.name).toList()
+      ));
     }
 
     return groups;

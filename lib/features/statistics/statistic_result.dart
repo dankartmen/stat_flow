@@ -6,10 +6,10 @@ class StatisticResult {
   final int totalCount;
 
   /// Количество непустых (валидных) значений в выборке
-  final int? validCount;
+  final int validCount;
 
   /// Количество пустых (null) значений в выборке
-  final int? emptyCount;
+  final int emptyCount;
   
   /// Наименьшее значение в выборке
   final double? min;
@@ -29,8 +29,8 @@ class StatisticResult {
   /// {macro statictic_result}
   StatisticResult({
     required this.totalCount,
-    this.emptyCount,
-    this.validCount,
+    this.emptyCount = 0,
+    this.validCount = 0,
     this.min,
     this.max,
     this.mean,
@@ -40,14 +40,14 @@ class StatisticResult {
 
   /// Процент пустых значений
   double get emptyPercentage{
-    if(totalCount == 0 && emptyCount == null) return 0;
-    return (emptyCount! / totalCount) * 100;
+    if(totalCount == 0) return 0;
+    return (emptyCount / totalCount) * 100;
   }
 
   /// Процент валидных значений
   double get validPercentage{
-    if(totalCount == 0 && validCount == null) return 0;
-    return (validCount! / totalCount) * 100;
+    if(totalCount == 0) return 0;
+    return (validCount / totalCount) * 100;
   }
 
   @override

@@ -1,156 +1,168 @@
 import 'dart:convert';
 import 'dart:developer';
-import 'package:http/http.dart' as http;
+
 import 'package:file_picker/file_picker.dart';
+import 'package:http/http.dart' as http;
 
 import '../dataset/dataset.dart';
 
 /// {@template file_loader}
-/// Класс для загрузки данных
+/// Загрузчик и парсер CSV-файлов для преобразования в структуру [Dataset]
+/// 
+/// Отвечает за:
+/// - Выбор файла через системный диалог
+/// - Чтение и декодирование CSV-содержимого
+/// - Определение типов колонок (числовые, дата/время, категориальные, текстовые)
+/// - Создание соответствующей структуры данных
 /// {@endtemplate}
 class FileLoader {
+  /// Открывает диалог выбора файла и загружает выбранный CSV-файл
+  /// 
+  /// Возвращает:
+  /// - [Future<Dataset>] — датасет, созданный из загруженного файла
+  /// 
+  /// Особенности:
+  /// - Поддерживаются только CSV-файлы
+  /// - Первая строка интерпретируется как заголовки колонок
+  /// - Пустые строки игнорируются
+  /// - Тип каждой колонки определяется автоматически
+  /// 
+  /// Выбрасывает:
+  /// - [Exception] — если файл не выбран
+  /// - [Exception] — если не удалось прочитать файл
+  /// - [Exception] — если файл пуст
   Future<Dataset> getDataset() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: [
-        'csv'
-      ],
-      withData: false,
-      withReadStream: true
+      allowedExtensions: ['csv'],
+      withReadStream: true,
     );
+
     if (result == null || result.files.isEmpty) {
-      throw Exception('Файлы не были выбраны или программа выбора файлов была отменена');
+      throw Exception('Файл не выбран');
     }
+
     final file = result.files.first;
-    final fileName = file.name;
-    final fileReadStream = file.readStream;
-    if (fileReadStream == null) {
-      throw Exception('Не удается прочитать файл из нулевого потока');
+
+    if (file.readStream == null) {
+      throw Exception('Не удалось прочитать файл');
     }
-    final stream = http.ByteStream(fileReadStream);
+
+    final stream = http.ByteStream(file.readStream!);
     final bytes = await stream.toBytes();
     final content = utf8.decode(bytes);
 
-    // Разбор CSV
-    final lines = content.split('\n').where((line) => line.trim().isNotEmpty).toList();
-    
+    final lines = content
+        .split('\n')
+        .where((line) => line.trim().isNotEmpty)
+        .toList();
+
     if (lines.isEmpty) {
       throw Exception('Файл пуст');
     }
-    
-    // Предполагаем, что первая строка - заголовки
-    final headers = lines.first.split(',').map((h) => h.trim()).toList();
-    final dataRows = lines.skip(1).map((line) {
-      return line.split(',').map((cell) => cell.trim()).toList();
-    }).toList();
-    
-    // Вывод информации в консоль
-    log('=== ИНФОРМАЦИЯ О CSV ФАЙЛЕ ===', name: "FileLoader");
-    log('Имя файла: ${file.name}', name: "FileLoader");
-    log('Размер файла: ${file.size} байт', name: "FileLoader");
-    log('Количество строк: ${lines.length}', name: "FileLoader");
-    log('Количество колонок: ${headers.length}', name: "FileLoader");
-    
-    log('Заголовки:', name: "FileLoader");
-    for (var i = 0; i < headers.length; i++) {
-      log('  [${i+1}] ${headers[i]}', name: "FileLoader");
-    }
-    log('=== КОНЕЦ ИНФОРМАЦИИ ===', name: "FileLoader");
 
-    // Создаем колонки для Dataset
+    final headers = lines.first.split(',').map((e) => e.trim()).toList();
+
+    final rows = lines
+        .skip(1)
+        .map((line) => line.split(',').map((e) => e.trim()).toList())
+        .toList();
+
+    log('CSV rows: ${rows.length}');
+    log('CSV columns: ${headers.length}');
+
     final List<DataColumn> columns = [];
 
-    for (int i = 0; i < headers.length; i++) {
-      // Собираем все значения для текущей колонки
-      final List<dynamic> rawValues = [];
-        for (var row in dataRows) {
-          if (i < row.length) {
-            rawValues.add(_tryParseValue(row[i]));
-          } else {
-            rawValues.add(null);
-          }
-        }
+    for (int colIndex = 0; colIndex < headers.length; colIndex++) {
+      final name = headers[colIndex];
+      final values = <String?>[];
 
-      // Определяем тип на основе всех значений
-      final columnType = _determineColumnType(rawValues);
-      
-      // Для числовых колонок - приводим всё к double
-      List<dynamic> cleanValues;
-      if (columnType == ColumnType.numeric) {
-        cleanValues = rawValues.map((v) {
-          if (v is num) return v.toDouble(); 
-          if (v is String && double.tryParse(v) != null) return double.parse(v); 
-          return null; // всё остальное в null
-        }).toList();
-      } else {
-        cleanValues = rawValues; // для остальных типов оставляем как есть
+      for (final row in rows) {
+        if (colIndex < row.length) {
+          values.add(row[colIndex]);
+        } else {
+          values.add(null);
+        }
       }
-      // Создаем колонку
-      columns.add(DataColumn(
-        name: headers[i],
-        type: columnType,
-        values: cleanValues,
-      ));
+
+      columns.add(_buildColumn(name, values));
     }
 
     return Dataset(
-      name: fileName,
+      name: file.name,
       columns: columns,
     );
   }
 
-  
-  /// Пытается преобразовать строковое значение в соответствующий тип
-  dynamic _tryParseValue(String value) {
-    if (value.isEmpty) return null;
-    
-    // Пробуем распарсить как число (int или double)
-    final intValue = int.tryParse(value);
-    if (intValue != null) return intValue;
-    
-    final doubleValue = double.tryParse(value);
-    if (doubleValue != null) return doubleValue;
-    
-    // Пробуем распарсить как дату (в разных форматах)
-    try {
-      final dateTime = DateTime.tryParse(value);
-      if (dateTime != null) return dateTime;
-    } catch (_) {}
-    
-    // Если ничего не подошло, возвращаем как строку
-    return value;
+  /// Создает колонку соответствующего типа на основе анализа сырых данных
+  /// 
+  /// Принимает:
+  /// - [name] — имя колонки
+  /// - [rawValues] — сырые строковые значения из CSV
+  /// 
+  /// Возвращает:
+  /// - [DataColumn] — типизированную колонку ([NumericColumn], [DateTimeColumn], 
+  ///   [CategoricalColumn] или [TextColumn])
+  /// 
+  /// Особенности:
+  /// - Сначала проверяется возможность числового типа
+  /// - Затем проверяется тип дата/время
+  /// - Затем проверяется категориальный тип (если уникальных значений < 20%)
+  /// - Иначе создается текстовая колонка
+  DataColumn _buildColumn(String name, List<String?> rawValues) {
+    if (_isNumeric(rawValues)) {
+      final values = rawValues.map((v) {
+        if (v == null || v.isEmpty) return null;
+        return double.tryParse(v);
+      }).toList();
+
+      return NumericColumn(name, values);
+    }
+
+    if (_isDateTime(rawValues)) {
+      final values = rawValues.map((v) {
+        if (v == null || v.isEmpty) return null;
+        return DateTime.tryParse(v);
+      }).toList();
+
+      return DateTimeColumn(name, values);
+    }
+
+    if (_isCategorical(rawValues)) {
+      return CategoricalColumn(name, rawValues);
+    }
+
+    return TextColumn(name, rawValues);
   }
-  
-  /// Определяет тип колонки на основе значений
-  ColumnType _determineColumnType(List<dynamic> values) {
-    bool allNull = true;
-    bool allNumeric = true;
-    bool allDateTime = true;
-    final nonNullValues = <dynamic>[];
-    
-    for (var v in values) {
-      if (v == null) continue;
-      
-      allNull = false;
-      nonNullValues.add(v);
-      
-      if (v is! num) allNumeric = false;
-      if (v is! DateTime) allDateTime = false;
+
+  /// Проверяет, можно ли интерпретировать значения как числа
+  bool _isNumeric(List<String?> values) {
+    for (final v in values) {
+      if (v == null || v.isEmpty) continue;
+      if (double.tryParse(v) == null) return false;
     }
-    
-    if (allNull) return ColumnType.text;
-    if (allNumeric) return ColumnType.numeric;
-    if (allDateTime) return ColumnType.datetime;
-    
-    // Если смесь типов или строки - проверяем на категориальность
-    final uniqueValues = nonNullValues.toSet().length;
-    if (uniqueValues < nonNullValues.length * 0.2) {
-      return ColumnType.categorical;
+    return true;
+  }
+
+  /// Проверяет, можно ли интерпретировать значения как даты
+  bool _isDateTime(List<String?> values) {
+    for (final v in values) {
+      if (v == null || v.isEmpty) continue;
+      if (DateTime.tryParse(v) == null) return false;
     }
-    
-    return ColumnType.text;
+    return true;
+  }
+
+  /// Проверяет, являются ли значения категориальными
+  /// 
+  /// Критерий: количество уникальных значений менее 20% от общего числа
+  bool _isCategorical(List<String?> values) {
+    final nonNull = values.whereType<String>().toList();
+
+    if (nonNull.isEmpty) return false;
+
+    final unique = nonNull.toSet().length;
+
+    return unique < nonNull.length * 0.2;
   }
 }
-
-
-

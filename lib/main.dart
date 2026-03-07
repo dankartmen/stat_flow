@@ -1,7 +1,10 @@
-  import 'package:flutter/material.dart' hide DataColumn;
+  import 'dart:developer';
+
+import 'package:flutter/material.dart' hide DataColumn;
   import 'package:flutter_localizations/flutter_localizations.dart';
   import 'package:pluto_grid/pluto_grid.dart';
   import 'package:stat_flow/features/charts/heatmap/model/correlation_matrix.dart';
+import 'package:stat_flow/features/dataset/correlation_matrix_builder.dart';
   import 'package:stat_flow/features/dataset/dataset.dart';
   import 'package:stat_flow/features/statistics/statistic_calculator.dart';
   import 'package:stat_flow/features/statistics/statistic_result.dart';
@@ -95,29 +98,23 @@
       try {
         // Загружаем датасет
         final loadedDataset = await _fileLoader.getDataset();
-        
+
         // Конвертируем в формат PlutoGridData
         final converter = PlutoGridConverter();
         final gridData = converter.convert(loadedDataset);
 
-        final calculator = StatisticCalculator();
-        final numColumn = loadedDataset.columns
-          .where((column) => column.type == ColumnType.numeric).toList();
-        final values = numColumn.first.values.map((v) => v as num?).toList();
-        final result = calculator.calculate(values);
-        debugPrint(result.toString());
         setState(() {
           _isLoading = false;
           _isTableVisible = true;
           _showStatistics = true;
           _dataset = loadedDataset;
           _plutoGridData = gridData;
-          _statisticResult = result;
           _windowPosition = const Offset(80, 80);
           _windowSize = const Size(720, 520);
         });
       } catch (e) {
         setState(() => _isLoading = false);
+        log('Ошибка загрузки: $e');
         _showErrorSnackBar(e);
       }
     }
@@ -531,7 +528,7 @@
             
                       if (_showStatistics) ...[
                         HeatmapSection(
-                          matrix: CorrelationMatrix.fromColumns(_dataset!.columns),
+                          matrix: _dataset!.corr(),
                         ),
                         // SfCartesianChart(
                         //   primaryXAxis: CategoryAxis(),
