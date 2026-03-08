@@ -31,7 +31,9 @@ class FileLoader {
   /// - [Exception] — если файл не выбран
   /// - [Exception] — если не удалось прочитать файл
   /// - [Exception] — если файл пуст
-  Future<Dataset> getDataset() async {
+  Future<Dataset> getDataset({
+    void Function(double progress)? onProgress,
+  }) async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['csv'],
@@ -49,8 +51,23 @@ class FileLoader {
     }
 
     final stream = http.ByteStream(file.readStream!);
-    final bytes = await stream.toBytes();
-    final content = utf8.decode(bytes);
+
+    final total = file.size;
+
+    int received = 0;
+
+    final buffer = <int>[];
+
+    await for (final chunk in stream) {
+      buffer.addAll(chunk);
+      received += chunk.length;
+
+      if (total > 0 && onProgress != null) {
+        onProgress(received / total);
+      }
+    }
+
+    final content = utf8.decode(buffer);
 
     final lines = content
         .split('\n')

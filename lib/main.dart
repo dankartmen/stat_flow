@@ -9,9 +9,14 @@ import 'package:stat_flow/features/dataset/correlation_matrix_builder.dart';
   import 'package:stat_flow/features/statistics/statistic_calculator.dart';
   import 'package:stat_flow/features/statistics/statistic_result.dart';
   import 'package:stat_flow/features/table/pluto_grid_converter.dart';
+import 'package:trina_grid/trina_grid.dart';
   import 'features/charts/heatmap/widgets/heatmap_section.dart';
   import 'features/file_import/file_import.dart';
   import 'package:syncfusion_flutter_charts/charts.dart';
+import 'package:syncfusion_flutter_datagrid/datagrid.dart';
+
+import 'features/table/trina_grid_data.dart';
+import 'features/table/syncfusion_grid_data.dart';
 
   void main() {
     runApp(const MyApp());
@@ -77,7 +82,11 @@ import 'package:stat_flow/features/dataset/correlation_matrix_builder.dart';
     Size _windowSize = const Size(720, 520);
     final Size _minSize = const Size(380, 280);
 
+    /// Состояние для второго плавающего окна (SfDataGrid)
+    Offset _windowPositionSf = const Offset(200, 200);
+    Size _windowSizeSf = const Size(720, 520);
 
+    double _progress = 0;
 
     @override
     void initState(){
@@ -93,11 +102,18 @@ import 'package:stat_flow/features/dataset/correlation_matrix_builder.dart';
       setState(() {
         _isLoading = true;
         _showStatistics = false;
+        _progress = 0;
       });
 
       try {
         // Загружаем датасет
-        final loadedDataset = await _fileLoader.getDataset();
+        final loadedDataset = await _fileLoader.getDataset(
+          onProgress: (p) {
+            setState(() {
+              _progress = p;
+            });
+          },
+        );
 
         // Конвертируем в формат PlutoGridData
         final converter = PlutoGridConverter();
@@ -201,6 +217,11 @@ import 'package:stat_flow/features/dataset/correlation_matrix_builder.dart';
     /// - Закрыть кнопкой закрытия
     /// - Изменять размер через отдельный хендлер
     Widget _buildFloatingTable() {
+
+      final converter = TrinaGridConverter();
+
+      final data = converter.convert(_dataset!);
+
       return Positioned(
         left: _windowPosition.dx,
         top: _windowPosition.dy,
@@ -248,23 +269,331 @@ import 'package:stat_flow/features/dataset/correlation_matrix_builder.dart';
                 ),
               ),
 
-              // Таблица
+              //  Таблица
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.all(8.0),
-                  child: PlutoGrid(
-                    columns: _plutoGridData!.columns,
-                    rows: _plutoGridData!.rows,
-                    columnGroups: _plutoGridData!.columnGroups,
-                    onLoaded: (event) {},
-                    configuration: const PlutoGridConfiguration(
-                      columnSize: PlutoGridColumnSizeConfig(
-                        autoSizeMode: PlutoAutoSizeMode.scale, // Автомасштабирование колонок
-                      ),
+                  child: TrinaGrid(
+                    /// Список колонок таблицы с их типами, заголовками и настройками
+                    columns: data.columns,
+                    /// Список строк данных для отображения в таблице
+                    rows: data.rows,
+                    /// Группы колонок для организации иерархической структуры заголовков
+                    columnGroups: data.columnGroups,
+                    /// Callback, вызываемый после полной загрузки таблицы
+                    onLoaded: (TrinaGridOnLoadedEvent event) {
+                      // Логика после загрузки, например, установка начального состояния
+                    },
+                    /// Callback при изменении данных в ячейке (редактирование)
+                    onChanged: (TrinaGridOnChangedEvent event) {
+                      // Обработка изменений, например, валидация или сохранение
+                    },
+                    /// Callback при выборе строки или ячейки
+                    onSelected: (TrinaGridOnSelectedEvent event) {
+                      // Логика при выборе, например, обновление UI
+                    },
+                    /// Callback при изменении состояния чекбокса строки
+                    onRowChecked: (TrinaGridOnRowCheckedEvent event) {
+                      // Обработка чекбоксов, например, массовые операции
+                    },
+                    /// Callback при двойном клике на строку
+                    onRowDoubleTap: (TrinaGridOnRowDoubleTapEvent event) {
+                      // Логика двойного клика, например, открытие деталей
+                    },
+                    /// Callback при правом клике на строку
+                    onRowSecondaryTap: (TrinaGridOnRowSecondaryTapEvent event) {
+                      // Контекстное меню или дополнительные действия
+                    },
+                    /// Callback при перемещении строк пользователем
+                    onRowsMoved: (TrinaGridOnRowsMovedEvent event) {
+                      // Обновление порядка строк в данных
+                    },
+                    /// Callback при перемещении колонок пользователем
+                    onColumnsMoved: (TrinaGridOnColumnsMovedEvent event) {
+                      // Обновление порядка колонок
+                    },
+                    /// Функция для создания кастомного заголовка таблицы
+                    createHeader: (stateManager) {
+                      return Container(
+                        height: 50,
+                        color: Colors.blueGrey[100],
+                        child: const Center(child: Text('Кастомный заголовок')),
+                      );
+                    },
+                    /// Функция для создания кастомного футера таблицы
+                    createFooter: (stateManager) {
+                      return Container(
+                        height: 40,
+                        color: Colors.blueGrey[50],
+                        child: const Center(child: Text('Кастомный футер')),
+                      );
+                    },
+                    /// Виджет, отображаемый когда нет строк для показа
+                    noRowsWidget: const Center(
+                      child: Text('Нет данных для отображения'),
                     ),
+                    /// Callback для определения цвета фона строки
+
+                    scrollPhysics: const ClampingScrollPhysics(),
+
+
+
+                    /// Конфигурация внешнего вида и поведения таблицы
+                    configuration: TrinaGridConfiguration(
+                      /// Настройки полос прокрутки (видимость, толщина и т.д.)
+                      scrollbar: TrinaGridScrollbarConfig(
+                      ),
+                      /// Стили оформления таблицы (цвета, шрифты и т.д.)
+                      style: TrinaGridStyleConfig(
+                        /// Цвет фона заголовков колонок
+                        columnTextStyle: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                        /// Цвет фона ячеек
+                        cellTextStyle: const TextStyle(color: Colors.black87),
+                        /// Цвет фона четных строк
+                        evenRowColor: Colors.grey[50],
+                        /// Цвет фона нечетных строк
+                        oddRowColor: Colors.white,
+                        /// Цвет фона строки при выборе
+                        rowColor: Colors.blue[50]!,
+                        /// Цвет границы ячеек
+                        gridBorderColor: Colors.blueGrey[200]!,
+                        /// Цвет линий сетки
+                        gridBorderWidth: 1.0,
+                        /// Цвет фона при наведении на строку
+                        activatedColor: Colors.blue[100]!,
+                      ),
+                      /// Настройки размеров колонок
+                      columnSize: TrinaGridColumnSizeConfig(
+                        /// Режим автоматического размера колонок
+                        autoSizeMode: TrinaAutoSizeMode.scale,
+                        /// Минимальная ширина колонки
+                        /// Режим изменения размера (resize - вручную, auto - автоматически)
+                        resizeMode: TrinaResizeMode.normal,
+                      ),
+                      
+                      /// Настройки локализации
+                      localeText: TrinaGridLocaleText.russian(),
+                      
+                    ),
+                  ),
+                )
+              )
+            ]
+          ),
+        ),
+      );
+    }
+
+    /// Строит второе плавающее окно с таблицей данных (SfDataGrid).
+    ///
+    /// Окно можно:
+    /// - Перетаскивать за заголовок
+    /// - Закрыть кнопкой закрытия
+    /// - Изменять размер через отдельный хендлер
+    Widget _buildFloatingTableSf() {
+
+      final converter = SyncfusionGridConverter();
+
+      final data = converter.convert(_dataset!);
+
+      return Positioned(
+        left: _windowPositionSf.dx,
+        top: _windowPositionSf.dy,
+        width: _windowSizeSf.width,
+        height: _windowSizeSf.height,
+        child: Material(
+          elevation: 8, // Тень для эффекта "парения"
+          borderRadius: BorderRadius.circular(12),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            children: [
+              // Заголовок + перетаскивание
+              GestureDetector(
+                // Перетаскивание за заголовок
+                onPanUpdate: (details) {
+                  setState(() {
+                    _windowPositionSf += details.delta; // Обновляем позицию
+                  });
+                },
+                child: Container(
+                  color: Colors.green[800],
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          "Таблица данных (SfDataGrid)",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white),
+                        onPressed: () {
+                          setState(() {
+                            _isTableVisible = false;
+                          });
+                        },
+                      ),
+                    ],
                   ),
                 ),
               ),
+
+              //  Таблица
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: SfDataGrid(
+                    /// Источник данных для таблицы, содержащий строки и логику их отображения
+                    source: data.source,
+                    /// Список колонок таблицы с их конфигурациями
+                    columns: data.columns,
+                    /// Видимость линий сетки между ячейками (горизонтальные и вертикальные линии)
+                    gridLinesVisibility: GridLinesVisibility.both,
+                    /// Видимость линий сетки в заголовке колонок
+                    headerGridLinesVisibility: GridLinesVisibility.both,
+                    /// Разрешает сортировку колонок по клику на заголовок
+                    allowSorting: true,
+                    /// Разрешает сортировку по нескольким колонкам одновременно
+                    allowMultiColumnSorting: true,
+                    /// Разрешает три состояния сортировки (возрастание, убывание, нет сортировки)
+                    allowTriStateSorting: true,
+                    /// Показывает номера порядка сортировки при мультисортировке
+                    showSortNumbers: true,
+                    /// Тип жеста для активации сортировки (tap - одиночный клик, doubleTap - двойной)
+                    sortingGestureType: SortingGestureType.tap,
+                    /// Разрешает фильтрацию данных в колонках
+                    allowFiltering: true,
+                    /// Разрешает изменение ширины колонок пользователем
+                    allowColumnsResizing: true,
+                    /// Разрешает pull-to-refresh для обновления данных
+                    allowPullToRefresh: false,
+                    /// Разрешает свайпинг строк для дополнительных действий
+                    allowSwiping: false,
+                    /// Максимальное смещение при свайпе (в пикселях)
+                    swipeMaxOffset: 200.0,
+                    /// Callback, вызываемый при начале свайпа строки
+                    onSwipeStart: (details) {
+                      // Можно добавить логику начала свайпа
+                      return true;
+                    },
+                    /// Callback, вызываемый при обновлении свайпа
+                    // onSwipeUpdate: (details) {
+                    //   // Логика обновления свайпа
+                    //   null
+                    // },
+                    /// Callback, вызываемый при завершении свайпа
+                    onSwipeEnd: (details) {
+                      // Логика завершения свайпа
+                    },
+                    /// Builder для действий при свайпе слева (start)
+                    // startSwipeActionsBuilder: (context, rowIndex) {
+                    //   return Container(); // Пустой контейнер, если нет действий
+                    // },
+                    // /// Builder для действий при свайпе справа (end)
+                    // endSwipeActionsBuilder: (context, rowIndex) {
+                    //   return Container(); // Пустой контейнер, если нет действий
+                    // },
+                    /// Режим выбора строк (single - одна строка, multiple - несколько, none - нет выбора)
+                    selectionMode: SelectionMode.multiple,
+                    /// Режим навигации по таблице (cell - по ячейкам, row - по строкам)
+                    navigationMode: GridNavigationMode.cell,
+                    /// Разрешает редактирование ячеек
+                    allowEditing: false,
+                    /// Тип жеста для редактирования (tap - клик, doubleTap - двойной клик)
+                    editingGestureType: EditingGestureType.doubleTap,
+                    /// Показывает колонку с чекбоксами для выбора строк
+                    showCheckboxColumn: true,
+                    /// Настройки колонки чекбоксов (ширина, цвет и т.д.)
+                    checkboxColumnSettings: const DataGridCheckboxColumnSettings(
+                      width: 50,
+                      showCheckboxOnHeader: true,
+                    ),
+                    /// Показывает иконку в заголовке колонки при наведении курсора
+                    showColumnHeaderIconOnHover: true,
+                    /// Режим определения ширины колонок (fitByCellValue - по содержимому, fitByColumnName - по имени, none - фиксированная)
+                    columnWidthMode: ColumnWidthMode.fitByCellValue,
+                    /// Объект для управления шириной колонок
+                    columnSizer: null,
+                    /// Ширина колонок по умолчанию (в пикселях)
+                    defaultColumnWidth: 120.0,
+                    /// Высота строк данных (в пикселях)
+                    rowHeight: 40.0,
+                    /// Высота строки заголовков колонок (в пикселях)
+                    headerRowHeight: 50.0,
+                    /// Высота футера таблицы (в пикселях)
+                    footerHeight: 0.0,
+                    /// Всегда показывать полосы прокрутки (даже если контент помещается)
+                    isScrollbarAlwaysShown: false,
+                    /// Физика прокрутки для горизонтальной полосы (определяет поведение прокрутки)
+                    horizontalScrollPhysics: const ClampingScrollPhysics(),
+                    /// Физика прокрутки для вертикальной полосы (определяет поведение прокрутки)
+                    verticalScrollPhysics: const ClampingScrollPhysics(),
+                    /// Контроллер для управления таблицей программно
+                    controller: null,
+                    /// Количество замороженных колонок слева (не прокручиваются)
+                    frozenColumnsCount: 0,
+                    /// Количество замороженных колонок в футере
+                    footerFrozenColumnsCount: 0,
+                    /// Количество замороженных строк сверху
+                    frozenRowsCount: 0,
+                    /// Callback для определения высоты строки динамически
+                    onQueryRowHeight: (rowIndex) {
+                      return 40.0; // Фиксированная высота
+                    },
+                    /// Callback при обновлении размера колонки
+                    // onColumnResizeUpdate: (details) {
+                    //   // Логика при изменении размера колонки
+                    // },
+                    /// Callback при клике на ячейку
+                    onCellTap: (details) {
+                      // Логика при клике на ячейку
+                    },
+                    /// Callback при двойном клике на ячейку
+                    onCellDoubleTap: (details) {
+                      // Логика при двойном клике
+                    },
+                    /// Callback при правом клике на ячейку
+                    onCellSecondaryTap: (details) {
+                      // Логика при правом клике
+                    },
+                    /// Callback при долгом нажатии на ячейку
+                    onCellLongPress: (details) {
+                      // Логика при долгом нажатии
+                    },
+                    /// Callback при изменении выбора строк
+                    onSelectionChanged: (addedRows, removedRows) {
+                      // Логика при изменении выбора
+                    },
+                    /// Callback при активации ячейки (фокус)
+                    onCurrentCellActivated: (oldRowColumnIndex, newRowColumnIndex) {
+                      // Логика при активации ячейки
+                    },
+                    /// Callback при клике на заголовок колонки
+                    // onColumnHeaderTap: (details) {
+                    //   // Логика при клике на заголовок
+                    // },
+                    // /// Подсвечивать строку при наведении курсора
+                    // highlightRowOnHover: true,
+                    // /// Цвет подсветки строки при наведении
+                    // rowHoverColor: Colors.blue.withOpacity(0.1),
+                    // /// Builder для виджета "загрузить больше" в конце таблицы
+                    // loadMoreViewBuilder: (context, loadMoreRows) {
+                    //   return Container(); // Пустой, если не используется
+                    // },
+                    // /// Сжимать строки по содержимому (для оптимизации производительности)
+                    // shrinkWrapRows: false,
+                    // /// Режим стека (для мобильных устройств, сворачивает колонки)
+                    // stackMode: false,
+                  ),
+                ),
+              ),
+
+
             ],
           ),
         ),
@@ -312,6 +641,47 @@ import 'package:stat_flow/features/dataset/correlation_matrix_builder.dart';
       );
     }
 
+    /// Строит хендлер для изменения размера второго плавающего окна (SfDataGrid).
+    ///
+    /// Расположен в правом нижнем углу окна и позволяет
+    /// изменять размер с учетом минимальных ограничений.
+    Widget _buildResizeHandleSf() {
+      return Positioned(
+        left: _windowPositionSf.dx + _windowSizeSf.width - 32,
+        top: _windowPositionSf.dy + _windowSizeSf.height - 32,
+        child: GestureDetector(
+          // Изменение размера
+          onPanUpdate: (details) {
+            setState(() {
+              double newWidth = _windowSizeSf.width + details.delta.dx;
+              double newHeight = _windowSizeSf.height + details.delta.dy;
+
+              // Ограничения минимального размера
+              newWidth = newWidth.clamp(_minSize.width, double.infinity);
+              newHeight = newHeight.clamp(_minSize.height, double.infinity);
+
+              _windowSizeSf = Size(newWidth, newHeight);
+            });
+          },
+          child: Container(
+            width: 32,
+            height: 32,
+            decoration: const BoxDecoration(
+              color: Colors.green,
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(16),
+              ),
+            ),
+            child: const Icon(
+              Icons.open_in_full,
+              color: Colors.white,
+              size: 20,
+            ),
+          ),
+        ),
+      );
+    }
+
     @override
     Widget build(BuildContext context) {
       return Scaffold(
@@ -344,6 +714,8 @@ import 'package:stat_flow/features/dataset/correlation_matrix_builder.dart';
             if (_isTableVisible == true) ...[
               _buildFloatingTable(),
               _buildResizeHandle(),
+              _buildFloatingTableSf(),
+              _buildResizeHandleSf(),
             ],
           ],
         ),
@@ -505,7 +877,29 @@ import 'package:stat_flow/features/dataset/correlation_matrix_builder.dart';
     /// - Данные загружены: показывает информацию и статистику
     Widget _buildMainContent() {
       if (_isLoading) {
-        return const Center(child: CircularProgressIndicator());
+        return Center(
+          child: SizedBox(
+            width: 400,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+
+                const Text(
+                  "Загрузка файла...",
+                  style: TextStyle(fontSize: 18),
+                ),
+
+                const SizedBox(height: 20),
+
+                LinearProgressIndicator(value: _progress),
+
+                const SizedBox(height: 10),
+
+                Text("${(_progress * 100).toStringAsFixed(1)} %"),
+              ],
+            ),
+          ),
+        );
       }
 
       if (_plutoGridData == null) {
