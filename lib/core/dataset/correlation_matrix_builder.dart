@@ -1,5 +1,5 @@
-import '../charts/heatmap/calculator/heatmap_calculator.dart';
-import '../charts/heatmap/model/correlation_matrix.dart';
+import '../../features/charts/heatmap/calculator/heatmap_calculator.dart';
+import '../../features/charts/heatmap/model/correlation_matrix.dart';
 import 'dataset.dart';
 
 /// {@template correlation_matrix_builder}

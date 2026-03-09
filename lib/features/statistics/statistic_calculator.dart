@@ -1,6 +1,6 @@
 import 'dart:math';
 
-import '../dataset/dataset.dart';
+import '../../core/dataset/dataset.dart';
 import 'statistic_result.dart';
 
 /// {@template statistic_calculator}

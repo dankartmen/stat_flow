@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart' hide DataColumn;
 import 'package:syncfusion_flutter_datagrid/datagrid.dart';
-import '../dataset/dataset.dart';
+import '../../../core/dataset/dataset.dart';
 import 'dataset_datasource.dart';
 
 /// {@template syncfusion_grid_data}

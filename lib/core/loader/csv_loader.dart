@@ -6,7 +6,7 @@ import 'package:http/http.dart' as http;
 
 import '../dataset/dataset.dart';
 
-/// {@template file_loader}
+/// {@template csv_loader}
 /// Загрузчик и парсер CSV-файлов для преобразования в структуру [Dataset]
 /// 
 /// Отвечает за:
@@ -15,7 +15,7 @@ import '../dataset/dataset.dart';
 /// - Определение типов колонок (числовые, дата/время, категориальные, текстовые)
 /// - Создание соответствующей структуры данных
 /// {@endtemplate}
-class FileLoader {
+class CsvLoader {
   /// Открывает диалог выбора файла и загружает выбранный CSV-файл
   /// 
   /// Возвращает:

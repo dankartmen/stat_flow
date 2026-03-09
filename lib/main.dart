@@ -1,22 +1,14 @@
-  import 'dart:developer';
+import 'dart:developer';
 
 import 'package:flutter/material.dart' hide DataColumn;
-  import 'package:flutter_localizations/flutter_localizations.dart';
-  import 'package:pluto_grid/pluto_grid.dart';
-  import 'package:stat_flow/features/charts/heatmap/model/correlation_matrix.dart';
-import 'package:stat_flow/features/dataset/correlation_matrix_builder.dart';
-  import 'package:stat_flow/features/dataset/dataset.dart';
-  import 'package:stat_flow/features/statistics/statistic_calculator.dart';
-  import 'package:stat_flow/features/statistics/statistic_result.dart';
-  import 'package:stat_flow/features/table/pluto_grid_converter.dart';
-import 'package:trina_grid/trina_grid.dart';
-  import 'features/charts/heatmap/widgets/heatmap_section.dart';
-  import 'features/file_import/file_import.dart';
-  import 'package:syncfusion_flutter_charts/charts.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:stat_flow/core/dataset/dataset.dart';
+import 'package:stat_flow/features/statistics/statistic_result.dart';
+import 'features/charts/heatmap/widgets/heatmap_section.dart';
+import 'core/loader/csv_loader.dart';
 import 'package:syncfusion_flutter_datagrid/datagrid.dart';
-
-import 'features/table/trina_grid_data.dart';
-import 'features/table/syncfusion_grid_data.dart';
+import 'package:syncfusion_localizations/syncfusion_localizations.dart';
+import 'features/table/grid/syncfusion_grid_data.dart';
 
   void main() {
     runApp(const MyApp());
@@ -37,6 +29,7 @@ import 'features/table/syncfusion_grid_data.dart';
           GlobalMaterialLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,
+          SfGlobalLocalizations.delegate
         ],
         supportedLocales: [
           const Locale('ru', 'RU'),
@@ -56,26 +49,20 @@ import 'features/table/syncfusion_grid_data.dart';
 
   class _FileLoaderScreenState extends State<FileLoaderScreen> {
     /// Сервис для загрузки файлов
-    final FileLoader _fileLoader = FileLoader();
+    final CsvLoader _csvLoader = CsvLoader();
 
     /// Флаг состояния загрузки
     bool _isLoading = false;
 
     /// Флаг для показа таблицы
     bool _isTableVisible = false;
-    
-    /// Данные для таблицы
-    PlutoGridData? _plutoGridData; 
-
-    /// Статистические данные
-    StatisticResult? _statisticResult;
 
     /// Датасет
     Dataset? _dataset;
     /// Состояние для показа статистики
     bool _showStatistics = false;
     
-    late TooltipBehavior _tooltip;
+    SyncfusionGridData? _gridData;
 
     /// Состояние для плавающего окна
     Offset _windowPosition = const Offset(80, 80);
@@ -90,7 +77,6 @@ import 'features/table/syncfusion_grid_data.dart';
 
     @override
     void initState(){
-      _tooltip = TooltipBehavior(enable: true);
       super.initState();
     }
 
@@ -107,7 +93,7 @@ import 'features/table/syncfusion_grid_data.dart';
 
       try {
         // Загружаем датасет
-        final loadedDataset = await _fileLoader.getDataset(
+        final loadedDataset = await _csvLoader.getDataset(
           onProgress: (p) {
             setState(() {
               _progress = p;
@@ -115,8 +101,7 @@ import 'features/table/syncfusion_grid_data.dart';
           },
         );
 
-        // Конвертируем в формат PlutoGridData
-        final converter = PlutoGridConverter();
+        final converter = SyncfusionGridConverter();
         final gridData = converter.convert(loadedDataset);
 
         setState(() {
@@ -124,7 +109,7 @@ import 'features/table/syncfusion_grid_data.dart';
           _isTableVisible = true;
           _showStatistics = true;
           _dataset = loadedDataset;
-          _plutoGridData = gridData;
+          _gridData = gridData;
           _windowPosition = const Offset(80, 80);
           _windowSize = const Size(720, 520);
         });
@@ -210,179 +195,6 @@ import 'features/table/syncfusion_grid_data.dart';
       );
     }
 
-    /// Строит плавающее окно с таблицей данных.
-    ///
-    /// Окно можно:
-    /// - Перетаскивать за заголовок
-    /// - Закрыть кнопкой закрытия
-    /// - Изменять размер через отдельный хендлер
-    Widget _buildFloatingTable() {
-
-      final converter = TrinaGridConverter();
-
-      final data = converter.convert(_dataset!);
-
-      return Positioned(
-        left: _windowPosition.dx,
-        top: _windowPosition.dy,
-        width: _windowSize.width,
-        height: _windowSize.height,
-        child: Material(
-          elevation: 8, // Тень для эффекта "парения"
-          borderRadius: BorderRadius.circular(12),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            children: [
-              // Заголовок + перетаскивание
-              GestureDetector(
-                // Перетаскивание за заголовок
-                onPanUpdate: (details) {
-                  setState(() {
-                    _windowPosition += details.delta; // Обновляем позицию  
-                  });
-                },
-                child: Container(
-                  color: Colors.blueGrey[800],
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Row(
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          "Таблица данных",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close, color: Colors.white),
-                        onPressed: () {
-                          setState(() {
-                            _isTableVisible = false;
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              //  Таблица
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: TrinaGrid(
-                    /// Список колонок таблицы с их типами, заголовками и настройками
-                    columns: data.columns,
-                    /// Список строк данных для отображения в таблице
-                    rows: data.rows,
-                    /// Группы колонок для организации иерархической структуры заголовков
-                    columnGroups: data.columnGroups,
-                    /// Callback, вызываемый после полной загрузки таблицы
-                    onLoaded: (TrinaGridOnLoadedEvent event) {
-                      // Логика после загрузки, например, установка начального состояния
-                    },
-                    /// Callback при изменении данных в ячейке (редактирование)
-                    onChanged: (TrinaGridOnChangedEvent event) {
-                      // Обработка изменений, например, валидация или сохранение
-                    },
-                    /// Callback при выборе строки или ячейки
-                    onSelected: (TrinaGridOnSelectedEvent event) {
-                      // Логика при выборе, например, обновление UI
-                    },
-                    /// Callback при изменении состояния чекбокса строки
-                    onRowChecked: (TrinaGridOnRowCheckedEvent event) {
-                      // Обработка чекбоксов, например, массовые операции
-                    },
-                    /// Callback при двойном клике на строку
-                    onRowDoubleTap: (TrinaGridOnRowDoubleTapEvent event) {
-                      // Логика двойного клика, например, открытие деталей
-                    },
-                    /// Callback при правом клике на строку
-                    onRowSecondaryTap: (TrinaGridOnRowSecondaryTapEvent event) {
-                      // Контекстное меню или дополнительные действия
-                    },
-                    /// Callback при перемещении строк пользователем
-                    onRowsMoved: (TrinaGridOnRowsMovedEvent event) {
-                      // Обновление порядка строк в данных
-                    },
-                    /// Callback при перемещении колонок пользователем
-                    onColumnsMoved: (TrinaGridOnColumnsMovedEvent event) {
-                      // Обновление порядка колонок
-                    },
-                    /// Функция для создания кастомного заголовка таблицы
-                    createHeader: (stateManager) {
-                      return Container(
-                        height: 50,
-                        color: Colors.blueGrey[100],
-                        child: const Center(child: Text('Кастомный заголовок')),
-                      );
-                    },
-                    /// Функция для создания кастомного футера таблицы
-                    createFooter: (stateManager) {
-                      return Container(
-                        height: 40,
-                        color: Colors.blueGrey[50],
-                        child: const Center(child: Text('Кастомный футер')),
-                      );
-                    },
-                    /// Виджет, отображаемый когда нет строк для показа
-                    noRowsWidget: const Center(
-                      child: Text('Нет данных для отображения'),
-                    ),
-                    /// Callback для определения цвета фона строки
-
-                    scrollPhysics: const ClampingScrollPhysics(),
-
-
-
-                    /// Конфигурация внешнего вида и поведения таблицы
-                    configuration: TrinaGridConfiguration(
-                      /// Настройки полос прокрутки (видимость, толщина и т.д.)
-                      scrollbar: TrinaGridScrollbarConfig(
-                      ),
-                      /// Стили оформления таблицы (цвета, шрифты и т.д.)
-                      style: TrinaGridStyleConfig(
-                        /// Цвет фона заголовков колонок
-                        columnTextStyle: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
-                        /// Цвет фона ячеек
-                        cellTextStyle: const TextStyle(color: Colors.black87),
-                        /// Цвет фона четных строк
-                        evenRowColor: Colors.grey[50],
-                        /// Цвет фона нечетных строк
-                        oddRowColor: Colors.white,
-                        /// Цвет фона строки при выборе
-                        rowColor: Colors.blue[50]!,
-                        /// Цвет границы ячеек
-                        gridBorderColor: Colors.blueGrey[200]!,
-                        /// Цвет линий сетки
-                        gridBorderWidth: 1.0,
-                        /// Цвет фона при наведении на строку
-                        activatedColor: Colors.blue[100]!,
-                      ),
-                      /// Настройки размеров колонок
-                      columnSize: TrinaGridColumnSizeConfig(
-                        /// Режим автоматического размера колонок
-                        autoSizeMode: TrinaAutoSizeMode.scale,
-                        /// Минимальная ширина колонки
-                        /// Режим изменения размера (resize - вручную, auto - автоматически)
-                        resizeMode: TrinaResizeMode.normal,
-                      ),
-                      
-                      /// Настройки локализации
-                      localeText: TrinaGridLocaleText.russian(),
-                      
-                    ),
-                  ),
-                )
-              )
-            ]
-          ),
-        ),
-      );
-    }
 
     /// Строит второе плавающее окно с таблицей данных (SfDataGrid).
     ///
@@ -391,14 +203,9 @@ import 'features/table/syncfusion_grid_data.dart';
     /// - Закрыть кнопкой закрытия
     /// - Изменять размер через отдельный хендлер
     Widget _buildFloatingTableSf() {
-
-      final converter = SyncfusionGridConverter();
-
-      final data = converter.convert(_dataset!);
-
       return Positioned(
-        left: _windowPositionSf.dx,
-        top: _windowPositionSf.dy,
+        left: _windowPosition.dx,
+        top: _windowPosition.dy,
         width: _windowSizeSf.width,
         height: _windowSizeSf.height,
         child: Material(
@@ -449,9 +256,9 @@ import 'features/table/syncfusion_grid_data.dart';
                   padding: const EdgeInsets.all(8.0),
                   child: SfDataGrid(
                     /// Источник данных для таблицы, содержащий строки и логику их отображения
-                    source: data.source,
+                    source: _gridData!.source,
                     /// Список колонок таблицы с их конфигурациями
-                    columns: data.columns,
+                    columns: _gridData!.columns,
                     /// Видимость линий сетки между ячейками (горизонтальные и вертикальные линии)
                     gridLinesVisibility: GridLinesVisibility.both,
                     /// Видимость линий сетки в заголовке колонок
@@ -577,18 +384,16 @@ import 'features/table/syncfusion_grid_data.dart';
                     // onColumnHeaderTap: (details) {
                     //   // Логика при клике на заголовок
                     // },
-                    // /// Подсвечивать строку при наведении курсора
-                    // highlightRowOnHover: true,
-                    // /// Цвет подсветки строки при наведении
-                    // rowHoverColor: Colors.blue.withOpacity(0.1),
-                    // /// Builder для виджета "загрузить больше" в конце таблицы
-                    // loadMoreViewBuilder: (context, loadMoreRows) {
-                    //   return Container(); // Пустой, если не используется
-                    // },
-                    // /// Сжимать строки по содержимому (для оптимизации производительности)
-                    // shrinkWrapRows: false,
-                    // /// Режим стека (для мобильных устройств, сворачивает колонки)
-                    // stackMode: false,
+                    /// Подсвечивать строку при наведении курсора
+                    highlightRowOnHover: true,
+                    /// Цвет подсветки строки при наведении
+                    /// Builder для виджета "загрузить больше" в конце таблицы
+                    loadMoreViewBuilder: (context, loadMoreRows) {
+                      return Container(); // Пустой, если не используется
+                    },
+                    /// Сжимать строки по содержимому (для оптимизации производительности)
+                    shrinkWrapRows: false,
+                    /// Режим стека (для мобильных устройств, сворачивает колонки)
                   ),
                 ),
               ),
@@ -690,13 +495,13 @@ import 'features/table/syncfusion_grid_data.dart';
           centerTitle: true,
           backgroundColor: Colors.blue,
           foregroundColor: Colors.white,
-          actions: _plutoGridData != null
+          actions: _gridData != null
               ? [
                   IconButton(
                     icon: const Icon(Icons.refresh),
                     onPressed: () {
                       setState(() {
-                        _plutoGridData = null;
+                        _gridData = null;
                         _showStatistics = false;
                       });
                     },
@@ -712,7 +517,6 @@ import 'features/table/syncfusion_grid_data.dart';
 
             // Плавающее окно с таблицей
             if (_isTableVisible == true) ...[
-              _buildFloatingTable(),
               _buildResizeHandle(),
               _buildFloatingTableSf(),
               _buildResizeHandleSf(),
@@ -755,7 +559,7 @@ import 'features/table/syncfusion_grid_data.dart';
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  _plutoGridData != null ? 'Данные загружены' : 'Нет данных',
+                  _gridData != null ? 'Данные загружены' : 'Нет данных',
                   style: const TextStyle(
                     color: Colors.white70,
                     fontSize: 14,
@@ -776,7 +580,7 @@ import 'features/table/syncfusion_grid_data.dart';
                     _loadFile();
                   },
                 ),
-                if (_plutoGridData != null) ...[
+                if (_gridData != null) ...[
                   const Divider(),
                   ListTile(
                     leading: const Icon(Icons.table_chart),
@@ -902,7 +706,7 @@ import 'features/table/syncfusion_grid_data.dart';
         );
       }
 
-      if (_plutoGridData == null) {
+      if (_gridData == null) {
         return _buildEmptyState();
       }
 

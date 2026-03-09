@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_datagrid/datagrid.dart';
 
-import '../dataset/dataset.dart';
+import '../../../core/dataset/dataset.dart';
 
 /// {@template dataset_data_source}
 /// Источник данных для Syncfusion DataGrid, адаптирующий [Dataset] к формату DataGridSource

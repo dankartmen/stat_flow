@@ -1,5 +1,5 @@
 
-import '../../../dataset/dataset.dart';
+import '../../../../core/dataset/dataset.dart';
 import '../calculator/heatmap_calculator.dart';
 
 /// {@template correlation_matrix}
