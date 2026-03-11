@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:stat_flow/features/charts/heatmap/color/heatmap_palette.dart';
 import 'package:stat_flow/features/charts/heatmap/color/heatmap_color_mapper.dart';
 
-import 'features/charts/chart_type.dart';
+import '../charts/chart_type.dart';
 
 /// {@template top_control_panel}
 /// Верхняя панель управления для настройки отображения графиков

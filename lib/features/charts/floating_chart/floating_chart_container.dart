@@ -1,0 +1,402 @@
+import 'package:flutter/material.dart';
+import 'floating_chart_data.dart';
+
+/// {@template floating_chart}
+/// Плавающий контейнер для графика с возможностью перемещения и изменения размера
+/// 
+/// Предоставляет интерактивное окно с:
+/// - Заголовком для перетаскивания
+/// - Зонами изменения размера по краям и углам
+/// - Кнопками полноэкранного режима и закрытия
+/// - Автоматическим ограничением позиции в пределах рабочей области
+/// 
+/// Поддерживает 8 направлений изменения размера через специальные зоны.
+/// {@endtemplate}
+class FloatingChart extends StatefulWidget {
+  /// Данные плавающего графика
+  final FloatingChartData data;
+
+  /// Флаг выделения (активен ли текущий график)
+  final bool isSelected;
+
+  /// Callback при изменении позиции
+  final ValueChanged<Offset> onPositionChanged;
+
+  /// Callback при изменении размера
+  final ValueChanged<Size> onSizeChanged;
+
+  /// Callback при выборе графика
+  final VoidCallback onSelect;
+
+  /// Callback при закрытии графика
+  final VoidCallback onClose;
+
+  /// Callback при переходе в полноэкранный режим
+  final VoidCallback onFullscreen;
+
+  /// Дочерний виджет (содержимое графика)
+  final Widget child;
+
+  /// Границы рабочей области (опционально)
+  final Size? bounds;
+
+  /// {@macro floating_chart}
+  const FloatingChart({
+    super.key,
+    required this.data,
+    required this.isSelected,
+    required this.onPositionChanged,
+    required this.onSizeChanged,
+    required this.onSelect,
+    required this.onClose,
+    required this.onFullscreen,
+    required this.child,
+    this.bounds,
+  });
+
+  /// Создает копию виджета с указанными границами
+  /// 
+  /// Используется в [CanvasWorkspace] для передачи границ области.
+  FloatingChart withBounds(Size bounds) {
+    return FloatingChart(
+      key: key,
+      data: data,
+      isSelected: isSelected,
+      onPositionChanged: onPositionChanged,
+      onSizeChanged: onSizeChanged,
+      onSelect: onSelect,
+      onClose: onClose,
+      onFullscreen: onFullscreen,
+      child: child,
+      bounds: bounds,
+    );
+  }
+
+  @override
+  State<FloatingChart> createState() => _FloatingChartState();
+}
+
+class _FloatingChartState extends State<FloatingChart> {
+  /// Отступ для зон изменения размера
+  static const _resizeMargin = 12.0;
+
+  /// Высота заголовка
+  static const _headerHeight = 36.0;
+
+  /// Минимальный размер окна
+  final Size _minSize = const Size(250, 200);
+
+  /// Максимальный размер окна (ограничение)
+  static const _maxSize = 4000.0;
+
+  /// Текущая позиция окна
+  late Offset _position;
+
+  /// Текущий размер окна
+  late Size _size;
+
+  @override
+  void initState() {
+    super.initState();
+    _position = widget.data.position;
+    _size = widget.data.size;
+  }
+
+  @override
+  void didUpdateWidget(covariant FloatingChart oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.data.position != widget.data.position) {
+      _position = widget.data.position;
+    }
+
+    if (oldWidget.data.size != widget.data.size) {
+      _size = widget.data.size;
+    }
+  }
+
+  /// Возвращает границы рабочей области или очень большое значение по умолчанию
+  Size get _bounds => widget.bounds ?? const Size(100000, 100000);
+
+  /// Перемещает окно с учетом границ области
+  void _move(DragUpdateDetails d) {
+    double newX = _position.dx + d.delta.dx;
+    double newY = _position.dy + d.delta.dy;
+
+    newX = newX.clamp(0, _bounds.width - _size.width);
+    newY = newY.clamp(0, _bounds.height - _size.height);
+
+    setState(() {
+      _position = Offset(newX, newY);
+    });
+
+    widget.onPositionChanged(_position);
+  }
+
+  /// Изменяет размер окна в указанном направлении
+  /// 
+  /// Принимает:
+  /// - [dir] — направление изменения размера
+  /// - [d] — детали перетаскивания
+  /// 
+  /// Особенности:
+  /// - Учитывает минимальный размер [_minSize]
+  /// - Ограничивает размер границами области
+  /// - Обновляет позицию при изменении размера от левого/верхнего края
+  void _resize(_ResizeDirection dir, DragUpdateDetails d) {
+    double dx = d.delta.dx;
+    double dy = d.delta.dy;
+
+    double newWidth = _size.width;
+    double newHeight = _size.height;
+    double newX = _position.dx;
+    double newY = _position.dy;
+
+    switch (dir) {
+      case _ResizeDirection.right:
+        newWidth += dx;
+        break;
+      case _ResizeDirection.left:
+        newWidth -= dx;
+        newX += dx;
+        break;
+      case _ResizeDirection.bottom:
+        newHeight += dy;
+        break;
+      case _ResizeDirection.top:
+        newHeight -= dy;
+        newY += dy;
+        break;
+      case _ResizeDirection.topLeft:
+        newWidth -= dx;
+        newHeight -= dy;
+        newX += dx;
+        newY += dy;
+        break;
+      case _ResizeDirection.topRight:
+        newWidth += dx;
+        newHeight -= dy;
+        newY += dy;
+        break;
+      case _ResizeDirection.bottomLeft:
+        newWidth -= dx;
+        newHeight += dy;
+        newX += dx;
+        break;
+      case _ResizeDirection.bottomRight:
+        newWidth += dx;
+        newHeight += dy;
+        break;
+    }
+
+    newWidth = newWidth.clamp(_minSize.width, _bounds.width - newX);
+    newHeight = newHeight.clamp(_minSize.height, _bounds.height - newY);
+
+    setState(() {
+      _size = Size(newWidth, newHeight);
+      _position = Offset(newX, newY);
+    });
+
+    widget.onSizeChanged(_size);
+    widget.onPositionChanged(_position);
+  }
+
+  /// Создает зону для изменения размера
+  /// 
+  /// Принимает:
+  /// - [direction] — направление изменения размера
+  /// - [cursor] — курсор мыши при наведении
+  /// - Параметры позиционирования (left, right, top, bottom, width, height)
+  Widget _resizeZone({
+    required _ResizeDirection direction,
+    required MouseCursor cursor,
+    double? left,
+    double? right,
+    double? top,
+    double? bottom,
+    double? width,
+    double? height,
+  }) {
+    return Positioned(
+      left: left,
+      right: right,
+      top: top,
+      bottom: bottom,
+      width: width,
+      height: height,
+      child: MouseRegion(
+        cursor: cursor,
+        child: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onPanUpdate: (d) => _resize(direction, d),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      left: _position.dx,
+      top: _position.dy,
+      child: SizedBox(
+        width: _size.width,
+        height: _size.height,
+        child: Material(
+          elevation: widget.isSelected ? 12 : 4,
+          child: Stack(
+            children: [
+              // Основной контейнер с содержимым
+              GestureDetector(
+                onTap: widget.onSelect,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: Border.all(
+                      color: widget.isSelected
+                          ? Colors.blue
+                          : Colors.grey.shade300,
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      _header(),
+                      Expanded(child: widget.child),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Зоны изменения размера по сторонам
+              _resizeZone(
+                direction: _ResizeDirection.left,
+                cursor: SystemMouseCursors.resizeLeftRight,
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: _resizeMargin,
+              ),
+              _resizeZone(
+                direction: _ResizeDirection.right,
+                cursor: SystemMouseCursors.resizeLeftRight,
+                right: 0,
+                top: 0,
+                bottom: 0,
+                width: _resizeMargin,
+              ),
+              _resizeZone(
+                direction: _ResizeDirection.top,
+                cursor: SystemMouseCursors.resizeUpDown,
+                top: 0,
+                left: 0,
+                right: 0,
+                height: _resizeMargin,
+              ),
+              _resizeZone(
+                direction: _ResizeDirection.bottom,
+                cursor: SystemMouseCursors.resizeUpDown,
+                bottom: 0,
+                left: 0,
+                right: 0,
+                height: _resizeMargin,
+              ),
+
+              // Зоны изменения размера по углам
+              _resizeZone(
+                direction: _ResizeDirection.topLeft,
+                cursor: SystemMouseCursors.resizeUpLeftDownRight,
+                left: 0,
+                top: 0,
+                width: _resizeMargin,
+                height: _resizeMargin,
+              ),
+              _resizeZone(
+                direction: _ResizeDirection.topRight,
+                cursor: SystemMouseCursors.resizeUpRightDownLeft,
+                right: 0,
+                top: 0,
+                width: _resizeMargin,
+                height: _resizeMargin,
+              ),
+              _resizeZone(
+                direction: _ResizeDirection.bottomLeft,
+                cursor: SystemMouseCursors.resizeUpRightDownLeft,
+                left: 0,
+                bottom: 0,
+                width: _resizeMargin,
+                height: _resizeMargin,
+              ),
+              _resizeZone(
+                direction: _ResizeDirection.bottomRight,
+                cursor: SystemMouseCursors.resizeUpLeftDownRight,
+                right: 0,
+                bottom: 0,
+                width: _resizeMargin,
+                height: _resizeMargin,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Строит заголовок окна с элементами управления
+  Widget _header() {
+    return GestureDetector(
+      onPanUpdate: _move,
+      child: Container(
+        height: _headerHeight,
+        color: widget.isSelected ? Colors.blue : Colors.grey[200],
+        child: Row(
+          children: [
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                widget.data.type.name,
+                style: TextStyle(
+                  color: widget.isSelected ? Colors.white : Colors.black87,
+                ),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.open_in_full, size: 16),
+              onPressed: widget.onFullscreen,
+            ),
+            IconButton(
+              icon: const Icon(Icons.close, size: 16),
+              onPressed: widget.onClose,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Направления изменения размера окна
+enum _ResizeDirection {
+  /// Вверх
+  top,
+
+  /// Вниз
+  bottom,
+
+  /// Влево
+  left,
+
+  /// Вправо
+  right,
+
+  /// Вверх-влево (диагональ)
+  topLeft,
+
+  /// Вверх-вправо (диагональ)
+  topRight,
+
+  /// Вниз-влево (диагональ)
+  bottomLeft,
+
+  /// Вниз-вправо (диагональ)
+  bottomRight,
+}

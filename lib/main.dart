@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart' hide DataColumn;
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:stat_flow/main_screen.dart';
+import 'package:stat_flow/features/screens/main_screen.dart';
 import 'package:syncfusion_localizations/syncfusion_localizations.dart';
 
 
@@ -14,7 +14,7 @@ import 'package:syncfusion_localizations/syncfusion_localizations.dart';
     @override
     Widget build(BuildContext context) {
       return MaterialApp(
-        title: 'CSV File Loader',
+        title: 'StatFlow',
         theme: ThemeData(
           primarySwatch: Colors.blue,
           useMaterial3: true,

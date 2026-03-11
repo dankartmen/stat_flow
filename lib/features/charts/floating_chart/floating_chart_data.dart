@@ -1,7 +1,7 @@
 import 'dart:ui';
 
-import 'core/dataset/dataset.dart';
-import 'features/charts/chart_type.dart';
+import '../../../core/dataset/dataset.dart';
+import '../chart_type.dart';
 
 /// {@template floating_chart_data}
 /// Модель данных для плавающего окна графика

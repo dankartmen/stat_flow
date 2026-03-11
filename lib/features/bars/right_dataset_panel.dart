@@ -16,10 +16,14 @@ class RightDatasetPanel extends StatelessWidget {
   /// Датасет для отображения информации
   final Dataset dataset;
 
+  /// Флаг, указывающий, развернута ли панель
+  final bool isExpanded;
+
   /// {@macro right_dataset_panel}
   const RightDatasetPanel({
     super.key,
     required this.dataset,
+    required this.isExpanded,
   });
 
   @override
@@ -30,30 +34,32 @@ class RightDatasetPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Заголовок с основной информацией о датасете
-          _buildHeader(),
+            if (isExpanded) ...[
+            // Заголовок с основной информацией о датасете
+            _buildHeader(),
 
-          // Список полей датасета
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                const Text(
-                  'Поля',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey,
+            // Список полей датасета
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  const Text(
+                    'Поля',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                ...dataset.columns.map((column) => _buildColumnItem(column)),
-              ],
+                  const SizedBox(height: 12),
+                  ...dataset.columns.map((column) => _buildColumnItem(column)),
+                ],
+              ),
             ),
-          ),
 
-          // Краткая статистика по типам данных
-          _buildTypeStatistics(),
+            // Краткая статистика по типам данных
+            _buildTypeStatistics(),
+          ]
         ],
       ),
     );

@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:stat_flow/core/dataset/dataset.dart';
-import 'features/charts/chart_type.dart';
-import 'features/charts/heatmap/color/heatmap_color_mapper.dart';
-import 'features/charts/heatmap/color/heatmap_palette.dart';
-import 'features/charts/heatmap/widgets/heatmap_view.dart';
-import 'floating_chart_container.dart';
-import 'floating_chart_data.dart';
-import 'fullscreen_chart.dart';
-import 'left_sidebar.dart';
-import 'right_dataset_panel.dart';
-import 'table_preview_screen.dart';
-import 'top_control_panel.dart';
+import 'package:stat_flow/features/canvas/canvas_workspace.dart';
+import '../charts/chart_type.dart';
+import '../charts/heatmap/color/heatmap_color_mapper.dart';
+import '../charts/heatmap/color/heatmap_palette.dart';
+import '../charts/heatmap/widgets/heatmap_view.dart';
+import '../table/widget/full_table_screen.dart';
+import '../charts/floating_chart/floating_chart_container.dart';
+import '../charts/floating_chart/floating_chart_data.dart';
+import '../charts/fullscreen_chart.dart';
+import '../bars/left_sidebar.dart';
+import '../bars/right_dataset_panel.dart';
+import '../table/widget/table_preview_screen.dart';
+import '../bars/top_control_panel.dart';
 import 'welcome_dialog.dart';
 
 /// {@template main_screen}
@@ -70,6 +72,15 @@ class _MainScreenState extends State<MainScreen> {
   /// Режим раскраски (непрерывный/дискретный)
   HeatmapColorMode _colorMode = HeatmapColorMode.discrete;
 
+  /// Флаг расширения правой панели
+  bool _isRightPanelExpanded = true;
+
+  /// Ширина правой панели в расширенном состоянии
+  static const double _rightPanelExpandedWidth = 280;
+
+  /// Ширина правой панели в свернутом состоянии (только иконка)
+  static const double _rightPanelCollapsedWidth = 0;
+
   @override
   void initState() {
     super.initState();
@@ -93,6 +104,22 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
+  /// Открывает экран с полной таблицей данных
+  /// 
+  /// Проверяет наличие загруженного датасета и открывает [FullTableScreen] с ним.
+  void _showFullTable() {
+    if (_dataset == null) return;
+    
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => FullTableScreen(
+          dataset: _dataset!,
+        ),
+      ),
+    );
+  }
+
   /// Загружает датасет через экран предварительного просмотра
   /// 
   /// Открывает [TablePreviewScreen] для выбора и предпросмотра CSV-файла.
@@ -109,8 +136,16 @@ class _MainScreenState extends State<MainScreen> {
       setState(() {
         _dataset = result;
         _showWelcomeOverlay = false;
+        _isRightPanelExpanded = true; // Автоматически расширяем правую панель при загрузке датасета
       });
     }
+  }
+
+  /// Переключает состояние правой панели (развернуто/свернуто)
+  void _toggleRightPanel() {
+    setState(() {
+      _isRightPanelExpanded = !_isRightPanelExpanded;
+    });
   }
 
   /// Добавляет новый график указанного типа
@@ -123,21 +158,35 @@ class _MainScreenState extends State<MainScreen> {
   /// - Устанавливает начальную позицию со смещением (каскадное расположение)
   /// - Автоматически выбирает созданный график
   void _addChart(ChartType type) {
+    if (_dataset == null) return;
+
     setState(() {
+
       final newChart = FloatingChartData(
         id: _nextChartId++,
         type: type,
         dataset: _dataset!,
-        position: Offset(100 + _charts.length * 30, 100 + _charts.length * 30),
+        position: Offset(
+          100 + _charts.length * 30,
+          100 + _charts.length * 30,
+        ),
       );
+
       _charts.add(newChart);
       _selectedChartId = newChart.id;
+
     });
   }
 
   /// Выбирает график по ID
   void _selectChart(int id) {
     setState(() {
+      final index = _charts.indexWhere((c) => c.id == id);
+      if (index == -1) return;
+
+      final chart = _charts.removeAt(index);
+      _charts.add(chart);
+
       _selectedChartId = id;
     });
   }
@@ -228,6 +277,12 @@ class _MainScreenState extends State<MainScreen> {
     return _charts.firstWhere((chart) => chart.id == _selectedChartId);
   }
 
+  double get _rightPanelWidth {
+    return _isRightPanelExpanded 
+        ? _rightPanelExpandedWidth 
+        : _rightPanelCollapsedWidth;
+  }
+  
   @override
   Widget build(BuildContext context) {
     final selectedChart = _getSelectedChart();
@@ -239,7 +294,7 @@ class _MainScreenState extends State<MainScreen> {
           if (selectedChart != null)
             Positioned(
               left: 72, // Ширина левой боковой панели
-              right: 280, // Ширина правой панели с датасетом
+              right: _rightPanelWidth, // Ширина правой панели с датасетом
               top: 0,
               child: TopControlPanel(
                 chartType: selectedChart.type,
@@ -260,11 +315,11 @@ class _MainScreenState extends State<MainScreen> {
           // Основная область с графиками
           Positioned.fill(
             left: 72,
-            right: 280,
+            right: _rightPanelWidth,
             top: selectedChart != null ? 80 : 0, // Высота панели управления
             child: Container(
               color: Colors.grey[100],
-              child: Stack(
+              child: CanvasWorkspace(
                 children: [
                   // Плавающие графики
                   ..._charts.map((chart) => FloatingChart(
@@ -296,6 +351,7 @@ class _MainScreenState extends State<MainScreen> {
               onLoadDataset: _loadDataset,
               onAddChart: _addChart,
               onShowInfo: _showInfoDialog,
+              onShowTable: _showFullTable,
               isDatasetLoaded: _dataset != null,
             ),
           ),
@@ -306,8 +362,48 @@ class _MainScreenState extends State<MainScreen> {
               right: 0,
               top: 0,
               bottom: 0,
-              child: RightDatasetPanel(
-                dataset: _dataset!,
+              child: Row(
+                children: [
+                  GestureDetector(
+                    onTap: _toggleRightPanel,
+                    child: Container(
+                      width: 16,
+                      height: 60,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[200],
+                        borderRadius: BorderRadius.only(
+                          topLeft: Radius.circular(4),
+                          bottomLeft: Radius.circular(4),
+                          topRight: Radius.circular(_isRightPanelExpanded ? 0 : 4),
+                          bottomRight: Radius.circular(_isRightPanelExpanded ? 0 : 4),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 2,
+                            offset: const Offset(-1, 0),
+                          ),
+                        ],
+                      ),
+                      child: Center(
+                        child: Icon(
+                          _isRightPanelExpanded ? Icons.chevron_right : Icons.chevron_left,
+                          color: Colors.grey[400],
+                          size: 14,
+                        ),
+                      ),
+                    ),
+                  ),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                    width: _rightPanelWidth,
+                    child: RightDatasetPanel(
+                      dataset: _dataset!,
+                      isExpanded: _isRightPanelExpanded,
+                    ),
+                  ),
+                ],
               ),
             ),
 

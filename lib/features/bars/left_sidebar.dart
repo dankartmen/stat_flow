@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'features/charts/chart_type.dart';
+import '../charts/chart_type.dart';
 
 /// {@template left_sidebar}
 /// Левая боковая панель навигации приложения
@@ -23,6 +23,9 @@ class LeftSidebar extends StatelessWidget {
   /// Callback для отображения информации о приложении
   final VoidCallback onShowInfo;
 
+  /// Callback для отображения таблицы данных
+  final VoidCallback onShowTable;
+
   /// Флаг, указывающий, загружен ли датасет
   final bool isDatasetLoaded;
 
@@ -32,6 +35,7 @@ class LeftSidebar extends StatelessWidget {
     required this.onLoadDataset,
     required this.onAddChart,
     required this.onShowInfo,
+    required this.onShowTable,
     required this.isDatasetLoaded,
   });
 
@@ -85,7 +89,8 @@ class LeftSidebar extends StatelessWidget {
             _SidebarIconButton(
               icon: Icons.grid_on,
               label: 'Таблица',
-              onTap: () => _showChartMenu(context),
+              onTap: () => onShowTable(),
+              isActive: false,
             ),
             const SizedBox(height: 8),
             _SidebarIconButton(

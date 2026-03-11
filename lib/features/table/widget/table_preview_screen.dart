@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:stat_flow/core/loader/csv_loader.dart';
 import 'package:syncfusion_flutter_datagrid/datagrid.dart';
-import 'preview_data_source.dart';
+import '../grid/preview_data_source.dart';
 
 /// {@template table_preview_screen}
 /// Экран предварительного просмотра CSV-файла перед загрузкой
@@ -199,7 +199,7 @@ class _TablePreviewScreenState extends State<TablePreviewScreen> {
                               ),
                             );
                           }).toList(),
-                          columnWidthMode: ColumnWidthMode.fitByCellValue,
+                          columnWidthMode: ColumnWidthMode.auto,
                           gridLinesVisibility: GridLinesVisibility.both,
                           headerGridLinesVisibility: GridLinesVisibility.both,
                           allowSorting: true,

@@ -17,6 +17,7 @@ import '../color/heatmap_palette.dart';
 /// - Плавная анимация при смене цветовых схем
 /// - Кластеризация матрицы для выявления паттернов
 /// - Автоматическое обновление при изменении параметров
+/// - Компактная легенда под картой
 /// {@endtemplate}
 class HeatmapView extends StatefulWidget {
   /// Матрица корреляции для отображения
@@ -38,9 +39,13 @@ class HeatmapView extends StatefulWidget {
   /// Режим отображения цветов: дискретный (segments) или градиентный
   final HeatmapColorMode colorMode;
 
+  /// Отображать ли подписи осей
+  final bool showAxisLabels;
+
   /// {@macro heatmap_view}
   const HeatmapView({
     super.key,
+    this.showAxisLabels = false,
     required this.matrix,
     required this.palette,
     required this.segments,
@@ -55,7 +60,6 @@ class HeatmapView extends StatefulWidget {
 
 class _HeatmapViewState extends State<HeatmapView>
     with SingleTickerProviderStateMixin {
-
   /// Индекс строки под курсором мыши (для подсветки)
   int? hoverRow;
 
@@ -71,6 +75,8 @@ class _HeatmapViewState extends State<HeatmapView>
   /// Предыдущий маппер для интерполяции во время анимации
   late HeatmapColorMapper _previousMapper;
 
+  /// Контроллер трансформации для масштабирования
+  final TransformationController _zoomController = TransformationController();
 
   /// Кэшированная кластеризованная матрица.
   /// Перестраивается только при изменении исходной матрицы или
@@ -81,10 +87,9 @@ class _HeatmapViewState extends State<HeatmapView>
   void initState() {
     super.initState();
 
-
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 400),
+      duration: const Duration(milliseconds: 350),
     );
 
     // Создание начального маппера на основе текущих настроек
@@ -100,7 +105,6 @@ class _HeatmapViewState extends State<HeatmapView>
     if (oldWidget.palette != widget.palette ||
         oldWidget.segments != widget.segments ||
         oldWidget.colorMode != widget.colorMode) {
-
       // Сохраняем текущий маппер как предыдущий для анимации перехода
       _previousMapper = _currentMapper;
 
@@ -121,6 +125,7 @@ class _HeatmapViewState extends State<HeatmapView>
   @override
   void dispose() {
     _controller.dispose();
+    _zoomController.dispose();
     super.dispose();
   }
 
@@ -136,25 +141,23 @@ class _HeatmapViewState extends State<HeatmapView>
       );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SizedBox(
-          height: 600, 
-          child: ClipRect(
-            child: _buildHeatmap(),
-          ),
-        ),
-
-        // Легенда цветовой шкалы
-        // Отображает соответствие между цветами и значениями корреляции
-        HeatmapLegend(
-          mapper: _currentMapper,
-          min: -1, // Корреляция всегда находится в диапазоне [-1, 1]
-          max: 1,
-          segments: widget.segments,
-        ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: _buildHeatmap(constraints.biggest),
+            ),
+            HeatmapLegend(
+              mapper: _currentMapper,
+              min: -1,
+              max: 1,
+              segments: widget.segments,
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -211,76 +214,102 @@ class _HeatmapViewState extends State<HeatmapView>
   ///
   /// Также реализует интерактивную подсветку ячеек при наведении мыши
   /// (для десктопных и веб-версий).
-  Widget _buildHeatmap() {
+  Widget _buildHeatmap(Size viewport) {
     final matrix = _getDisplayMatrix();
 
-    // Фиксированный базовый размер ячейки для предсказуемого отображения
-    const double cellSize = 40;
+    final int n = matrix.size;
 
-    // Общий размер холста (без учета отступа для подписей,
-    // так как отступ обрабатывается в HeatmapPainter)
-    final totalSize = matrix.size * cellSize;
+    final cellSize = (viewport.width / n).clamp(20.0, 80.0);
 
-    return InteractiveViewer(
-      constrained: false, 
-      minScale: 0.5, // Минимальное увеличение 
-      maxScale: 5.0, // Максимальное увеличение 
-      trackpadScrollCausesScale: false, // Скролл для перемещения, а не масштаба
-      boundaryMargin: const EdgeInsets.all(40), // Отступы от границ для удобства
+    final totalSize = n * cellSize;
 
-      child: MouseRegion(
-        // Отслеживание мыши для интерактивной подсветки
-        onHover: (event) {
-          final localPos = event.localPosition;
+    final showValues = cellSize > 35;
 
-          // Вычисляем индекс ячейки под курсором.
-          // Вычитаем cellSize для учета отступа под подписи осей,
-          // который добавляется в HeatmapPainter.
-          final row = ((localPos.dy - cellSize) / cellSize).floor();
-          final col = ((localPos.dx - cellSize) / cellSize).floor();
+    return Stack(
+      children: [
+        InteractiveViewer(
+          transformationController: _zoomController,
+          constrained: false,
+          minScale: 0.5, // Минимальное увеличение
+          maxScale: 5.0, // Максимальное увеличение
+          boundaryMargin: const EdgeInsets.all(8), // Отступы от границ для удобства
 
-          // Проверяем, что курсор находится в пределах матрицы
-          if (row >= 0 && row < matrix.size && col >= 0 && col < matrix.size) {
-            // Обновляем состояние для подсветки ячейки
-            setState(() {
-              hoverRow = row;
-              hoverCol = col;
-            });
-          } else {
-            // Курсор вне матрицы - убираем подсветку
-            setState(() {
-              hoverRow = null;
-              hoverCol = null;
-            });
-          }
-        },
-        // Сброс подсветки при уходе мыши с виджета
-        onExit: (_) {
-          setState(() {
-            hoverRow = null;
-            hoverCol = null;
-          });
-        },
+          child: MouseRegion(
+            // Отслеживание мыши для интерактивной подсветки
+            onHover: (event) {
+              final localPos = event.localPosition;
 
-        child: AnimatedBuilder(
-          // Анимируем переходы между цветовыми схемами
-          animation: _controller,
-          builder: (context, child) => CustomPaint(
-            size: Size(totalSize, totalSize),
-            painter: HeatmapPainter(
-              matrix: _getDisplayMatrix(),
-              colorMapper: _currentMapper,
-              previousMapper: _previousMapper,
-              animationValue: _controller.value, 
-              cellSize: cellSize,
-              showValues: true, // Отображаем числовые значения в ячейках
-              triangleMode: widget.triangleMode,
-              hoverRow: hoverRow,
-              hoverCol: hoverCol,
+              // Вычисляем индекс ячейки под курсором.
+              // Вычитаем cellSize для учета отступа под подписи осей,
+              // который добавляется в HeatmapPainter.
+              final axisOffset = widget.showAxisLabels ? cellSize : 0;
+              final row = ((localPos.dy - axisOffset) / cellSize).floor();
+              final col = ((localPos.dx - axisOffset) / cellSize).floor();
+
+              // Проверяем, что курсор находится в пределах матрицы
+              if (row >= 0 && row < n && col >= 0 && col < n) {
+                if (row != hoverRow || col != hoverCol) {
+                  setState(() {
+                    hoverRow = row;
+                    hoverCol = col;
+                  });
+                }
+              } else {
+                if (hoverRow != null) {
+                  setState(() {
+                    hoverRow = null;
+                    hoverCol = null;
+                  });
+                }
+              }
+            },
+            // Сброс подсветки при уходе мыши с виджета
+            onExit: (_) {
+              setState(() {
+                hoverRow = null;
+                hoverCol = null;
+              });
+            },
+
+            child: AnimatedBuilder(
+              animation: _controller,
+              builder: (_, __) {
+                return CustomPaint(
+                  size: Size(totalSize, totalSize),
+                  painter: HeatmapPainter(
+                    matrix: matrix,
+                    colorMapper: _currentMapper,
+                    previousMapper: _previousMapper,
+                    animationValue: _controller.value,
+                    cellSize: cellSize,
+                    showValues: showValues,
+                    showAxisLabels: widget.showAxisLabels,
+                    triangleMode: widget.triangleMode,
+                    hoverRow: hoverRow,
+                    hoverCol: hoverCol,
+                  ),
+                );
+              },
             ),
           ),
         ),
-      ),
+
+        // Кнопка сброса масштаба
+        Positioned(
+          top: 8,
+          right: 8,
+          child: Material(
+            elevation: 3,
+            child: IconButton(
+              icon: const Icon(Icons.zoom_out_map),
+              onPressed: () {
+                _zoomController.value = Matrix4.identity();
+              },
+              tooltip: 'Сбросить масштаб',
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

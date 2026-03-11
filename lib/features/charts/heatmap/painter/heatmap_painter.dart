@@ -14,6 +14,11 @@ import '../color/heatmap_color_mapper.dart';
 /// - Рендеринг значений внутри ячеек
 /// - Подсветку ячейки при наведении и показ тултипа
 /// - Кэширование статического слоя (сетка и подписи) для оптимизации
+/// 
+/// Использует продвинутые техники оптимизации:
+/// - Кэширование статического слоя для избежания перерисовки неизменных элементов
+/// - Кэширование текстовых рисовальщиков для повторного использования
+/// - Минимизация создания объектов в методе paint
 /// {@endtemplate}
 class HeatmapPainter extends CustomPainter {
   /// Матрица корреляции для визуализации
@@ -34,6 +39,9 @@ class HeatmapPainter extends CustomPainter {
   /// Отображать ли значения внутри ячеек
   final bool showValues;
 
+  /// Отображать ли подписи осей
+  final bool showAxisLabels;
+
   /// Индекс строки под курсором (для подсветки)
   final int? hoverRow;
 
@@ -49,15 +57,14 @@ class HeatmapPainter extends CustomPainter {
     this.hoverRow,
     this.hoverCol,
     this.triangleMode = false,
+    this.showValues = true,
+    this.showAxisLabels = false,
     required this.matrix,
     required this.colorMapper,
     required this.previousMapper,
     required this.animationValue,
     required this.cellSize,
-    required this.showValues,
   });
-
- 
 
   /// Кэш статического слоя (сетка + подписи осей).
   /// Перестраивается только при изменении матрицы или размера ячейки.
@@ -70,6 +77,17 @@ class HeatmapPainter extends CustomPainter {
   /// Переиспользуемый Paint для минимизации создания объектов.
   final Paint _paint = Paint();
 
+  /// Кэш для тултипа, чтобы не создавать новый при каждом наведении.
+  TextPainter? _tooltipPainter;
+
+  /// Кэш для текста тултипа, чтобы обновлять только при изменении ячейки под курсором.
+  String? _tooltipText;
+
+  /// Переиспользуемый Paint для подсветки ячейки под курсором.
+  final Paint _highlightPaint = Paint()
+    ..color = Colors.black
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
 
   /// Получает или создает TextPainter для заданного текста и стиля.
   ///
@@ -91,8 +109,6 @@ class HeatmapPainter extends CustomPainter {
     return tp;
   }
 
-
-
   /// Возвращает анимированный цвет для заданного значения корреляции.
   ///
   /// Если есть предыдущий маппер и идет анимация, выполняет интерполяцию
@@ -108,94 +124,89 @@ class HeatmapPainter extends CustomPainter {
     return Color.lerp(oldColor, newColor, animationValue)!;
   }
 
-
-
   /// Создает статический слой с сеткой и подписями осей.
   ///
   /// Этот слой не изменяется при анимации и перерисовывается только
   /// при изменении матрицы или размера ячейки.
-  ui.Picture _buildStaticLayer() {
+  ui.Picture _buildStaticLayer(bool showLabels) {
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
 
     final n = matrix.size;
-    final axisOffset = cellSize; // Отступ от края для подписей
+    final axisOffset = showLabels ? cellSize : 0.0; // Отступ от края для подписей
 
     final gridPaint = Paint()
       ..color = Colors.grey.shade300
       ..strokeWidth = 0.5
       ..style = PaintingStyle.stroke;
 
-    final total = cellSize * (n + 1);
+    final total = cellSize * n + axisOffset;
+    final path = Path();
 
     // Рисуем горизонтальные и вертикальные линии сетки
     for (int i = 0; i <= n; i++) {
       final pos = axisOffset + i * cellSize;
 
       // Горизонтальная линия
-      canvas.drawLine(
-        Offset(axisOffset, pos),
-        Offset(total, pos),
-        gridPaint,
-      );
+      path.moveTo(axisOffset, pos);
+      path.lineTo(total, pos);
 
       // Вертикальная линия
-      canvas.drawLine(
-        Offset(pos, axisOffset),
-        Offset(pos, total),
-        gridPaint,
-      );
+      path.moveTo(pos, axisOffset);
+      path.lineTo(pos, total);
     }
+    canvas.drawPath(path, gridPaint);
 
-    // Отрисовка подписей осей
-    final angle = _computeLabelAngle();
-    final step = _computeLabelStep();
+    if (showLabels) {
+      // Отрисовка подписей осей
+      final angle = _computeLabelAngle();
+      final step = _computeLabelStep();
 
-    for (int i = 0; i < n; i += step) {
-      final label = _smartLabel(matrix.fieldNames[i]);
+      for (int i = 0; i < n; i += step) {
+        final label = _smartLabel(matrix.fieldNames[i], max: 6);
 
-      final style = TextStyle(
-        fontSize: cellSize * 0.25, // Размер шрифта относительно ячейки
-        color: Colors.black,
-      );
+        final style = TextStyle(
+          fontSize: cellSize * 0.25, // Размер шрифта относительно ячейки
+          color: Colors.black,
+        );
 
-      final tp = _getTextPainter(label, style);
+        final tp = _getTextPainter(label, style);
 
-      // Подписи для колонок (сверху)
-      canvas.save();
+        // Подписи для колонок (сверху)
+        canvas.save();
 
-      // Перемещаемся к верхней части колонки
-      canvas.translate(
-        axisOffset + i * cellSize + cellSize / 2,
-        axisOffset - 6,
-      );
+        // Перемещаемся к верхней части колонки
+        canvas.translate(
+          axisOffset + i * cellSize + cellSize / 2,
+          axisOffset - 6,
+        );
 
-      canvas.rotate(angle); // Поворачиваем для лучшей читаемости
+        canvas.rotate(angle); // Поворачиваем для лучшей читаемости
 
-      tp.paint(
-        canvas,
-        Offset(-tp.width / 2 + 37, -tp.height), // Смещение для повернутого текста
-      );
+        tp.paint(
+          canvas,
+          Offset(-tp.width / 2 + 37, -tp.height), // Смещение для повернутого текста
+        );
 
-      canvas.restore();
+        canvas.restore();
 
-      // Подписи для строк
-      tp.paint(
-        canvas,
-        Offset(
-          -axisOffset, // Слева от сетки
-          axisOffset + i * cellSize + cellSize / 2 - tp.height / 2,
-        ),
-      );
+        // Подписи для строк (слева)
+        tp.paint(
+          canvas,
+          Offset(
+            -axisOffset, // Слева от сетки
+            axisOffset + i * cellSize + cellSize / 2 - tp.height / 2,
+          ),
+        );
+      }
     }
 
     return recorder.endRecording();
   }
 
-
   /// Рисует тултип с информацией о ячейке под курсором.
   void _drawTooltip(Canvas canvas, int row, int col) {
-    final axisOffset = cellSize;
+    final axisOffset = showAxisLabels ? cellSize : 0.0;
 
     final value = matrix.getByIndex(row, col);
     final rowName = matrix.fieldNames[row];
@@ -203,21 +214,26 @@ class HeatmapPainter extends CustomPainter {
 
     final text = "$rowName ↔ $colName\n${value.toStringAsFixed(3)}";
 
-    final style = const TextStyle(
-      color: Colors.white,
-      fontSize: 12,
-    );
+    if (_tooltipText != text) {
+      _tooltipText = text;
 
-    final tp = TextPainter(
-      text: TextSpan(text: text, style: style),
-      textDirection: TextDirection.ltr,
-    )..layout(maxWidth: 220);
+      _tooltipPainter = TextPainter(
+        text: TextSpan(
+          text: text,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout(maxWidth: 220);
+    }
 
-    // Позиционируем тултип справа от ячейки
+    final tp = _tooltipPainter!;
+
     final x = axisOffset + col * cellSize + cellSize + 6;
     final y = axisOffset + row * cellSize - tp.height / 2;
 
-    // Фон тултипа с отступами
     final rect = Rect.fromLTWH(
       x - 6,
       y - 4,
@@ -225,16 +241,13 @@ class HeatmapPainter extends CustomPainter {
       tp.height + 8,
     );
 
-    final bg = Paint()..color = Colors.black;
-
     canvas.drawRRect(
       RRect.fromRectAndRadius(rect, const Radius.circular(6)),
-      bg,
+      Paint()..color = Colors.black,
     );
 
     tp.paint(canvas, Offset(x, y));
   }
-
 
   /// Умное сокращение длинных названий полей.
   ///
@@ -271,16 +284,15 @@ class HeatmapPainter extends CustomPainter {
     return 4;                             // Мелкие - каждую четвертую
   }
 
-
   @override
   void paint(Canvas canvas, Size size) {
     final n = matrix.size;
     if (n == 0) return;
 
-    final axisOffset = cellSize;
+    final axisOffset = showAxisLabels ? cellSize : 0.0;
 
     // Отрисовка статического слоя (кэшированного)
-    _staticLayer ??= _buildStaticLayer();
+    _staticLayer ??= _buildStaticLayer(showAxisLabels);
     canvas.drawPicture(_staticLayer!);
 
     // Отрисовка ячеек тепловой карты (динамический слой)
@@ -329,26 +341,18 @@ class HeatmapPainter extends CustomPainter {
 
     // Подсветка ячейки под курсором и тултип
     if (hoverRow != null && hoverCol != null) {
-      final highlightPaint = Paint()
-        ..color = Colors.black
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1;
+      double left = axisOffset + hoverCol! * cellSize;
+      double top = axisOffset + hoverRow! * cellSize;
 
       canvas.drawRect(
-        Rect.fromLTWH(
-          axisOffset + hoverCol! * cellSize,
-          axisOffset + hoverRow! * cellSize,
-          cellSize,
-          cellSize,
-        ),
-        highlightPaint,
+        Rect.fromLTWH(left, top, cellSize, cellSize),
+        _highlightPaint,
       );
       _drawTooltip(canvas, hoverRow!, hoverCol!);
     }
   }
 
   // Определение необходимости перерисовки
-
   @override
   bool shouldRepaint(covariant HeatmapPainter old) {
     // Перерисовываем только если изменились параметры
