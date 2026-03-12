@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart' hide DataColumn;
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:stat_flow/features/charts/register_charts.dart';
 import 'package:stat_flow/features/screens/main_screen.dart';
 import 'package:syncfusion_localizations/syncfusion_localizations.dart';
 
 
   void main() {
+    registerCharts();
     runApp(const MyApp());
   }
 

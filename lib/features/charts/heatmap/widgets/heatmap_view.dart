@@ -4,6 +4,7 @@ import 'package:stat_flow/features/charts/heatmap/widgets/heatmap_legend.dart';
 import '../model/correlation_clusterer.dart';
 import '../model/correlation_matrix.dart';
 import '../color/heatmap_color_mapper.dart';
+import '../model/heatmap_state.dart';
 import '../painter/heatmap_painter.dart';
 import '../color/heatmap_palette.dart';
 
@@ -23,35 +24,14 @@ class HeatmapView extends StatefulWidget {
   /// Матрица корреляции для отображения
   final CorrelationMatrix matrix;
 
-  /// Выбранная цветовая палитра 
-  final HeatmapPalette palette;
-
-  /// Количество сегментов для дискретного режима отображения
-  final int segments;
-
-  /// Режим отображения только верхнего треугольника матрицы
-  final bool triangleMode;
-
-  /// Включена ли кластеризация строк и столбцов
-  /// для группировки похожих переменных
-  final bool clusterEnabled;
-
-  /// Режим отображения цветов: дискретный (segments) или градиентный
-  final HeatmapColorMode colorMode;
-
-  /// Отображать ли подписи осей
-  final bool showAxisLabels;
+  /// Состояние тепловой карты, содержащее настройки отображения
+  final HeatmapState state;
 
   /// {@macro heatmap_view}
   const HeatmapView({
     super.key,
-    this.showAxisLabels = false,
     required this.matrix,
-    required this.palette,
-    required this.segments,
-    required this.triangleMode,
-    required this.clusterEnabled,
-    required this.colorMode,
+    required this.state,
   });
 
   @override
@@ -83,6 +63,11 @@ class _HeatmapViewState extends State<HeatmapView>
   /// при включении/выключении кластеризации.
   CorrelationMatrix? _clusteredMatrix;
 
+  /// Кэш последних параметров, влияющих на цветовую схему
+  HeatmapPalette? _lastPalette;
+  int? _lastSegments;
+  HeatmapColorMode? _lastMode;
+
   @override
   void initState() {
     super.initState();
@@ -95,6 +80,10 @@ class _HeatmapViewState extends State<HeatmapView>
     // Создание начального маппера на основе текущих настроек
     _currentMapper = _createMapper();
     _previousMapper = _currentMapper; // Начальное состояние без анимации
+
+    _lastPalette = widget.state.palette;
+    _lastSegments = widget.state.segments;
+    _lastMode = widget.state.colorMode;
   }
 
   @override
@@ -102,9 +91,9 @@ class _HeatmapViewState extends State<HeatmapView>
     super.didUpdateWidget(oldWidget);
 
     // Проверяем, изменились ли параметры, влияющие на цветовую схему
-    if (oldWidget.palette != widget.palette ||
-        oldWidget.segments != widget.segments ||
-        oldWidget.colorMode != widget.colorMode) {
+    if (_lastPalette != widget.state.palette ||
+        _lastSegments != widget.state.segments ||
+        _lastMode != widget.state.colorMode) {
       // Сохраняем текущий маппер как предыдущий для анимации перехода
       _previousMapper = _currentMapper;
 
@@ -113,11 +102,15 @@ class _HeatmapViewState extends State<HeatmapView>
 
       // Запускаем анимацию перехода от старой цветовой схемы к новой
       _controller.forward(from: 0);
+
+      _lastPalette = widget.state.palette;
+      _lastSegments = widget.state.segments;
+      _lastMode = widget.state.colorMode;
     }
 
     // При изменении состояния кластеризации сбрасываем кэш,
     // чтобы при следующем обращении матрица была перекластеризована
-    if (oldWidget.clusterEnabled != widget.clusterEnabled) {
+    if (oldWidget.state.clusterEnabled != widget.state.clusterEnabled) {
       _clusteredMatrix = null;
     }
   }
@@ -153,7 +146,7 @@ class _HeatmapViewState extends State<HeatmapView>
               mapper: _currentMapper,
               min: -1,
               max: 1,
-              segments: widget.segments,
+              segments: widget.state.segments,
             ),
           ],
         );
@@ -169,21 +162,21 @@ class _HeatmapViewState extends State<HeatmapView>
   /// - [HeatmapColorMode.gradient]: плавный переход между цветами
   ///   (лучше для визуального восприятия общей структуры)
   HeatmapColorMapper _createMapper() {
-    switch (widget.colorMode) {
+    switch (widget.state.colorMode) {
       case HeatmapColorMode.discrete:
         // Получаем базовые цвета для выбранной палитры
-        final base = HeatmapPaletteFactory.baseColors(widget.palette);
+        final base = HeatmapPaletteFactory.baseColors(widget.state.palette);
 
         return DiscreteColorMapper(
           min: -1,
           max: 1,
-          segments: widget.segments,
+          segments: widget.state.segments,
           baseColors: base,
         );
 
       case HeatmapColorMode.gradient:
         return GradientColorMapper(
-          paletteType: widget.palette,
+          paletteType: widget.state.palette,
         );
     }
   }
@@ -197,7 +190,7 @@ class _HeatmapViewState extends State<HeatmapView>
   /// так как операция кластеризации может быть вычислительно затратной
   /// для больших матриц.
   CorrelationMatrix _getDisplayMatrix() {
-    if (!widget.clusterEnabled) return widget.matrix;
+    if (!widget.state.clusterEnabled) return widget.matrix;
 
     // Ленивая инициализация: кластеризуем только при первом запросе
     _clusteredMatrix ??= CorrelationClusterer.cluster(widget.matrix);
@@ -242,7 +235,7 @@ class _HeatmapViewState extends State<HeatmapView>
               // Вычисляем индекс ячейки под курсором.
               // Вычитаем cellSize для учета отступа под подписи осей,
               // который добавляется в HeatmapPainter.
-              final axisOffset = widget.showAxisLabels ? cellSize : 0;
+              final axisOffset = widget.state.showAxisLabels ? cellSize : 0;
               final row = ((localPos.dy - axisOffset) / cellSize).floor();
               final col = ((localPos.dx - axisOffset) / cellSize).floor();
 
@@ -283,8 +276,8 @@ class _HeatmapViewState extends State<HeatmapView>
                     animationValue: _controller.value,
                     cellSize: cellSize,
                     showValues: showValues,
-                    showAxisLabels: widget.showAxisLabels,
-                    triangleMode: widget.triangleMode,
+                    showAxisLabels: widget.state.showAxisLabels,
+                    triangleMode: widget.state.triangleMode,
                     hoverRow: hoverRow,
                     hoverCol: hoverCol,
                   ),

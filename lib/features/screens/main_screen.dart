@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:stat_flow/core/dataset/dataset.dart';
 import 'package:stat_flow/features/canvas/canvas_workspace.dart';
+import 'package:stat_flow/features/charts/chart_renderer.dart';
+import 'package:stat_flow/features/charts/chart_state.dart';
+import '../charts/chart_registry.dart';
 import '../charts/chart_type.dart';
-import '../charts/heatmap/color/heatmap_color_mapper.dart';
-import '../charts/heatmap/color/heatmap_palette.dart';
-import '../charts/heatmap/widgets/heatmap_view.dart';
+import '../charts/heatmap/model/heatmap_state.dart';
 import '../table/widget/full_table_screen.dart';
 import '../charts/floating_chart/floating_chart_container.dart';
 import '../charts/floating_chart/floating_chart_data.dart';
@@ -55,22 +56,6 @@ class _MainScreenState extends State<MainScreen> {
 
   /// ID текущего выбранного графика
   int? _selectedChartId;
-
-  // Состояния для панели управления тепловой карты
-  /// Выбранная цветовая палитра
-  HeatmapPalette _selectedPalette = HeatmapPalette.redBlue;
-
-  /// Количество сегментов для дискретного режима
-  int _segments = 10;
-
-  /// Режим отображения только верхнего треугольника
-  bool _triangleMode = false;
-
-  /// Включение кластеризации
-  bool _clusterEnabled = false;
-
-  /// Режим раскраски (непрерывный/дискретный)
-  HeatmapColorMode _colorMode = HeatmapColorMode.discrete;
 
   /// Флаг расширения правой панели
   bool _isRightPanelExpanded = true;
@@ -160,21 +145,20 @@ class _MainScreenState extends State<MainScreen> {
   void _addChart(ChartType type) {
     if (_dataset == null) return;
 
+    final plugin = ChartRegistry.get(type.name);
+
+    final newChart = FloatingChartData(
+      id: _nextChartId++,
+      type: type,
+      dataset: _dataset!,
+      state: plugin.createState(),
+      position: Offset(50 + _charts.length * 20.0, 50 + _charts.length * 20.0),
+      size: const Size(300, 200),
+    );
+
     setState(() {
-
-      final newChart = FloatingChartData(
-        id: _nextChartId++,
-        type: type,
-        dataset: _dataset!,
-        position: Offset(
-          100 + _charts.length * 30,
-          100 + _charts.length * 30,
-        ),
-      );
-
       _charts.add(newChart);
       _selectedChartId = newChart.id;
-
     });
   }
 
@@ -238,39 +222,13 @@ class _MainScreenState extends State<MainScreen> {
         fullscreenDialog: true,
         builder: (context) => FullscreenChart(
           title: chart.type.name,
-          child: _buildChartContent(chart),
+          child: ChartRenderer.build(chart),
         ),
       ),
     );
   }
 
-  /// Строит содержимое графика в зависимости от его типа
-  /// 
-  /// Принимает:
-  /// - [chart] — данные графика
-  /// 
-  /// Возвращает:
-  /// - [Widget] — соответствующий виджет графика
-  /// 
-  /// Особенности:
-  /// - Для тепловой карты использует [HeatmapView] с текущими настройками
-  /// - Для остальных типов отображает заглушку "в разработке"
-  Widget _buildChartContent(FloatingChartData chart) {
-    switch (chart.type) {
-      case ChartType.heatmap:
-        return HeatmapView(
-          matrix: chart.dataset.corr(),
-          palette: _selectedPalette,
-          segments: _segments,
-          triangleMode: _triangleMode,
-          clusterEnabled: _clusterEnabled,
-          colorMode: _colorMode,
-        );
-      default:
-        return const Center(child: Text('График в разработке'));
-    }
-  }
-
+  
   /// Возвращает данные выбранного графика или null
   FloatingChartData? _getSelectedChart() {
     if (_selectedChartId == null) return null;
@@ -297,18 +255,10 @@ class _MainScreenState extends State<MainScreen> {
               right: _rightPanelWidth, // Ширина правой панели с датасетом
               top: 0,
               child: TopControlPanel(
-                chartType: selectedChart.type,
-                // Параметры для тепловой карты
-                palette: _selectedPalette,
-                segments: _segments,
-                triangleMode: _triangleMode,
-                clusterEnabled: _clusterEnabled,
-                colorMode: _colorMode,
-                onPaletteChanged: (p) => setState(() => _selectedPalette = p),
-                onSegmentsChanged: (s) => setState(() => _segments = s),
-                onTriangleModeChanged: (v) => setState(() => _triangleMode = v),
-                onClusterEnabledChanged: (v) => setState(() => _clusterEnabled = v),
-                onColorModeChanged: (m) => setState(() => _colorMode = m),
+                chart: selectedChart,
+                onChanged: () {
+                  setState(() {}); // Обновляем состояние для перерисовки панели управления
+                },
               ),
             ),
 
@@ -331,7 +281,7 @@ class _MainScreenState extends State<MainScreen> {
                         onSizeChanged: (size) => _updateChartSize(chart.id, size),
                         onClose: () => _removeChart(chart.id),
                         onFullscreen: () => _openFullscreen(chart.id),
-                        child: _buildChartContent(chart),
+                        child: ChartRenderer.build(chart),
                       )),
 
                   // Подсказка, если нет графиков

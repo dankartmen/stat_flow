@@ -1,5 +1,7 @@
 import 'dart:ui';
 
+import 'package:stat_flow/features/charts/chart_state.dart';
+
 import '../../../core/dataset/dataset.dart';
 import '../chart_type.dart';
 
@@ -30,11 +32,15 @@ class FloatingChartData {
   /// Размер окна
   final Size size;
 
+  /// Состояние графика
+  final ChartState state;
+
   /// {@macro floating_chart_data}
   FloatingChartData({
     required this.id,
     required this.type,
     required this.dataset,
+    required this.state,
     this.position = const Offset(100, 100),
     this.size = const Size(600, 450),
   });
@@ -56,6 +62,7 @@ class FloatingChartData {
     Dataset? dataset,
     Offset? position,
     Size? size,
+    ChartState? state,
   }) {
     return FloatingChartData(
       id: id ?? this.id,
@@ -63,6 +70,7 @@ class FloatingChartData {
       dataset: dataset ?? this.dataset,
       position: position ?? this.position,
       size: size ?? this.size,
+      state: state ?? this.state,
     );
   }
 }
