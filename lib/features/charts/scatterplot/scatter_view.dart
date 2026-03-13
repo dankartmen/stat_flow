@@ -1,67 +1,109 @@
-// import 'package:flutter/material.dart';
-// import 'package:syncfusion_flutter_charts/charts.dart';
+import 'dart:developer';
 
-// import '../../../core/dataset/dataset.dart';
-// import 'scatter_state.dart';
+import 'package:flutter/material.dart';
+import 'package:syncfusion_flutter_charts/charts.dart';
 
-// class HistogramView extends StatelessWidget {
+import '../../../core/dataset/dataset.dart';
+import 'scatter_state.dart';
 
-//   final Dataset dataset;
-//   final ScatterState state;
+/// {@template scatter_view}
+/// Виджет для отображения диаграммы рассеяния (scatter plot)
+/// 
+/// Использует SyncFusion Charts для построения интерактивного scatter plot
+/// с поддержкой:
+/// - Отображения зависимости между двумя числовыми колонками
+/// - Всплывающих подсказок (tooltips) с координатами точки
+/// - Адаптивного отображения под разные размеры
+/// 
+/// Требует две выбранные числовые колонки в [ScatterState].
+/// {@endtemplate}
+class ScatterView extends StatelessWidget {
+  /// Датасет с данными для отображения
+  final Dataset dataset;
 
-//   const HistogramView({
-//     super.key,
-//     required this.dataset,
-//     required this.state,
-//   });
+  /// Состояние диаграммы рассеяния с настройками
+  final ScatterState state;
 
-//   @override
-//   Widget build(BuildContext context) {
+  /// {@macro scatter_view}
+  const ScatterView({
+    super.key,
+    required this.dataset,
+    required this.state,
+  });
 
-//     if (state.firstColumnName == null || state.secondColumnName == null) {
-//       return const Center(
-//         child: Text("Выберите колонки"),
-//       );
-//     }
+  @override
+  Widget build(BuildContext context) {
+    // Проверка выбора колонок
+    if (state.firstColumnName == null || state.secondColumnName == null) {
+      return const Center(
+        child: Text("Выберите колонки для осей X и Y"),
+      );
+    }
 
-//     final firstColumn = dataset.numeric(state.firstColumnName!);
-//     final secondColumn = dataset.numeric(state.secondColumnName!);
+    // Получение числовых колонок
+    final firstColumn = dataset.numeric(state.firstColumnName!);
+    final secondColumn = dataset.numeric(state.secondColumnName!);
+    log("Построение scatter plot для колонок: ${firstColumn.name} и ${secondColumn.name}");
+    // Фильтрация null-значений и подготовка пар данных
+    final List<_ScatterPoint> points = [];
+    
+    for (int i = 0; i < firstColumn.data.length; i++) {
+      final xValue = firstColumn.data[i];
+      final yValue = i < secondColumn.data.length ? secondColumn.data[i] : null;
+      
+      if (xValue != null && yValue != null) {
+        points.add(_ScatterPoint(xValue, yValue));
+      }
+    }
 
-//     final v1 = firstColumn.data
-//         .whereType<double>()
-//         .toList();
+    // Проверка наличия данных
+    if (points.isEmpty) {
+      return const Center(
+        child: Text("Нет данных для отображения"),
+      );
+    }
 
-//     final v2 = secondColumn.data
-//         .whereType<double>()
-//         .toList();
+    return SfCartesianChart(
+      // Настройка всплывающих подсказок
+      tooltipBehavior: TooltipBehavior(
+        enable: true,
+        duration: 2000,
+        header: '${firstColumn.name} vs ${secondColumn.name}',
+        activationMode: ActivationMode.singleTap,
+        format: 'X: point.x\nY: point.y',
+      ),
 
-//     if (v1.isEmpty) {
-//       return const Center(
-//         child: Text("Нет данных для первой колонки"),
-//       );
-//     }
+      // Настройка осей
+      primaryXAxis: NumericAxis(
+        title: AxisTitle(text: firstColumn.name),
+      ),
+      primaryYAxis: NumericAxis(
+        title: AxisTitle(text: secondColumn.name),
+      ),
 
-//     if (v2.isEmpty){
-//       return const Center(
-//         child: Text("Нет данных для второй колонки"),
-//       );
-//     }
+      // Серия данных - scatter plot
+      series: <ScatterSeries<_ScatterPoint, double>>[
+        ScatterSeries<_ScatterPoint, double>(
+          dataSource: points,
+          xValueMapper: (_ScatterPoint point, _) => point.x,
+          yValueMapper: (_ScatterPoint point, _) => point.y,
+          enableTooltip: true,
+          markerSettings: const MarkerSettings(
+            isVisible: true,
+            shape: DataMarkerType.circle,
+            width: 8,
+            height: 8,
+          ),
+        ),
+      ],
+    );
+  }
+}
 
+/// Вспомогательный класс для хранения точки данных
+class _ScatterPoint {
+  final double x;
+  final double y;
 
-
-//     return SfCartesianChart(
-//       tooltipBehavior: TooltipBehavior(enable: true, duration: 2000, header: column.name, activationMode: ActivationMode.singleTap),
-//       primaryXAxis: NumericAxis(),
-//       primaryYAxis: NumericAxis(),
-//       series: <ScatterSeries<double, double>>[
-//         ScatterSeries<double, double>(
-//           dataSource: values,
-//           xValueMapper: (v, _) => ,
-//           yValueMapper: (v, _) => v,
-//           binInterval: interval,
-//           enableTooltip: true,
-//         ),
-//       ],
-//     );
-//   }
-// }
+  _ScatterPoint(this.x, this.y);
+}

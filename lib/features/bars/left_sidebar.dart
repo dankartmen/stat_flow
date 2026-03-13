@@ -170,6 +170,26 @@ class LeftSidebar extends StatelessWidget {
             ],
           ),
         ),
+        PopupMenuItem(
+          onTap: () => onAddChart(ChartType.linechart),
+          child: const Row(
+            children: [
+              Icon(Icons.line_axis, size: 20),
+              SizedBox(width: 12),
+              Text('Линейный график'),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          onTap: () => onAddChart(ChartType.barchart),
+          child: const Row(
+            children: [
+              Icon(Icons.bar_chart, size: 20),
+              SizedBox(width: 12),
+              Text('Столбчатая диаграмма'),
+            ],
+          ),
+        ),
       ],
     );
   }
