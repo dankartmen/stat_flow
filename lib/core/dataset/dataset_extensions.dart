@@ -148,3 +148,24 @@ extension RowGetters on DatasetRow {
   /// Возвращает значение как DateTime? (для колонок даты/времени)
   DateTime? getDate(String column) => this[column] as DateTime?;
 }
+
+/// {@template list_sampling}
+/// Расширение для выборки данных при визуализации больших датасетов.
+///
+/// Используется для того, чтобы не передавать в графики и таблицы
+/// слишком много точек и не блокировать UI при больших объемах данных.
+/// {@endtemplate}
+extension SamplingExtension<T> on List<T> {
+  /// Возвращает не более [maxSamples] элементов, равномерно распределённых по списку.
+  ///
+  /// Всегда включает первый и последний элементы (если они существуют).
+  List<T> sample(int maxSamples) {
+    if (length <= maxSamples) return this;
+
+    final step = (length - 1) / (maxSamples - 1);
+    return List.generate(maxSamples, (i) {
+      final index = (i * step).round().clamp(0, length - 1);
+      return this[index];
+    });
+  }
+}

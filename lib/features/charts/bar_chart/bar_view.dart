@@ -4,6 +4,8 @@ import 'package:syncfusion_flutter_charts/charts.dart';
 import '../../../core/dataset/dataset.dart';
 import 'bar_state.dart';
 
+const int _kMaxChartPoints = 5000;
+
 /// {@template bar_view}
 /// Виджет для отображения столбчатой диаграммы
 /// 
@@ -32,13 +34,19 @@ class BarView extends StatelessWidget {
     }
 
     final column = dataset.numeric(state.columnName!);
-    final values = column.data.whereType<double>().toList();
+    final allValues = column.data.whereType<double>().toList();
 
-    if (values.isEmpty) {
+    if (allValues.isEmpty) {
       return const Center(
         child: Text("Нет данных для отображения"),
       );
     }
+
+    // Сэмплирование данных для ускорения рендеринга на больших датасетах
+    final values = allValues.length > _kMaxChartPoints
+        ? allValues.sample(_kMaxChartPoints)
+        : allValues;
+    final isSampled = values.length != allValues.length;
 
     // Создаем категории (индексы) и значения
     final List<BarData> barData = [];
@@ -49,38 +57,53 @@ class BarView extends StatelessWidget {
     // Преобразуем выравнивание
     final barAlignment = _getBarAlignment(state.alignment);
 
-    return SfCartesianChart(
-      tooltipBehavior: TooltipBehavior(
-        enable: true,
-        duration: 2000,
-        header: column.name,
-        activationMode: ActivationMode.singleTap,
-        format: 'Категория: point.x\nЗначение: point.y',
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (isSampled)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: Text(
+              'Показано ${values.length} из ${allValues.length} точек (сэмплирование)',
+              style: const TextStyle(fontSize: 12, color: Colors.black54),
+            ),
+          ),
+        Expanded(
+          child: SfCartesianChart(
+            tooltipBehavior: TooltipBehavior(
+              enable: true,
+              duration: 2000,
+              header: column.name,
+              activationMode: ActivationMode.singleTap,
+              format: 'Категория: point.x\nЗначение: point.y',
+            ),
 
-      primaryXAxis: CategoryAxis(
-        title: const AxisTitle(text: 'Категория'),
-        labelRotation: 45,
-      ),
-      
-      primaryYAxis: NumericAxis(
-        title: AxisTitle(text: column.name),
-      ),
+            primaryXAxis: CategoryAxis(
+              title: const AxisTitle(text: 'Категория'),
+              labelRotation: 45,
+            ),
+            
+            primaryYAxis: NumericAxis(
+              title: AxisTitle(text: column.name),
+            ),
 
-      series: <BarSeries<BarData, String>>[
-        BarSeries<BarData, String>(
-          dataSource: barData,
-          xValueMapper: (BarData data, _) => data.category,
-          yValueMapper: (BarData data, _) => data.value,
-          enableTooltip: true,
-          width: state.barWidth,
-          spacing: 0.2,
-          color: Colors.blue,
-          dataLabelSettings: DataLabelSettings(
-            alignment: barAlignment,
-            isVisible: state.showValues,
-            labelPosition: ChartDataLabelPosition.outside,
-            textStyle: const TextStyle(fontSize: 10),
+            series: <BarSeries<BarData, String>>[
+              BarSeries<BarData, String>(
+                dataSource: barData,
+                xValueMapper: (BarData data, _) => data.category,
+                yValueMapper: (BarData data, _) => data.value,
+                enableTooltip: true,
+                width: state.barWidth,
+                spacing: 0.2,
+                color: Colors.blue,
+                dataLabelSettings: DataLabelSettings(
+                  alignment: barAlignment,
+                  isVisible: state.showValues,
+                  labelPosition: ChartDataLabelPosition.outside,
+                  textStyle: const TextStyle(fontSize: 10),
+                ),
+              ),
+            ],
           ),
         ),
       ],

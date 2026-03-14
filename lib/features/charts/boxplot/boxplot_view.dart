@@ -53,17 +53,43 @@ class BoxPlotView extends StatelessWidget {
       );
     }
 
-    return SfCartesianChart(
-      // Настройка оси X как категориальной (для одной колонки)
-      primaryXAxis: CategoryAxis(),
+    // Сэмплирование для ускорения рендеринга на больших наборах данных
+    final maxPoints = state.maxPoints <= 0 ? values.length : state.maxPoints;
+    final displayValues = values.length > maxPoints
+        ? values.sample(maxPoints)
+        : values;
+    final isSampled = displayValues.length != values.length;
 
-      // Серия данных - ящик с усами
-      series: <BoxAndWhiskerSeries<List<double>, String>>[
-        BoxAndWhiskerSeries<List<double>, String>(
-          dataSource: [values],
-          xValueMapper: (_, __) => state.columnName!,
-          yValueMapper: (v, _) => v,
-          showMean: true, // Отображать среднее значение
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (isSampled)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: Text(
+              'Показано ${displayValues.length} из ${values.length} точек (сэмплирование)',
+              style: const TextStyle(fontSize: 12, color: Colors.black54),
+            ),
+          ),
+        Expanded(
+          child: SfCartesianChart(
+            // Настройка оси X как категориальной (для одной колонки)
+            primaryXAxis: CategoryAxis(),
+
+            // Серия данных - ящик с усами
+            series: <BoxAndWhiskerSeries<List<double>, String>>[
+              BoxAndWhiskerSeries<List<double>, String>(
+                dataSource: [displayValues],
+                xValueMapper: (_, __) => state.columnName!,
+                yValueMapper: (v, _) => v,
+                showMean: state.showMean,
+                markerSettings: const MarkerSettings(isVisible: true),
+                dataLabelSettings: const DataLabelSettings(
+                  isVisible: false,
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );

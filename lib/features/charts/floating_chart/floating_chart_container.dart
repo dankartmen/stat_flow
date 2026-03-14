@@ -67,8 +67,8 @@ class FloatingChart extends StatefulWidget {
       onSelect: onSelect,
       onClose: onClose,
       onFullscreen: onFullscreen,
-      child: child,
       bounds: bounds,
+      child: child,
     );
   }
 

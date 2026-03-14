@@ -64,6 +64,7 @@ class _TablePreviewScreenState extends State<TablePreviewScreen> {
     );
 
     if (result == null) {
+      if (!mounted) return;
       Navigator.pop(context);
       return;
     }
