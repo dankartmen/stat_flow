@@ -29,7 +29,7 @@ class ChartControlsBuilder {
       FloatingChartData chart,
       VoidCallback refresh
   ) {
-    final plugin = ChartRegistry.get(chart.type.name);
+    final plugin = ChartRegistry.get(chart.type);
     return plugin.buildControls(chart, refresh);
   }
 }

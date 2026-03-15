@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../chart_plugin.dart';
 import '../chart_state.dart';
+import '../chart_type.dart';
 import '../floating_chart/floating_chart_data.dart';
 
 import 'line_state.dart';
@@ -18,7 +19,7 @@ class LinePlugin extends ChartPlugin {
   const LinePlugin();
 
   @override
-  String get type => "Линейный график";
+  ChartType get type => ChartType.linechart;
 
   @override
   ChartState createState() {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:stat_flow/core/dataset/dataset.dart';
 
 import '../chart_plugin.dart';
+import '../chart_type.dart';
 import '../floating_chart/floating_chart_data.dart';
 import '../chart_state.dart';
 
@@ -12,7 +13,7 @@ import 'widgets/heatmap_view.dart';
 class HeatmapPlugin extends ChartPlugin {
 
   @override
-  String get type => "Тепловая карта";
+  ChartType get type => ChartType.heatmap;
 
   @override
   ChartState createState() {

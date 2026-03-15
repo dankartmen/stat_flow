@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../chart_plugin.dart';
 import '../chart_state.dart';
+import '../chart_type.dart';
 import '../floating_chart/floating_chart_data.dart';
 
 import 'bar_state.dart';
@@ -15,7 +16,7 @@ class BarPlugin extends ChartPlugin {
   const BarPlugin();
 
   @override
-  String get type => "Столбчатая диаграмма";
+  ChartType get type => ChartType.barchart;
 
   @override
   ChartState createState() {

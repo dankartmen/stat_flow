@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:flutter/material.dart';
 import 'package:stat_flow/core/dataset/dataset.dart';
 import 'package:stat_flow/features/canvas/canvas_workspace.dart';
@@ -143,7 +145,7 @@ class _MainScreenState extends State<MainScreen> {
   void _addChart(ChartType type) {
     if (_dataset == null) return;
 
-    final plugin = ChartRegistry.get(type.name);
+    final plugin = ChartRegistry.get(type);
 
     final newChart = FloatingChartData(
       id: _nextChartId++,
@@ -165,10 +167,9 @@ class _MainScreenState extends State<MainScreen> {
     setState(() {
       final index = _charts.indexWhere((c) => c.id == id);
       if (index == -1) return;
-
+      if (index == _charts.length - 1) return; // Уже выбран, ничего не делаем
       final chart = _charts.removeAt(index);
       _charts.add(chart);
-
       _selectedChartId = id;
     });
   }
@@ -355,9 +356,6 @@ class _MainScreenState extends State<MainScreen> {
               ),
             ),
 
-          // Приветственный оверлей
-          if (_showWelcomeOverlay)
-            _buildWelcomeOverlay(),
         ],
       ),
     );
@@ -383,68 +381,6 @@ class _MainScreenState extends State<MainScreen> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  /// Строит приветственный оверлей (альтернатива диалогу)
-  Widget _buildWelcomeOverlay() {
-    return Container(
-      color: Colors.black54,
-      child: Center(
-        child: Card(
-          elevation: 8,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Container(
-            width: 400,
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.analytics,
-                  size: 64,
-                  color: Colors.blue,
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Stat Flow',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Визуализация и анализ данных',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.grey,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: () {
-                    setState(() => _showWelcomeOverlay = false);
-                    _loadDataset();
-                  },
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: const Size(200, 48),
-                  ),
-                  child: const Text('Загрузить датасет'),
-                ),
-                TextButton(
-                  onPressed: () {
-                    setState(() => _showWelcomeOverlay = false);
-                  },
-                  child: const Text('Пропустить'),
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }

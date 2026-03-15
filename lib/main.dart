@@ -16,6 +16,7 @@ import 'package:syncfusion_localizations/syncfusion_localizations.dart';
     @override
     Widget build(BuildContext context) {
       return MaterialApp(
+        showPerformanceOverlay: true,
         title: 'StatFlow',
         theme: ThemeData(
           primarySwatch: Colors.blue,

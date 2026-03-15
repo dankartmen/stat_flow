@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
 
@@ -15,7 +17,7 @@ const int _kMaxChartPoints = 5000;
 /// - Подписей значений на столбцах
 /// - Настраиваемой ширины столбцов
 /// {@endtemplate}
-class BarView extends StatelessWidget {
+class BarView extends StatefulWidget {
   final Dataset dataset;
   final BarState state;
 
@@ -26,54 +28,84 @@ class BarView extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  _BarViewState createState() => _BarViewState();
+}
+
+
+class _BarViewState extends State<BarView> {
+  List<BarData> _barData = [];
+  bool _isSampled = false;
+
+
+  @override
+  void initState() {
+    super.initState();
+    _updateData(widget.dataset, widget.state);
+  }
+
+  @override
+  void didUpdateWidget(covariant BarView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    log(oldWidget.state.toString(), name: 'BarView didUpdateWidget - old state');
+    log(widget.state.toString(), name: 'BarView didUpdateWidget - new state');
+    if (oldWidget.dataset != widget.dataset ||
+        oldWidget.state != widget.state) {
+      _updateData(widget.dataset, widget.state);
+    }
+  }
+
+  void _updateData(Dataset dataset, BarState state) {
+    log("Обновление данных в BarView с состоянием: ${state.toString()}", name: 'BarView');
     if (state.columnName == null) {
-      return const Center(
-        child: Text("Выберите колонку"),
-      );
+      setState(() {
+        _barData = [];
+        _isSampled = false;
+      });
+      return;
     }
 
     final column = dataset.numeric(state.columnName!);
     final allValues = column.data.whereType<double>().toList();
 
     if (allValues.isEmpty) {
-      return const Center(
-        child: Text("Нет данных для отображения"),
-      );
+      setState(() {
+        _barData = [];
+        _isSampled = false;
+      });
+      return;
     }
 
     // Сэмплирование данных для ускорения рендеринга на больших датасетах
     final values = allValues.length > _kMaxChartPoints
         ? allValues.sample(_kMaxChartPoints)
         : allValues;
-    final isSampled = values.length != allValues.length;
 
-    // Создаем категории (индексы) и значения
-    final List<BarData> barData = [];
-    for (int i = 0; i < values.length; i++) {
-      barData.add(BarData('${i + 1}', values[i]));
+    setState(() {
+      _isSampled = values.length != allValues.length;
+      _barData = List.generate(values.length, (index) => BarData('${index + 1}', values[index]));
+    });
+  }
+
+
+  @override
+  Widget build(BuildContext context) {
+    if (_barData.isEmpty) {
+      return const Center(
+        child: Text("Нет данных для отображения"),
+      );
     }
 
-    // Преобразуем выравнивание
-    final barAlignment = _getBarAlignment(state.alignment);
-
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (isSampled)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            child: Text(
-              'Показано ${values.length} из ${allValues.length} точек (сэмплирование)',
-              style: const TextStyle(fontSize: 12, color: Colors.black54),
-            ),
-          ),
         Expanded(
           child: SfCartesianChart(
             tooltipBehavior: TooltipBehavior(
               enable: true,
               duration: 2000,
-              header: column.name,
+              header: widget.state.columnName ?? 'Столбчатая диаграмма',
               activationMode: ActivationMode.singleTap,
               format: 'Категория: point.x\nЗначение: point.y',
             ),
@@ -84,30 +116,30 @@ class BarView extends StatelessWidget {
             ),
             
             primaryYAxis: NumericAxis(
-              title: AxisTitle(text: column.name),
+              title: AxisTitle(text: widget.state.columnName),
             ),
 
-            series: <BarSeries<BarData, String>>[
-              BarSeries<BarData, String>(
-                dataSource: barData,
-                xValueMapper: (BarData data, _) => data.category,
-                yValueMapper: (BarData data, _) => data.value,
-                enableTooltip: true,
-                width: state.barWidth,
-                spacing: 0.2,
-                color: Colors.blue,
-                dataLabelSettings: DataLabelSettings(
-                  alignment: barAlignment,
-                  isVisible: state.showValues,
-                  labelPosition: ChartDataLabelPosition.outside,
-                  textStyle: const TextStyle(fontSize: 10),
-                ),
-              ),
-            ],
+            series: _buildSeries(),
           ),
         ),
       ],
     );
+  }
+
+  List<BarSeries<BarData, String>> _buildSeries() {
+    return [
+      BarSeries<BarData, String>(
+        dataSource: _barData,
+        xValueMapper: (data, _) => data.category,
+        yValueMapper: (data, _) => data.value,
+        width: widget.state.barWidth,
+        dataLabelSettings: DataLabelSettings(
+          alignment: _getBarAlignment(widget.state.alignment),
+          isVisible: widget.state.showValues,
+          textStyle: const TextStyle(fontSize: 10),
+        ),
+      ),
+    ];
   }
 
   // Преобразование BarAlignment в ChartAlignment

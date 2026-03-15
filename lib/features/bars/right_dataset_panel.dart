@@ -29,7 +29,6 @@ class RightDatasetPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 280,
       color: Colors.white,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

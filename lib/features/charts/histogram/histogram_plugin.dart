@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../chart_plugin.dart';
 import '../chart_state.dart';
+import '../chart_type.dart';
 import '../floating_chart/floating_chart_data.dart';
 
 import 'histogram_state.dart';
@@ -25,7 +26,7 @@ class HistogramPlugin extends ChartPlugin {
   const HistogramPlugin();
 
   @override
-  String get type => "Гистограмма";
+  ChartType get type => ChartType.histogram;
 
   @override
   ChartState createState() {

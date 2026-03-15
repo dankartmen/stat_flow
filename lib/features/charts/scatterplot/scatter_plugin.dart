@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../chart_plugin.dart';
 import '../chart_state.dart';
+import '../chart_type.dart';
 import '../floating_chart/floating_chart_data.dart';
 
 import 'scatter_state.dart';
@@ -25,7 +26,7 @@ class ScatterPlugin extends ChartPlugin {
   const ScatterPlugin();
 
   @override
-  String get type => "Диаграмма рассеяния";
+  ChartType get type => ChartType.scatter;
 
   @override
   ChartState createState() {

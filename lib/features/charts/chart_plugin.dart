@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:stat_flow/features/charts/chart_type.dart';
 import 'chart_state.dart';
 import 'floating_chart/floating_chart_data.dart';
 
@@ -21,7 +22,7 @@ abstract class ChartPlugin {
   /// Уникальный идентификатор типа графика
   /// 
   /// Должен соответствовать одному из значений [ChartType]
-  String get type;
+  ChartType get type;
 
   /// Создает начальное состояние для графика этого типа
   /// 

@@ -36,4 +36,9 @@ class BarState extends ChartState {
     this.barWidth = 0.7,
     this.alignment = BarAlignment.center,
   });
+
+  @override
+  String toString() {
+    return 'BarState(columnName: $columnName, showValues: $showValues, barWidth: $barWidth, alignment: $alignment)';
+  }
 }

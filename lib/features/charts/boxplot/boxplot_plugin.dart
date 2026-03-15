@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../chart_plugin.dart';
 import '../chart_state.dart';
+import '../chart_type.dart';
 import '../floating_chart/floating_chart_data.dart';
 
 import 'boxplot_state.dart';
@@ -25,7 +26,7 @@ class BoxPlotPlugin extends ChartPlugin {
   const BoxPlotPlugin();
 
   @override
-  String get type => "Ящик с усами";
+  ChartType get type => ChartType.boxplot;
 
   @override
   ChartState createState() {

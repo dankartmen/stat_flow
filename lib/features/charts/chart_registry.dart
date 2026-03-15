@@ -1,3 +1,5 @@
+import 'package:stat_flow/features/charts/chart_type.dart';
+
 import 'chart_plugin.dart';
 
 /// {@template chart_registry}
@@ -13,7 +15,7 @@ import 'chart_plugin.dart';
 /// {@endtemplate}
 class ChartRegistry {
   /// Внутренняя карта зарегистрированных плагинов
-  static final Map<String, ChartPlugin> _plugins = {};
+  static final Map<ChartType, ChartPlugin> _plugins = {};
 
   /// Регистрирует новый плагин в системе
   /// 
@@ -38,7 +40,7 @@ class ChartRegistry {
   /// 
   /// Выбрасывает:
   /// - [Exception] — если плагин с указанным типом не найден
-  static ChartPlugin get(String type) {
+  static ChartPlugin get(ChartType type) {
     final plugin = _plugins[type];
     if (plugin == null) {
       throw Exception("График не зарегистрирован: $type");
@@ -47,5 +49,5 @@ class ChartRegistry {
   }
 
   /// Возвращает список всех зарегистрированных типов графиков
-  static List<String> get types => _plugins.keys.toList();
+  static List<ChartType> get types => _plugins.keys.toList();
 }

@@ -25,7 +25,7 @@ class ChartRenderer {
   /// - Делегирует создание виджета плагину через метод [ChartPlugin.buildChart]
   /// - Позволяет добавлять новые типы графиков без изменения этого класса
   static Widget build(FloatingChartData chart) {
-    final plugin = ChartRegistry.get(chart.type.name);
+    final plugin = ChartRegistry.get(chart.type);
     return plugin.buildChart(chart);
   }
 }
