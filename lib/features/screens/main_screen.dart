@@ -5,6 +5,7 @@ import 'package:stat_flow/core/dataset/dataset.dart';
 import 'package:stat_flow/features/canvas/canvas_workspace.dart';
 import 'package:stat_flow/features/charts/chart_renderer.dart';
 import '../charts/chart_registry.dart';
+import '../charts/chart_state.dart';
 import '../charts/chart_type.dart';
 import '../table/widget/full_table_screen.dart';
 import '../charts/floating_chart/floating_chart_container.dart';
@@ -45,9 +46,6 @@ class _MainScreenState extends State<MainScreen> {
   /// Загруженный датасет
   Dataset? _dataset;
 
-  /// Флаг отображения приветственного оверлея
-  bool _showWelcomeOverlay = true;
-
   /// Счетчик для генерации уникальных ID графиков
   int _nextChartId = 0;
 
@@ -82,7 +80,6 @@ class _MainScreenState extends State<MainScreen> {
       barrierDismissible: false,
       builder: (context) => WelcomeDialog(
         onStart: () {
-          setState(() => _showWelcomeOverlay = false);
         },
         onLoadDataset: () => _loadDataset(),
       ),
@@ -120,7 +117,6 @@ class _MainScreenState extends State<MainScreen> {
     if (result != null && result is Dataset) {
       setState(() {
         _dataset = result;
-        _showWelcomeOverlay = false;
         _isRightPanelExpanded = true; // Автоматически расширяем правую панель при загрузке датасета
       });
     }
@@ -227,7 +223,50 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  
+  /// Создаёт новый график для указанного поля (вызывается из правой панели)
+  void _createChartForField(String fieldName) {
+    if (_dataset == null) return;
+
+    final column = _dataset!.column(fieldName);
+    if (column == null) return;
+
+    // Определяем тип графика по умолчанию на основе типа колонки
+    ChartType defaultType;
+    ColumnType colType;
+
+    if (column is NumericColumn) {
+      defaultType = ChartType.histogram;
+      colType = ColumnType.numeric;
+    } else if (column is DateTimeColumn) {
+      defaultType = ChartType.linechart;      
+      colType = ColumnType.dateTime;
+    } else if (column is CategoricalColumn) {
+      defaultType = ChartType.barchart;  
+      colType = ColumnType.categorical;
+    } else {
+      // TextColumn или другие 
+      defaultType = ChartType.barchart;
+      colType = ColumnType.text;
+    }
+
+    final plugin = ChartRegistry.get(defaultType);
+    final state = plugin.createState();
+    state.selectField(fieldName, type: colType); // передаём поле и его тип
+
+    final newChart = FloatingChartData(
+      id: _nextChartId++,
+      type: defaultType,
+      dataset: _dataset!,
+      state: state,
+      position: Offset(50 + _charts.length * 20.0, 50 + _charts.length * 20.0),
+      size: const Size(300, 200),
+    );
+
+    setState(() {
+      _charts.add(newChart);
+      _selectedChartId = newChart.id;
+    });
+  }
   /// Возвращает данные выбранного графика или null
   FloatingChartData? _getSelectedChart() {
     if (_selectedChartId == null) return null;
@@ -350,6 +389,7 @@ class _MainScreenState extends State<MainScreen> {
                     child: RightDatasetPanel(
                       dataset: _dataset!,
                       isExpanded: _isRightPanelExpanded,
+                      onCreateChart: _createChartForField,
                     ),
                   ),
                 ],

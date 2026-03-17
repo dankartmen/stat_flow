@@ -61,6 +61,9 @@ class HistogramView extends StatelessWidget {
     final interval = (max - min) / state.bins;
 
     return SfCartesianChart(
+      
+      crosshairBehavior: CrosshairBehavior(enable: true, lineDashArray: [20, 10], hideDelay: 300),
+      // plotAreaBackgroundImage: AssetImage('assets/zzz_angel1.png'),
       // Настройка всплывающих подсказок
       tooltipBehavior: TooltipBehavior(
         enable: true,
@@ -80,6 +83,7 @@ class HistogramView extends StatelessWidget {
           yValueMapper: (v, _) => v,
           binInterval: interval,
           enableTooltip: true,
+          dataLabelSettings: DataLabelSettings(isVisible: false),
         ),
       ],
     );

@@ -24,4 +24,13 @@ class HistogramState extends ChartState {
     this.bins = 10,
     this.columnName,
   });
+
+  @override
+  void selectField(String columnName, {ColumnType? type}) {
+    if (type == ColumnType.numeric) {
+      this.columnName = columnName;
+    } else {
+      this.columnName = null;
+    }
+  }
 }
