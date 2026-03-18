@@ -21,4 +21,15 @@ class ScatterState extends ChartState {
     this.firstColumnName,
     this.secondColumnName,
   });
+
+  @override
+  void selectField(String columnName, {ColumnType? type}) {
+    if (type == ColumnType.numeric) {
+      if (firstColumnName == null) {
+        firstColumnName = columnName;
+      } else {
+        secondColumnName ??= columnName;
+      }
+    }
+  }
 }

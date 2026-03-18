@@ -4,9 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:stat_flow/core/dataset/dataset.dart';
 import 'package:stat_flow/features/canvas/canvas_workspace.dart';
 import 'package:stat_flow/features/charts/chart_renderer.dart';
+import '../charts/bar_chart/bar_state.dart';
+import '../charts/boxplot/boxplot_state.dart';
 import '../charts/chart_registry.dart';
 import '../charts/chart_state.dart';
 import '../charts/chart_type.dart';
+import '../charts/histogram/histogram_state.dart';
+import '../charts/line_chart/line_state.dart';
+import '../charts/scatterplot/scatter_state.dart';
 import '../table/widget/full_table_screen.dart';
 import '../charts/floating_chart/floating_chart_container.dart';
 import '../charts/floating_chart/floating_chart_data.dart';
@@ -22,15 +27,16 @@ import 'welcome_dialog.dart';
 /// 
 /// Реализует интерфейс рабочего стола (dashboard) с:
 /// - Левой боковой панелью навигации
-/// - Правой панелью с информацией о датасете
+/// - Правой панелью с информацией о датасете (с возможностью сворачивания)
 /// - Верхней контекстной панелью управления (для выбранного графика)
 /// - Центральной областью с плавающими окнами графиков
 /// 
 /// Поддерживает:
 /// - Загрузку CSV-файлов через экран предпросмотра
-/// - Создание графиков различных типов (тепловая карта, диаграмма рассеяния и др.)
+/// - Создание графиков различных типов (тепловая карта, диаграмма рассеяния, гистограмма,
+///   ящик с усами, линейный график, столбчатая диаграмма)
 /// - Перемещение и изменение размеров окон
-/// - Выделение активного окна
+/// - Выделение активного окна (автоматически перемещается на передний план)
 /// - Полноэкранный режим
 /// - Управление параметрами отображения через верхнюю панель
 /// {@endtemplate}
@@ -61,7 +67,7 @@ class _MainScreenState extends State<MainScreen> {
   /// Ширина правой панели в расширенном состоянии
   static const double _rightPanelExpandedWidth = 280;
 
-  /// Ширина правой панели в свернутом состоянии (только иконка)
+  /// Ширина правой панели в свернутом состоянии
   static const double _rightPanelCollapsedWidth = 0;
 
   @override
@@ -80,6 +86,7 @@ class _MainScreenState extends State<MainScreen> {
       barrierDismissible: false,
       builder: (context) => WelcomeDialog(
         onStart: () {
+          // Пользователь выбрал "Пропустить"
         },
         onLoadDataset: () => _loadDataset(),
       ),
@@ -105,7 +112,7 @@ class _MainScreenState extends State<MainScreen> {
   /// Загружает датасет через экран предварительного просмотра
   /// 
   /// Открывает [TablePreviewScreen] для выбора и предпросмотра CSV-файла.
-  /// При успешной загрузке сохраняет датасет и скрывает приветственный оверлей.
+  /// При успешной загрузке сохраняет датасет.
   Future<void> _loadDataset() async {
     final result = await Navigator.push(
       context,
@@ -159,6 +166,9 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   /// Выбирает график по ID
+  /// 
+  /// Особенности:
+  /// - Перемещает выбранный график в конец списка (на передний план)
   void _selectChart(int id) {
     setState(() {
       final index = _charts.indexWhere((c) => c.id == id);
@@ -203,6 +213,28 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
+  /// Возвращает множество имен полей, которые используются в графиках
+  Set<String> _getUsedFields() {
+    final used = <String>{};
+    for (final chart in _charts) {
+      final state = chart.state;
+      if (state is HistogramState && state.columnName != null) {
+        used.add(state.columnName!);
+      } else if (state is BoxPlotState && state.columnName != null) {
+        used.add(state.columnName!);
+      } else if (state is ScatterState) {
+        if (state.firstColumnName != null) used.add(state.firstColumnName!);
+        if (state.secondColumnName != null) used.add(state.secondColumnName!);
+      } else if (state is LineState && state.columnName != null) {
+        used.add(state.columnName!);
+      } else if (state is BarState && state.columnName != null) {
+        used.add(state.columnName!);
+      }
+      // HeatmapState использует все числовые колонки, но мы не отслеживаем их здесь
+    }
+    return used;
+  }
+
   /// Открывает график в полноэкранном режиме
   /// 
   /// Принимает:
@@ -224,38 +256,21 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   /// Создаёт новый график для указанного поля (вызывается из правой панели)
-  void _createChartForField(String fieldName) {
+  /// 
+  /// Принимает:
+  /// - [fieldName] — имя поля для графика
+  /// - [chartType] — тип создаваемого графика
+  void _createChartForField(String fieldName, ChartType chartType) {
     if (_dataset == null) return;
 
-    final column = _dataset!.column(fieldName);
-    if (column == null) return;
-
-    // Определяем тип графика по умолчанию на основе типа колонки
-    ChartType defaultType;
-    ColumnType colType;
-
-    if (column is NumericColumn) {
-      defaultType = ChartType.histogram;
-      colType = ColumnType.numeric;
-    } else if (column is DateTimeColumn) {
-      defaultType = ChartType.linechart;      
-      colType = ColumnType.dateTime;
-    } else if (column is CategoricalColumn) {
-      defaultType = ChartType.barchart;  
-      colType = ColumnType.categorical;
-    } else {
-      // TextColumn или другие 
-      defaultType = ChartType.barchart;
-      colType = ColumnType.text;
-    }
-
-    final plugin = ChartRegistry.get(defaultType);
+    final plugin = ChartRegistry.get(chartType);
     final state = plugin.createState();
-    state.selectField(fieldName, type: colType); // передаём поле и его тип
+
+    state.selectField(fieldName);
 
     final newChart = FloatingChartData(
       id: _nextChartId++,
-      type: defaultType,
+      type: chartType,
       dataset: _dataset!,
       state: state,
       position: Offset(50 + _charts.length * 20.0, 50 + _charts.length * 20.0),
@@ -267,18 +282,20 @@ class _MainScreenState extends State<MainScreen> {
       _selectedChartId = newChart.id;
     });
   }
+
   /// Возвращает данные выбранного графика или null
   FloatingChartData? _getSelectedChart() {
     if (_selectedChartId == null) return null;
     return _charts.firstWhere((chart) => chart.id == _selectedChartId);
   }
 
+  /// Возвращает текущую ширину правой панели
   double get _rightPanelWidth {
     return _isRightPanelExpanded 
         ? _rightPanelExpandedWidth 
         : _rightPanelCollapsedWidth;
   }
-  
+
   @override
   Widget build(BuildContext context) {
     final selectedChart = _getSelectedChart();
@@ -346,56 +363,63 @@ class _MainScreenState extends State<MainScreen> {
 
           // Правая панель с информацией о датасете
           if (_dataset != null)
-            Positioned(
-              right: 0,
-              top: 0,
-              bottom: 0,
-              child: Row(
-                children: [
-                  GestureDetector(
-                    onTap: _toggleRightPanel,
-                    child: Container(
-                      width: 16,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[200],
-                        borderRadius: BorderRadius.only(
-                          topLeft: Radius.circular(4),
-                          bottomLeft: Radius.circular(4),
-                          topRight: Radius.circular(_isRightPanelExpanded ? 0 : 4),
-                          bottomRight: Radius.circular(_isRightPanelExpanded ? 0 : 4),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.05),
-                            blurRadius: 2,
-                            offset: const Offset(-1, 0),
-                          ),
-                        ],
-                      ),
-                      child: Center(
-                        child: Icon(
-                          _isRightPanelExpanded ? Icons.chevron_right : Icons.chevron_left,
-                          color: Colors.grey[400],
-                          size: 14,
-                        ),
-                      ),
-                    ),
-                  ),
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeInOut,
-                    width: _rightPanelWidth,
-                    child: RightDatasetPanel(
-                      dataset: _dataset!,
-                      isExpanded: _isRightPanelExpanded,
-                      onCreateChart: _createChartForField,
-                    ),
+            _buildRightPanel(),
+        ],
+      ),
+    );
+  }
+
+  /// Строит правую панель с кнопкой сворачивания
+  Widget _buildRightPanel() {
+    return Positioned(
+      right: 0,
+      top: 0,
+      bottom: 0,
+      child: Row(
+        children: [
+          // Кнопка сворачивания/разворачивания
+          GestureDetector(
+            onTap: _toggleRightPanel,
+            child: Container(
+              width: 16,
+              height: 60,
+              decoration: BoxDecoration(
+                color: Colors.grey[200],
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(4),
+                  bottomLeft: Radius.circular(4),
+                  topRight: Radius.circular(_isRightPanelExpanded ? 0 : 4),
+                  bottomRight: Radius.circular(_isRightPanelExpanded ? 0 : 4),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 2,
+                    offset: const Offset(-1, 0),
                   ),
                 ],
               ),
+              child: Center(
+                child: Icon(
+                  _isRightPanelExpanded ? Icons.chevron_right : Icons.chevron_left,
+                  color: Colors.grey[400],
+                  size: 14,
+                ),
+              ),
             ),
-
+          ),
+          // Анимированная панель с контентом
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            width: _rightPanelWidth,
+            child: RightDatasetPanel(
+              dataset: _dataset!,
+              isExpanded: _isRightPanelExpanded,
+              onCreateChart: _createChartForField,
+              usedFields: _getUsedFields(),
+            ),
+          ),
         ],
       ),
     );

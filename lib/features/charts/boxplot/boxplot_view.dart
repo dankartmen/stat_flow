@@ -74,8 +74,12 @@ class BoxPlotView extends StatelessWidget {
         Expanded(
           child: SfCartesianChart(
             // Настройка оси X как категориальной (для одной колонки)
-            primaryXAxis: CategoryAxis(),
-
+            primaryXAxis: CategoryAxis(
+              title: const AxisTitle(text: 'Поле'),
+            ),
+            primaryYAxis: NumericAxis(
+              title: const AxisTitle(text: 'Значение'),
+            ),
             // Серия данных - ящик с усами
             series: <BoxAndWhiskerSeries<List<double>, String>>[
               BoxAndWhiskerSeries<List<double>, String>(

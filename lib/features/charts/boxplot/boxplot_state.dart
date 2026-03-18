@@ -5,6 +5,9 @@ import '../chart_state.dart';
 /// 
 /// Хранит настройки отображения ящика с усами:
 /// - [columnName] — имя выбранной числовой колонки для анализа
+/// - [showMean] — показывать ли на графике среднее значение
+/// - [showOutliers] — показывать ли выбросы (outliers)
+/// - [maxPoints] — максимальное количество точек для расчета статистики
 /// 
 /// Наследуется от [ChartState] для интеграции с системой плагинов.
 /// {@endtemplate}
@@ -29,4 +32,11 @@ class BoxPlotState extends ChartState {
     this.showOutliers = true,
     this.maxPoints = 5000,
   });
+
+  @override
+  void selectField(String columnName, {ColumnType? type}) {
+    if (type == ColumnType.numeric) {
+      this.columnName = columnName;
+    }
+  }
 }

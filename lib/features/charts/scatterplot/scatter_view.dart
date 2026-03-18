@@ -48,10 +48,13 @@ class ScatterView extends StatelessWidget {
     log("Построение scatter plot для колонок: ${firstColumn.name} и ${secondColumn.name}");
     // Фильтрация null-значений и подготовка пар данных
     final allPoints = <_ScatterPoint>[];
+    final minLength = firstColumn.data.length < secondColumn.data.length 
+          ? firstColumn.data.length 
+          : secondColumn.data.length;
 
-    for (int i = 0; i < firstColumn.data.length; i++) {
+    for (int i = 0; i < minLength; i++) {
       final xValue = firstColumn.data[i];
-      final yValue = i < secondColumn.data.length ? secondColumn.data[i] : null;
+      final yValue = secondColumn.data[i];
 
       if (xValue != null && yValue != null) {
         allPoints.add(_ScatterPoint(xValue, yValue));
@@ -123,10 +126,16 @@ class ScatterView extends StatelessWidget {
   }
 }
 
-/// Вспомогательный класс для хранения точки данных
+/// {@template scatter_point}
+/// Вспомогательный класс для хранения точки данных диаграммы рассеяния
+/// {@endtemplate}
 class _ScatterPoint {
+  /// Координата X
   final double x;
+
+  /// Координата Y
   final double y;
 
+  /// {@macro scatter_point}
   _ScatterPoint(this.x, this.y);
 }

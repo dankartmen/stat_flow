@@ -6,7 +6,6 @@ import '../chart_state.dart';
 /// Хранит настройки отображения линейного графика:
 /// - [columnName] — имя выбранной числовой колонки для оси Y
 /// - [showMarkers] — показывать маркеры на точках
-/// - [isSmooth] — сглаживание линии
 /// - [showGridLines] — показывать сетку
 /// {@endtemplate}
 class LineState extends ChartState {
@@ -25,4 +24,11 @@ class LineState extends ChartState {
     this.showMarkers = true,
     this.showGridLines = true,
   });
+
+  @override
+  void selectField(String columnName, {ColumnType? type}) {
+    if (type == ColumnType.numeric) {
+      this.columnName = columnName;
+    }
+  }
 }
