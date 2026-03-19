@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
-
 import '../color/heatmap_color_mapper.dart';
 import '../color/heatmap_palette.dart';
 import '../model/heatmap_state.dart';
 
 /// {@template heatmap_controls}
 /// Фабрика для создания элементов управления тепловой картой
-/// 
+///
 /// Предоставляет статические методы для построения UI-компонентов,
 /// управляющих отображением тепловой карты:
 /// - Выбор цветовой палитры
@@ -17,31 +16,25 @@ import '../model/heatmap_state.dart';
 /// {@endtemplate}
 class HeatmapControls {
   /// Строит список виджетов управления на основе состояния
-  /// 
+  ///
   /// Принимает:
   /// - [state] — текущее состояние тепловой карты
-  /// - [refresh] — callback для обновления UI после изменения состояния
-  /// 
+  /// - [onChanged] — колбэк для обновления состояния
+  ///
   /// Возвращает:
   /// - [List<Widget>] — список виджетов для размещения в панели управления
-  static List<Widget> build(
-    HeatmapState state,
-    VoidCallback refresh
-  ) {
+  static List<Widget> build({
+    required HeatmapState state,
+    required ValueChanged<HeatmapState> onChanged,
+  }) {
     return [
       // Выбор палитры
       DropdownButton<HeatmapPalette>(
         value: state.palette,
         items: HeatmapPalette.values.map((p) {
-          return DropdownMenuItem(
-            value: p,
-            child: Text(p.name),
-          );
+          return DropdownMenuItem(value: p, child: Text(p.name));
         }).toList(),
-        onChanged: (v) {
-          state.palette = v!;
-          refresh();
-        },
+        onChanged: (v) => onChanged(state.copyWith(palette: v!)),
       ),
 
       const SizedBox(width: 16),
@@ -50,19 +43,13 @@ class HeatmapControls {
       DropdownButton<HeatmapColorMode>(
         value: state.colorMode,
         items: HeatmapColorMode.values.map((m) {
-          return DropdownMenuItem(
-            value: m,
-            child: Text(m.name),
-          );
+          return DropdownMenuItem(value: m, child: Text(m.name));
         }).toList(),
-        onChanged: (v) {
-          state.colorMode = v!;
-          refresh();
-        },
+        onChanged: (v) => onChanged(state.copyWith(colorMode: v!)),
       ),
 
       // Количество сегментов (только для дискретного режима)
-      if (state.colorMode == HeatmapColorMode.discrete)...[
+      if (state.colorMode == HeatmapColorMode.discrete) ...[
         const SizedBox(width: 16),
         DropdownButton<int>(
           value: state.segments,
@@ -71,10 +58,7 @@ class HeatmapControls {
             DropdownMenuItem(value: 10, child: Text("0.2")),
             DropdownMenuItem(value: 20, child: Text("0.1")),
           ],
-          onChanged: (v) {
-            state.segments = v!;
-            refresh();
-          },
+          onChanged: (v) => onChanged(state.copyWith(segments: v!)),
         ),
       ],
 
@@ -84,10 +68,7 @@ class HeatmapControls {
         children: [
           Checkbox(
             value: state.triangleMode,
-            onChanged: (v) {
-              state.triangleMode = v!;
-              refresh();
-            },
+            onChanged: (v) => onChanged(state.copyWith(triangleMode: v!)),
           ),
           const Text("Верхний треугольник"),
         ],
@@ -97,19 +78,12 @@ class HeatmapControls {
 
       // Кнопка кластеризации
       ElevatedButton.icon(
-        onPressed: () {
-          state.clusterEnabled = !state.clusterEnabled;
-          refresh();
-        },
+        onPressed: () => onChanged(state.copyWith(clusterEnabled: !state.clusterEnabled)),
         icon: Icon(
-          state.clusterEnabled
-              ? Icons.account_tree
-              : Icons.account_tree_outlined,
+          state.clusterEnabled ? Icons.account_tree : Icons.account_tree_outlined,
         ),
         label: Text(
-          state.clusterEnabled
-              ? "Отключить кластеризацию"
-              : "Кластеризовать",
+          state.clusterEnabled ? "Отключить кластеризацию" : "Кластеризовать",
         ),
       ),
     ];

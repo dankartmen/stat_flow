@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/providers/providers.dart';
 import '../chart_plugin.dart';
 import '../chart_state.dart';
 import '../chart_type.dart';
@@ -37,13 +39,16 @@ class BarPlugin extends ChartPlugin {
   List<Widget> buildControls(
     FloatingChartData data,
     VoidCallback refresh,
+    WidgetRef ref
   ) {
     final state = data.state as BarState;
 
     return BarControls.build(
-      data.dataset,
-      state,
-      refresh,
+      dataset: data.dataset,
+      state: state,
+      onChanged: (newState) {
+        ref.read(chartsProvider.notifier).updateChartState(data.id, newState);
+      },
     );
   }
 }

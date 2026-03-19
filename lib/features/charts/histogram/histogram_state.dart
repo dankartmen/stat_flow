@@ -26,11 +26,18 @@ class HistogramState extends ChartState {
   });
 
   @override
-  void selectField(String columnName, {ColumnType? type}) {
+  HistogramState copyWith({String? columnName, int? bins}) {
+    return HistogramState(
+      columnName: columnName ?? this.columnName,
+      bins: bins ?? this.bins,
+    );
+  }
+
+  @override
+  HistogramState withField(String columnName, {ColumnType? type}) {
     if (type == ColumnType.numeric) {
-      this.columnName = columnName;
-    } else {
-      this.columnName = null;
+      return copyWith(columnName: columnName);
     }
+    return this;
   }
 }

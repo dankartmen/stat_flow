@@ -1,38 +1,30 @@
 import 'package:flutter/material.dart';
-
 import '../../../core/dataset/dataset.dart';
 import 'histogram_state.dart';
 
 /// {@template histogram_controls}
 /// Фабрика для создания элементов управления гистограммой
-/// 
+///
 /// Предоставляет статические методы для построения UI-компонентов,
 /// управляющих отображением гистограммы:
 /// - Выбор числовой колонки для анализа
 /// - Настройка количества корзин (bins) через слайдер
-/// 
-/// Элементы управления адаптируются под текущий датасет и состояние.
 /// {@endtemplate}
 class HistogramControls {
   /// Строит список виджетов управления на основе состояния
-  /// 
+  ///
   /// Принимает:
   /// - [dataset] — датасет с данными для анализа
   /// - [state] — текущее состояние гистограммы
-  /// - [refresh] — callback для обновления UI после изменения состояния
-  /// 
+  /// - [onChanged] — колбэк для обновления состояния
+  ///
   /// Возвращает:
   /// - [List<Widget>] — список виджетов для размещения в панели управления
-  /// 
-  /// Особенности:
-  /// - Автоматически получает список числовых колонок из датасета
-  /// - При отсутствии числовых колонок Dropdown будет пустым
-  /// - Слайдер позволяет выбирать количество корзин от 5 до 50 с шагом 5
-  static List<Widget> build(
-    Dataset dataset,
-    HistogramState state,
-    VoidCallback refresh,
-  ) {
+  static List<Widget> build({
+    required Dataset dataset,
+    required HistogramState state,
+    required ValueChanged<HistogramState> onChanged,
+  }) {
     final columns = dataset.numericColumns;
 
     return [
@@ -41,15 +33,9 @@ class HistogramControls {
         hint: const Text("Колонка"),
         value: state.columnName,
         items: columns.map((c) {
-          return DropdownMenuItem(
-            value: c.name,
-            child: Text(c.name),
-          );
+          return DropdownMenuItem(value: c.name, child: Text(c.name));
         }).toList(),
-        onChanged: (v) {
-          state.columnName = v;
-          refresh();
-        },
+        onChanged: (v) => onChanged(state.copyWith(columnName: v)),
       ),
 
       const SizedBox(width: 20),
@@ -65,12 +51,9 @@ class HistogramControls {
               value: state.bins.toDouble(),
               min: 5,
               max: 50,
-              divisions: 9, // 5,10,15,...,50
+              divisions: 9,
               label: state.bins.toString(),
-              onChanged: (v) {
-                state.bins = v.toInt();
-                refresh();
-              },
+              onChanged: (v) => onChanged(state.copyWith(bins: v.toInt())),
             ),
           ),
         ],

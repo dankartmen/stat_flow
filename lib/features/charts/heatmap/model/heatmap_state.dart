@@ -48,4 +48,26 @@ class HeatmapState extends ChartState {
     this.clusterEnabled = false,
     this.colorMode = HeatmapColorMode.discrete,
   });
+
+
+  @override
+  HeatmapState copyWith({
+    HeatmapPalette? palette,
+    int? segments,
+    bool? showAxisLabels,
+    bool? showValues,
+    bool? triangleMode,
+    bool? clusterEnabled,
+    HeatmapColorMode? colorMode,
+  }) {
+    return HeatmapState(
+      palette: palette ?? this.palette,
+      segments: segments ?? this.segments,
+      showAxisLabels: showAxisLabels ?? this.showAxisLabels,
+      showValues: showValues ?? this.showValues,
+      triangleMode: triangleMode ?? this.triangleMode,
+      clusterEnabled: clusterEnabled ?? this.clusterEnabled,
+      colorMode: colorMode ?? this.colorMode,
+    );
+  }
 }

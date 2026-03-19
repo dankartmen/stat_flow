@@ -43,12 +43,26 @@ class BarState extends ChartState {
   });
 
   @override
-  void selectField(String columnName, {ColumnType? type}) {
-    if (type == ColumnType.categorical || 
-        type == ColumnType.text || 
-        type == ColumnType.numeric) {
-      this.columnName = columnName;
+  BarState copyWith({
+    String? columnName,
+    bool? showValues,
+    double? barWidth,
+    BarAlignment? alignment,
+  }) {
+    return BarState(
+      columnName: columnName ?? this.columnName,
+      showValues: showValues ?? this.showValues,
+      barWidth: barWidth ?? this.barWidth,
+      alignment: alignment ?? this.alignment,
+    );
+  }
+
+  @override
+  BarState withField(String columnName, {ColumnType? type}) {
+    if (type == ColumnType.categorical || type == ColumnType.text || type == ColumnType.numeric) {
+      return copyWith(columnName: columnName);
     }
+    return this;
   }
 
   @override

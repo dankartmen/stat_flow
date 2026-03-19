@@ -7,11 +7,11 @@ import 'bar_state.dart';
 /// Фабрика для создания элементов управления столбчатой диаграммой
 /// {@endtemplate}
 class BarControls {
-  static List<Widget> build(
-    Dataset dataset,
-    BarState state,
-    VoidCallback refresh,
-  ) {
+  static List<Widget> build({
+    required Dataset dataset,
+    required BarState state,
+    required ValueChanged<BarState> onChanged,
+  }) {
     final columns = dataset.numericColumns;
 
     return [
@@ -25,10 +25,7 @@ class BarControls {
             child: Text(c.name),
           );
         }).toList(),
-        onChanged: (v) {
-          state.columnName = v;
-          refresh();
-        },
+        onChanged: (v) => onChanged(state.copyWith(columnName: v)),
       ),
 
       const SizedBox(width: 16),
@@ -40,10 +37,7 @@ class BarControls {
           const SizedBox(width: 4),
           Checkbox(
             value: state.showValues,
-            onChanged: (v) {
-              state.showValues = v ?? false;
-              refresh();
-            },
+            onChanged: (v) => onChanged(state.copyWith(showValues: v ?? false)),
           ),
         ],
       ),
@@ -63,10 +57,7 @@ class BarControls {
               max: 1.0,
               divisions: 9,
               label: state.barWidth.toStringAsFixed(1),
-              onChanged: (v) {
-                state.barWidth = v;
-                refresh();
-              },
+              onChanged: (v) => onChanged(state.copyWith(barWidth: v)),
             ),
           ),
         ],
@@ -84,10 +75,7 @@ class BarControls {
           );
         }).toList(),
         onChanged: (v) {
-          if (v != null) {
-            state.alignment = v;
-            refresh();
-          }
+          if (v != null) onChanged(state.copyWith(alignment: v));
         },
       ),
     ];

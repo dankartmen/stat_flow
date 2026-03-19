@@ -23,13 +23,15 @@ class ScatterState extends ChartState {
   });
 
   @override
-  void selectField(String columnName, {ColumnType? type}) {
-    if (type == ColumnType.numeric) {
-      if (firstColumnName == null) {
-        firstColumnName = columnName;
-      } else {
-        secondColumnName ??= columnName;
-      }
-    }
+  ScatterState copyWith({String? firstColumnName, String? secondColumnName}) {
+    return ScatterState(
+      firstColumnName: firstColumnName ?? this.firstColumnName,
+      secondColumnName: secondColumnName ?? this.secondColumnName,
+    );
+  }
+
+  @override
+  ScatterState withField(String columnName, {ColumnType? type}) {
+    return this;
   }
 }

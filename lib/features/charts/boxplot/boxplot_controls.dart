@@ -1,46 +1,35 @@
 import 'package:flutter/material.dart';
-
 import '../../../core/dataset/dataset.dart';
 import 'boxplot_state.dart';
 
 /// {@template boxplot_controls}
 /// Фабрика для создания элементов управления ящика с усами (box plot)
-/// 
+///
 /// Предоставляет статические методы для построения UI-компонентов,
 /// управляющих отображением ящика с усами:
 /// - Выбор числовой колонки для анализа
-/// 
-/// Элементы управления адаптируются под текущий датасет и состояние.
+/// - Включение отображения среднего
+/// - Включение отображения выбросов
+/// - Ограничение числа точек для рендеринга
 /// {@endtemplate}
 class BoxPlotControls {
   /// Строит список виджетов управления на основе состояния
-  /// 
+  ///
   /// Принимает:
   /// - [dataset] — датасет с данными для анализа
   /// - [state] — текущее состояние ящика с усами
-  /// - [refresh] — callback для обновления UI после изменения состояния
-  /// 
+  /// - [onChanged] — колбэк для обновления состояния
+  ///
   /// Возвращает:
   /// - [List<Widget>] — список виджетов для размещения в панели управления
-  /// 
-  /// Особенности:
-  /// - Автоматически получает список числовых колонок из датасета
-  /// - При отсутствии числовых колонок Dropdown будет пустым
-  /// - Позволяет выбрать только одну колонку для отображения
-  static List<Widget> build(
-    Dataset dataset,
-    BoxPlotState state,
-    VoidCallback refresh,
-  ) {
+  static List<Widget> build({
+    required Dataset dataset,
+    required BoxPlotState state,
+    required ValueChanged<BoxPlotState> onChanged,
+  }) {
     final columns = dataset.numericColumns;
 
-    final maxPointsOptions = [
-      1000,
-      2000,
-      5000,
-      10000,
-      0, // 0 обозначает "все" значения
-    ];
+    final maxPointsOptions = [1000, 2000, 5000, 10000, 0];
 
     String formatMaxPoints(int value) {
       if (value <= 0) return 'Все';
@@ -59,10 +48,7 @@ class BoxPlotControls {
             child: Text(c.name),
           );
         }).toList(),
-        onChanged: (v) {
-          state.columnName = v;
-          refresh();
-        },
+        onChanged: (v) => onChanged(state.copyWith(columnName: v)),
       ),
 
       const SizedBox(width: 12),
@@ -75,10 +61,7 @@ class BoxPlotControls {
             Icons.show_chart,
             color: state.showMean ? Colors.blue : Colors.black45,
           ),
-          onPressed: () {
-            state.showMean = !state.showMean;
-            refresh();
-          },
+          onPressed: () => onChanged(state.copyWith(showMean: !state.showMean)),
         ),
       ),
 
@@ -90,10 +73,7 @@ class BoxPlotControls {
             Icons.bubble_chart,
             color: state.showOutliers ? Colors.blue : Colors.black45,
           ),
-          onPressed: () {
-            state.showOutliers = !state.showOutliers;
-            refresh();
-          },
+          onPressed: () => onChanged(state.copyWith(showOutliers: !state.showOutliers)),
         ),
       ),
 
@@ -109,9 +89,7 @@ class BoxPlotControls {
           );
         }).toList(),
         onChanged: (v) {
-          if (v == null) return;
-          state.maxPoints = v;
-          refresh();
+          if (v != null) onChanged(state.copyWith(maxPoints: v));
         },
       ),
     ];

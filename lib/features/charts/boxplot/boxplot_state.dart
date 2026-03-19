@@ -34,9 +34,20 @@ class BoxPlotState extends ChartState {
   });
 
   @override
-  void selectField(String columnName, {ColumnType? type}) {
+  BoxPlotState copyWith({String? columnName, bool? showMean, bool? showOutliers, int? maxPoints}) {
+    return BoxPlotState(
+      columnName: columnName ?? this.columnName,
+      showMean: showMean ?? this.showMean,
+      showOutliers: showOutliers ?? this.showOutliers,
+      maxPoints: maxPoints ?? this.maxPoints,
+    );
+  }
+
+  @override
+  BoxPlotState withField(String columnName, {ColumnType? type}) {
     if (type == ColumnType.numeric) {
-      this.columnName = columnName;
+      return copyWith(columnName: columnName);
     }
+    return this;
   }
 }

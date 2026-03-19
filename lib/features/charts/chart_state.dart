@@ -7,10 +7,11 @@
 /// {@endtemplate}
 abstract class ChartState {
   
-  /// Вызывается при создании графика через правую панель,
-  /// чтобы передать выбранное поле.
-  /// По умолчанию ничего не делает, переопределяется в конкретных состояниях.
-  void selectField(String columnName, {ColumnType? type}) {}
+  /// Возвращает новое состояние с выбранным полем (используется при создании графика из панели полей)
+  ChartState withField(String columnName, {ColumnType? type}) => this;
+
+  /// Создаёт копию состояния с изменёнными параметрами
+  ChartState copyWith();
 
   /// {@macro chart_state}
   const ChartState();
@@ -25,6 +26,9 @@ abstract class ChartState {
 class EmptyChartState extends ChartState {
   /// {@macro empty_chart_state}
   const EmptyChartState();
+
+  @override
+  ChartState copyWith() => this;
 }
 
 enum ColumnType { numeric, text, dateTime, categorical }

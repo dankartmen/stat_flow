@@ -1,29 +1,30 @@
 import 'package:flutter/material.dart' hide DataColumn;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stat_flow/core/dataset/dataset.dart';
+import '../../core/providers/providers.dart';
 import '../charts/chart_type.dart';
 
 /// {@template right_dataset_panel}
-/// Правая боковая панель с информацией о загруженном датасете
+/// Правая панель с информацией о загруженном датасете
 /// 
-/// Отображает детальную информацию о датасете:
-/// - Название файла с возможностью сворачивания/разворачивания списка полей
-/// - Список всех полей с их типами и индикаторами использования
-/// - Контекстное меню для создания графиков из выбранного поля (правый клик)
+/// Отображает список всех колонок датасета с возможностью:
+/// - Просмотра типа данных каждой колонки (цветовой индикатор)
+/// - Визуальной индикации используемых в графиках полей
+/// - Быстрого создания графиков через контекстное меню (правый клик)
+/// - Сворачивания/разворачивания панели
 /// 
-/// Панель имеет анимированную ширину и обновляется при загрузке нового датасета.
+/// Панель имеет адаптивную ширину: 280px в развернутом состоянии,
+/// 0px в свернутом (скрыта, видна только ручка для раскрытия).
 /// {@endtemplate}
-class RightDatasetPanel extends StatefulWidget {
-  /// Датасет для отображения информации
+class RightDatasetPanel extends ConsumerStatefulWidget {
+  /// Загруженный датасет для отображения
   final Dataset dataset;
 
-  /// Флаг, указывающий, развернута ли панель
+  /// Флаг развернутого состояния панели
   final bool isExpanded;
 
-  /// Callback для создания графика на основе выбранного поля
+  /// Коллбек для создания графика по выбранному полю и типу
   final Function(String fieldName, ChartType chartType) onCreateChart;
-  
-  /// Множество полей, уже используемых в графиках (для визуальной индикации)
-  final Set<String> usedFields;
 
   /// {@macro right_dataset_panel}
   const RightDatasetPanel({
@@ -31,35 +32,36 @@ class RightDatasetPanel extends StatefulWidget {
     required this.dataset,
     required this.isExpanded,
     required this.onCreateChart,
-    required this.usedFields
   });
 
   @override
-  State<RightDatasetPanel> createState() => _RightDatasetPanelState();
+  ConsumerState<RightDatasetPanel> createState() => _RightDatasetPanelState();
 }
 
-class _RightDatasetPanelState extends State<RightDatasetPanel> {
-  /// Флаг развернутости списка полей
+class _RightDatasetPanelState extends ConsumerState<RightDatasetPanel> {
+  /// Флаг развернутого состояния списка полей (внутри панели)
   bool _fieldsExpanded = true;
 
   @override
   Widget build(BuildContext context) {
+    final usedFields = ref.watch(usedFieldsProvider);
+
     return Container(
       color: Colors.white,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (widget.isExpanded)...[
+          if (widget.isExpanded) ...[
             _buildTitle(),
-            if (_fieldsExpanded) _buildFieldsList(),
+            if (_fieldsExpanded) _buildFieldsList(usedFields),
           ]
-        ]
-      )
+        ],
+      ),
     );
   }
 
-  /// Строит заголовок панели с кнопкой сворачивания
-  Widget _buildTitle(){
+  /// Строит заголовок панели с кнопкой сворачивания списка полей
+  Widget _buildTitle() {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -83,22 +85,22 @@ class _RightDatasetPanelState extends State<RightDatasetPanel> {
     );
   }
 
-  /// Строит список полей датасета
-  Widget _buildFieldsList(){
+  /// Строит список полей датасета с сортировкой по алфавиту
+  Widget _buildFieldsList(Set<String> usedFields) {
     final sortedColumns = List<DataColumn>.from(widget.dataset.columns)
       ..sort((a, b) => a.name.compareTo(b.name));
 
     return Expanded(
       child: ListView(
         padding: const EdgeInsets.all(16),
-        children: sortedColumns.map((c) => _buildFieldItem(c)).toList(),
+        children: sortedColumns.map((c) => _buildFieldItem(c, usedFields)).toList(),
       ),
     );
   }
 
   /// Строит элемент списка для отдельного поля
-  Widget _buildFieldItem(DataColumn column) {
-    final isUsed = widget.usedFields.contains(column.name);
+  Widget _buildFieldItem(DataColumn column, Set<String> usedFields) {
+    final isUsed = usedFields.contains(column.name);
     final typeColor = _getTypeColor(column);
     final availableChartTypes = _getAvailableChartTypes(column);
 
@@ -106,12 +108,7 @@ class _RightDatasetPanelState extends State<RightDatasetPanel> {
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
         onSecondaryTap: () {
-          // Открываем контекстное меню при правом клике
           _showChartTypeMenu(context, column, availableChartTypes);
-        },
-        onTap: () {
-          // Левый клик можно использовать для чего-то другого,
-          // например, для выбора поля (будущее расширение)
         },
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
@@ -121,11 +118,8 @@ class _RightDatasetPanelState extends State<RightDatasetPanel> {
           ),
           child: Row(
             children: [
-              // Индикатор использования поля
               _buildUsageIndicator(isUsed),
               const SizedBox(width: 8),
-              
-              // Цветной индикатор типа
               Container(
                 width: 4,
                 height: 20,
@@ -135,8 +129,6 @@ class _RightDatasetPanelState extends State<RightDatasetPanel> {
                 ),
               ),
               const SizedBox(width: 8),
-              
-              // Название колонки
               Expanded(
                 child: Text(
                   column.name,
@@ -148,8 +140,6 @@ class _RightDatasetPanelState extends State<RightDatasetPanel> {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              
-              // Подсказка о правом клике
               if (!isUsed)
                 Icon(
                   Icons.more_vert,
@@ -163,7 +153,7 @@ class _RightDatasetPanelState extends State<RightDatasetPanel> {
     );
   }
 
-  /// Строит индикатор использования поля
+  /// Строит индикатор использования поля в графиках
   Widget _buildUsageIndicator(bool isUsed) {
     return Container(
       width: 20,
@@ -182,12 +172,7 @@ class _RightDatasetPanelState extends State<RightDatasetPanel> {
     );
   }
 
-  /// Показывает меню выбора типа графика
-  /// 
-  /// Принимает:
-  /// - [context] — BuildContext для отображения меню
-  /// - [column] — колонка, для которой создается график
-  /// - [chartTypes] — список доступных типов графиков
+  /// Отображает контекстное меню с доступными типами графиков для поля
   void _showChartTypeMenu(
     BuildContext context,
     DataColumn column,
@@ -195,11 +180,11 @@ class _RightDatasetPanelState extends State<RightDatasetPanel> {
   ) {
     final renderBox = context.findRenderObject() as RenderBox?;
     final offset = renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
-    
+
     showMenu(
       context: context,
       position: RelativeRect.fromLTRB(
-        offset.dx + 300, // примерно ширина панели
+        offset.dx + 300,
         offset.dy,
         0,
         0,
@@ -219,64 +204,63 @@ class _RightDatasetPanelState extends State<RightDatasetPanel> {
     );
   }
 
-  /// Возвращает цвет в зависимости от типа колонки
+  /// Определяет цвет индикатора типа данных
   Color _getTypeColor(DataColumn column) {
     if (column is NumericColumn) return Colors.blue;
     if (column is DateTimeColumn) return Colors.purple;
     if (column is CategoricalColumn) return Colors.green;
-    return Colors.orange; // TextColumn или другие
+    return Colors.orange;
   }
 
   /// Возвращает список доступных типов графиков для данного типа колонки
   List<ChartTypeWithIcon> _getAvailableChartTypes(DataColumn column) {
     if (column is NumericColumn) {
-      return [
-        const ChartTypeWithIcon(
+      return const [
+        ChartTypeWithIcon(
           type: ChartType.histogram,
           icon: Icons.bar_chart,
           name: 'Гистограмма',
         ),
-        const ChartTypeWithIcon(
+        ChartTypeWithIcon(
           type: ChartType.boxplot,
           icon: Icons.candlestick_chart,
           name: 'Ящик с усами',
         ),
-        const ChartTypeWithIcon(
+        ChartTypeWithIcon(
           type: ChartType.scatter,
           icon: Icons.bubble_chart,
           name: 'Диаграмма рассеяния',
         ),
-        const ChartTypeWithIcon(
+        ChartTypeWithIcon(
           type: ChartType.linechart,
           icon: Icons.line_axis,
           name: 'Линейный график',
         ),
       ];
     } else if (column is DateTimeColumn) {
-      return [
-        const ChartTypeWithIcon(
+      return const [
+        ChartTypeWithIcon(
           type: ChartType.linechart,
           icon: Icons.line_axis,
           name: 'Временной ряд',
         ),
-        const ChartTypeWithIcon(
+        ChartTypeWithIcon(
           type: ChartType.scatter,
           icon: Icons.bubble_chart,
           name: 'Диаграмма рассеяния',
         ),
       ];
     } else if (column is CategoricalColumn || column is TextColumn) {
-      return [
-        const ChartTypeWithIcon(
+      return const [
+        ChartTypeWithIcon(
           type: ChartType.barchart,
           icon: Icons.bar_chart,
           name: 'Столбчатая диаграмма',
         ),
       ];
     }
-    
-    return [
-      const ChartTypeWithIcon(
+    return const [
+      ChartTypeWithIcon(
         type: ChartType.barchart,
         icon: Icons.bar_chart,
         name: 'Столбчатая диаграмма',
@@ -287,6 +271,11 @@ class _RightDatasetPanelState extends State<RightDatasetPanel> {
 
 /// {@template chart_type_with_icon}
 /// Вспомогательный класс для хранения информации о типе графика в меню
+/// 
+/// Используется для единообразного отображения пунктов меню создания графиков:
+/// - Содержит тип графика для идентификации
+/// - Иконку для визуального различия
+/// - Локализованное название для отображения пользователю
 /// {@endtemplate}
 class ChartTypeWithIcon {
   /// Тип графика из перечисления [ChartType]

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'chart_registry.dart';
 import 'floating_chart/floating_chart_data.dart';
 
@@ -27,9 +28,10 @@ class ChartControlsBuilder {
   /// - Позволяет добавлять новые типы графиков без изменения этого класса
   static List<Widget> build(
       FloatingChartData chart,
-      VoidCallback refresh
+      VoidCallback refresh,
+      WidgetRef ref
   ) {
     final plugin = ChartRegistry.get(chart.type);
-    return plugin.buildControls(chart, refresh);
+    return plugin.buildControls(chart, refresh, ref);
   }
 }

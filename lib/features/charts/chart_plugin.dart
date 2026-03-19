@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stat_flow/features/charts/chart_type.dart';
 import 'chart_state.dart';
 import 'floating_chart/floating_chart_data.dart';
@@ -50,5 +51,6 @@ abstract class ChartPlugin {
   List<Widget> buildControls(
     FloatingChartData data,
     VoidCallback refresh,
+    WidgetRef ref
   );
 }

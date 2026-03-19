@@ -26,9 +26,19 @@ class LineState extends ChartState {
   });
 
   @override
-  void selectField(String columnName, {ColumnType? type}) {
-    if (type == ColumnType.numeric) {
-      this.columnName = columnName;
+  LineState copyWith({String? columnName, bool? showMarkers, bool? showGridLines}) {
+    return LineState(
+      columnName: columnName ?? this.columnName,
+      showMarkers: showMarkers ?? this.showMarkers,
+      showGridLines: showGridLines ?? this.showGridLines,
+    );
+  }
+
+  @override
+  LineState withField(String columnName, {ColumnType? type}) {
+    if (type == ColumnType.numeric || type == ColumnType.dateTime) {
+      return copyWith(columnName: columnName);
     }
+    return this;
   }
 }

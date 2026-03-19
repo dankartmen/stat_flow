@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stat_flow/features/charts/chart_controls_builder.dart';
 import 'package:stat_flow/features/charts/floating_chart/floating_chart_data.dart';
 /// {@template top_control_panel}
@@ -12,7 +13,7 @@ import 'package:stat_flow/features/charts/floating_chart/floating_chart_data.dar
 /// 
 /// Панель имеет фиксированную высоту 80 пикселей и адаптируется под разные типы графиков.
 /// {@endtemplate}
-class TopControlPanel extends StatelessWidget {
+class TopControlPanel extends ConsumerWidget {
 
   /// Данные текущего графика для отображения и управления 
   final FloatingChartData chart;
@@ -28,7 +29,7 @@ class TopControlPanel extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Container(
       height: 80,
       decoration: BoxDecoration(
@@ -58,6 +59,7 @@ class TopControlPanel extends StatelessWidget {
                   children: ChartControlsBuilder.build(
                     chart,
                     onChanged,
+                    ref
                   ),
                 ),
               ),

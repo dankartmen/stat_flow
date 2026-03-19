@@ -36,10 +36,12 @@ dependencies:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
+  flutter_riverpod: ^3.3.1
   http: ^1.6.0
   intl: ^0.20.2
   path_provider: ^2.1.5
   pluto_grid: ^8.1.0
+  riverpod: ^3.2.1
   screenshot: ^3.0.0
   syncfusion_flutter_charts: ^32.2.8
   syncfusion_flutter_datagrid: ^32.2.8
