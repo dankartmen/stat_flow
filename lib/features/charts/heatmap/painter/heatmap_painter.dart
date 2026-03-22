@@ -1,6 +1,7 @@
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:stat_flow/features/charts/heatmap/model/heatmap_data.dart';
 
 import '../model/correlation_matrix.dart';
 import '../color/heatmap_color_mapper.dart';
@@ -23,6 +24,8 @@ import '../color/heatmap_color_mapper.dart';
 class HeatmapPainter extends CustomPainter {
   /// Матрица корреляции для визуализации
   final CorrelationMatrix matrix;
+
+  final HeatmapData data;
 
   /// Текущий маппер цветов
   final HeatmapColorMapper colorMapper;
@@ -52,6 +55,8 @@ class HeatmapPainter extends CustomPainter {
   /// (скрывает нижнюю половину матрицы)
   final bool triangleMode;
 
+  final bool showPercentage;
+
   /// {@macro heatmap_painter}
   HeatmapPainter({
     this.hoverRow,
@@ -59,7 +64,9 @@ class HeatmapPainter extends CustomPainter {
     this.triangleMode = false,
     this.showValues = true,
     this.showAxisLabels = false,
+    this.showPercentage = true,
     required this.matrix,
+    required this.data,
     required this.colorMapper,
     required this.previousMapper,
     required this.animationValue,
@@ -208,11 +215,13 @@ class HeatmapPainter extends CustomPainter {
   void _drawTooltip(Canvas canvas, int row, int col) {
     final axisOffset = showAxisLabels ? cellSize : 0.0;
 
-    final value = matrix.getByIndex(row, col);
-    final rowName = matrix.fieldNames[row];
-    final colName = matrix.fieldNames[col];
+    final value = showPercentage ? data.values[row][col] * 100 : data.values[row][col];
+    final rowName = data.rowLabels[row];
+    final colName = data.columnLabels[col];
 
-    final text = "$rowName ↔ $colName\n${value.toStringAsFixed(3)}";
+    final suffix = showPercentage ? " %" : "";  
+
+    final text = "$rowName ↔ $colName\n${value.toStringAsFixed(value.abs() < 10 ? 2 : 1)} $suffix";
 
     if (_tooltipText != text) {
       _tooltipText = text;
@@ -286,7 +295,7 @@ class HeatmapPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final n = matrix.size;
+    final n = data.rowLabels.length;
     if (n == 0) return;
 
     final axisOffset = showAxisLabels ? cellSize : 0.0;
@@ -302,7 +311,7 @@ class HeatmapPainter extends CustomPainter {
         // В режиме треугольника пропускаем нижнюю половину
         if (triangleMode && col < row) continue;
 
-        final value = matrix.getByIndex(row, col);
+        final value = data.values[row][col];
 
         // Устанавливаем цвет с учетом анимации
         _paint.color = _getAnimatedColor(value);
@@ -318,13 +327,19 @@ class HeatmapPainter extends CustomPainter {
 
         // Отображение значений внутри ячеек
         if (showValues && cellSize > 25) { // Не показываем в слишком мелких ячейках
+          final displayValue = showPercentage ? value * 100 : value;
+          final suffix = showPercentage ? " %" : "";
+
           final tp = _getTextPainter(
-            value.toStringAsFixed(2),
+            displayValue.toStringAsFixed(displayValue.abs() < 10 ? 2 : 1) + suffix,
             TextStyle(
               fontSize: cellSize * 0.3,
               // Контрастный цвет текста в зависимости от яркости фона
-              color: value.abs() > 0.4 ? Colors.white : Colors.black,
+              color: value.abs() > 0.5 ? Colors.white : Colors.black,
               fontWeight: FontWeight.bold,
+              shadows: value.abs() > 0.6
+                  ? [const Shadow(blurRadius: 1.5, color: Colors.black87)]
+                  : null,
             ),
           );
 

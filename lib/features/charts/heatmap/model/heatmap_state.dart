@@ -2,6 +2,10 @@ import '../../chart_state.dart';
 import '../color/heatmap_color_mapper.dart';
 import '../color/heatmap_palette.dart';
 
+enum NormalizeMode { none, row, column, total }
+enum SortMode { none, alphabetic, byValueAsc, byValueDesc }
+
+
 /// {@template heatmap_state}
 /// Состояние тепловой карты для системы плагинов
 /// 
@@ -38,6 +42,21 @@ class HeatmapState extends ChartState {
   /// Режим раскраски (дискретный/градиентный)
   HeatmapColorMode colorMode;
 
+  /// Режим нормализации данных для отображения на тепловой карте
+  NormalizeMode normalizeMode;
+
+  /// Режим сортировки строк
+  SortMode sortX;
+
+  /// Режим сортировки столбцов
+  SortMode sortY;
+
+  /// Режим масштабирования цветовой шкалы
+  ColorScaleType scaleType;
+
+  /// Показывать ли проценты вместо абсолютных значений в ячейках
+  bool showPercentage;
+  
   /// {@macro heatmap_state}
   HeatmapState({
     this.showAxisLabels = false,
@@ -47,6 +66,11 @@ class HeatmapState extends ChartState {
     this.triangleMode = false,
     this.clusterEnabled = false,
     this.colorMode = HeatmapColorMode.discrete,
+    this.normalizeMode = NormalizeMode.row,
+    this.sortX = SortMode.none,
+    this.sortY = SortMode.none,
+    this.scaleType = ColorScaleType.linear,
+    this.showPercentage = false,
   });
 
 
@@ -59,6 +83,11 @@ class HeatmapState extends ChartState {
     bool? triangleMode,
     bool? clusterEnabled,
     HeatmapColorMode? colorMode,
+    NormalizeMode? normalizeMode,
+    SortMode? sortX,
+    SortMode? sortY,
+    ColorScaleType? scaleType,
+    bool? showPercentage,
   }) {
     return HeatmapState(
       palette: palette ?? this.palette,
@@ -68,6 +97,11 @@ class HeatmapState extends ChartState {
       triangleMode: triangleMode ?? this.triangleMode,
       clusterEnabled: clusterEnabled ?? this.clusterEnabled,
       colorMode: colorMode ?? this.colorMode,
+      normalizeMode: normalizeMode ?? this.normalizeMode,
+      sortX: sortX ?? this.sortX,
+      sortY: sortY ?? this.sortY,
+      scaleType: scaleType ?? this.scaleType,
+      showPercentage: showPercentage ?? this.showPercentage,
     );
   }
 }

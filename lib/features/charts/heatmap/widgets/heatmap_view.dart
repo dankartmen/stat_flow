@@ -4,6 +4,7 @@ import 'package:stat_flow/features/charts/heatmap/widgets/heatmap_legend.dart';
 import '../model/correlation_clusterer.dart';
 import '../model/correlation_matrix.dart';
 import '../color/heatmap_color_mapper.dart';
+import '../model/heatmap_data.dart';
 import '../model/heatmap_state.dart';
 import '../painter/heatmap_painter.dart';
 import '../color/heatmap_palette.dart';
@@ -65,9 +66,20 @@ class _HeatmapViewState extends State<HeatmapView>
 
   /// Кэш последних параметров, влияющих на цветовую схему
   HeatmapPalette? _lastPalette;
+
+  /// Кэш последнего количества сегментов для дискретного режима
   int? _lastSegments;
+
+  /// Кэш последнего режима отображения цветов
   HeatmapColorMode? _lastMode;
 
+  /// Данные, подготовленные для отображения (после кластеризации, сортировки, нормализации)
+  late HeatmapData _displayData;
+
+  /// Минимальное и максимальное значение в отображаемых данных для настройки цветовой шкалы
+  late double _currentMin;
+  late double _currentMax;
+  
   @override
   void initState() {
     super.initState();
@@ -76,7 +88,7 @@ class _HeatmapViewState extends State<HeatmapView>
       vsync: this,
       duration: const Duration(milliseconds: 350),
     );
-
+    _recomputeDisplayData();
     // Создание начального маппера на основе текущих настроек
     _currentMapper = _createMapper();
     _previousMapper = _currentMapper; // Начальное состояние без анимации
@@ -84,11 +96,22 @@ class _HeatmapViewState extends State<HeatmapView>
     _lastPalette = widget.state.palette;
     _lastSegments = widget.state.segments;
     _lastMode = widget.state.colorMode;
+
+    
   }
 
   @override
   void didUpdateWidget(covariant HeatmapView oldWidget) {
     super.didUpdateWidget(oldWidget);
+
+    // Проверяем изменения, которые влияют на данные / цвета
+    if (oldWidget.state.normalizeMode != widget.state.normalizeMode ||
+        oldWidget.state.sortX != widget.state.sortX ||
+        oldWidget.state.sortY != widget.state.sortY ||
+        oldWidget.state.clusterEnabled != widget.state.clusterEnabled ||
+        oldWidget.matrix != widget.matrix) {
+      _recomputeDisplayData();
+    }
 
     // Проверяем, изменились ли параметры, влияющие на цветовую схему
     if (_lastPalette != widget.state.palette ||
@@ -162,23 +185,50 @@ class _HeatmapViewState extends State<HeatmapView>
   /// - [HeatmapColorMode.gradient]: плавный переход между цветами
   ///   (лучше для визуального восприятия общей структуры)
   HeatmapColorMapper _createMapper() {
-    switch (widget.state.colorMode) {
-      case HeatmapColorMode.discrete:
-        // Получаем базовые цвета для выбранной палитры
-        final base = HeatmapPaletteFactory.baseColors(widget.state.palette);
+    final paletteColors = HeatmapPaletteFactory.baseColors(widget.state.palette);
 
-        return DiscreteColorMapper(
-          min: -1,
-          max: 1,
-          segments: widget.state.segments,
-          baseColors: base,
-        );
-
-      case HeatmapColorMode.gradient:
-        return GradientColorMapper(
-          paletteType: widget.state.palette,
-        );
+    if (widget.state.colorMode == HeatmapColorMode.discrete) {
+      // Здесь можно позже добавить логику scaleType == quantile
+      return DiscreteColorMapper(
+        min: _currentMin,
+        max: _currentMax,
+        segments: widget.state.segments,
+        baseColors: paletteColors,
+      );
+    } else {
+      return GradientColorMapper(
+        paletteType: widget.state.palette,
+        min: _currentMin,
+        max: _currentMax,
+      );
     }
+  }
+
+  /// Пересчет данных для отображения на основе текущих настроек.
+  ///
+  /// Выполняет следующие шаги:
+  /// 1. Кластеризация (если включена) — меняет порядок строк
+  /// 2. Сортировка (после кластеризации, т.к. она тоже сортирует)
+  /// 3. Нормализация (после сортировки — логичнее для интерпретации)
+  void _recomputeDisplayData() {
+    HeatmapData data = HeatmapData.fromCorrelation(widget.matrix);
+
+    // 1. кластеризация (если включена) — меняет порядок строк
+    if (widget.state.clusterEnabled) {
+      data = CorrelationClusterer.clusterHeatmapData(data);
+    }
+
+    // 2. сортировка
+    data = data.sortRows(widget.state.sortX);
+    data = data.sortCols(widget.state.sortY);
+
+    // 3. нормализация
+    data = data.normalize(widget.state.normalizeMode);
+
+    _displayData = data;
+    _currentMin = data.min;
+    _currentMax = data.max;
+
   }
 
   /// Получение актуальной матрицы для отображения.
@@ -208,9 +258,7 @@ class _HeatmapViewState extends State<HeatmapView>
   /// Также реализует интерактивную подсветку ячеек при наведении мыши
   /// (для десктопных и веб-версий).
   Widget _buildHeatmap(Size viewport) {
-    final matrix = _getDisplayMatrix();
-
-    final int n = matrix.size;
+    final n = _displayData.rowLabels.length;
 
     final cellSize = (viewport.width / n).clamp(20.0, 80.0);
 
@@ -270,7 +318,8 @@ class _HeatmapViewState extends State<HeatmapView>
                 return CustomPaint(
                   size: Size(totalSize, totalSize),
                   painter: HeatmapPainter(
-                    matrix: matrix,
+                    matrix: _getDisplayMatrix(),
+                    data: _displayData,
                     colorMapper: _currentMapper,
                     previousMapper: _previousMapper,
                     animationValue: _controller.value,
@@ -280,6 +329,7 @@ class _HeatmapViewState extends State<HeatmapView>
                     triangleMode: widget.state.triangleMode,
                     hoverRow: hoverRow,
                     hoverCol: hoverCol,
+                    showPercentage: widget.state.showPercentage,
                   ),
                 );
               },

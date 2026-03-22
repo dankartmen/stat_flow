@@ -26,6 +26,15 @@ enum HeatmapColorMode {
   gradient,
 }
 
+/// Режимы нормализации данных для отображения на тепловой карте
+enum ColorScaleType {
+  /// Линейный масштаб — равные интервалы для всех сегментов
+  linear,
+  
+  /// Квантильный масштаб — сегменты определяются на основе распределения данных
+  quantile,
+}
+
 /// {@template discrete_color_mapper}
 /// Маппер цветов с дискретным разбиением диапазона значений на сегменты.
 /// {@endtemplate}
@@ -142,5 +151,38 @@ class GradientColorMapper implements HeatmapColorMapper {
       colors[index + 1],
       remainder,
     )!;
+  }
+}
+
+/// {@template quantile_color_mapper}
+/// Маппер цветов, который распределяет значения по квантилям для создания дискретного цветового разбиения на основе распределения данных.
+/// {@endtemplate}
+class QuantileColorMapper implements HeatmapColorMapper {
+  /// Отсортированные значения для определения квантилей
+  final List<double> sortedValues;
+
+  /// Палитра цветов для квантильного разбиения
+  final List<Color> colors;
+
+  QuantileColorMapper({
+    required List<double> allValues,
+    required this.colors,
+  }) : sortedValues = List.from(allValues)..sort();
+
+  @override
+  Color map(double value) {
+    if (sortedValues.isEmpty) return colors.first;
+
+    // находим в какой квантиль попадает значение
+    int index = 0;
+    for (int i = 1; i < sortedValues.length; i++) {
+      if (value <= sortedValues[i]) break;
+      index = i;
+    }
+
+    // пропорционально распределяем по цветам
+    double t = index / (sortedValues.length - 1);
+    int colorIndex = (t * (colors.length - 1)).round().clamp(0, colors.length - 1);
+    return colors[colorIndex];
   }
 }
