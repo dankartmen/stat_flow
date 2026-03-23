@@ -336,22 +336,6 @@ class _HeatmapViewState extends State<HeatmapView>
             ),
           ),
         ),
-
-        // Кнопка сброса масштаба
-        Positioned(
-          top: 8,
-          right: 8,
-          child: Material(
-            elevation: 3,
-            child: IconButton(
-              icon: const Icon(Icons.zoom_out_map),
-              onPressed: () {
-                _zoomController.value = Matrix4.identity();
-              },
-              tooltip: 'Сбросить масштаб',
-            ),
-          ),
-        ),
       ],
     );
   }

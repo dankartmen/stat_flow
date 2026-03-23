@@ -16,7 +16,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
     @override
     Widget build(BuildContext context) {
       return MaterialApp(
-        showPerformanceOverlay: true,
+        showPerformanceOverlay: false,
         title: 'StatFlow',
         theme: ThemeData(
           primarySwatch: Colors.blue,

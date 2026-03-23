@@ -90,13 +90,30 @@
       if (dataset == null) return;
 
       final plugin = ChartRegistry.get(type);
+
+      Size initialSize;
+
+      if (type == ChartType.heatmap) {
+        final n = dataset.columns.length;
+        const desiredCellSize = 38.0;    
+        const extraForLabelsAndLegend = 140.0;
+        final contentWidth  = n * desiredCellSize + extraForLabelsAndLegend;
+        final contentHeight = n * desiredCellSize + extraForLabelsAndLegend + 60;
+        initialSize = Size(
+          contentWidth.clamp(420.0, 1200.0),
+          contentHeight.clamp(380.0, 1000.0),
+        );
+      } else {
+        initialSize = const Size(520, 380);
+      }
+
       final newChart = FloatingChartData(
         id: _nextChartId++,
         type: type,
         dataset: dataset,
         state: plugin.createState(),
         position: Offset(50 + _nextChartId * 20.0, 50 + _nextChartId * 20.0),
-        size: const Size(300, 200),
+        size: initialSize,
       );
 
       ref.read(chartsProvider.notifier).addChart(newChart);

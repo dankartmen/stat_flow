@@ -1,4 +1,9 @@
+import 'dart:io';
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:path_provider/path_provider.dart';
 import 'floating_chart_data.dart';
 
 /// {@template floating_chart}
@@ -77,6 +82,9 @@ class FloatingChart extends StatefulWidget {
 }
 
 class _FloatingChartState extends State<FloatingChart> {
+  /// Ключ для получения рендер-объекта графика при экспорте в PNG
+  final GlobalKey _chartKey = GlobalKey();
+
   /// Отступ для зон изменения размера
   static const _resizeMargin = 12.0;
 
@@ -261,7 +269,13 @@ class _FloatingChartState extends State<FloatingChart> {
                   child: Column(
                     children: [
                       _header(),
-                      Expanded(child: widget.child),
+                      Expanded(
+                        child: RepaintBoundary(
+                          key: _chartKey,
+
+                          child: widget.child,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -360,19 +374,60 @@ class _FloatingChartState extends State<FloatingChart> {
               ),
             ),
             IconButton(
+              tooltip: "Полноэкранный режим",
               icon: const Icon(Icons.open_in_full, size: 16),
               onPressed: widget.onFullscreen,
             ),
             IconButton(
+              tooltip: "Закрыть",
               icon: const Icon(Icons.close, size: 16),
               onPressed: widget.onClose,
+            ),
+            IconButton(
+              tooltip: "Получить скриншот",
+              icon: const Icon(Icons.download),
+              onPressed: _exportPng,
             ),
           ],
         ),
       ),
     );
   }
+
+  /// Экспортирует текущее содержимое графика в PNG-файл
+  /// Особенности:
+  /// - Использует [RepaintBoundary] для получения изображения
+  /// - Сохраняет файл в директории документов приложения
+  /// - Имя файла включает тип графика и временную метку
+  Future<void> _exportPng() async {
+    final boundary = _chartKey.currentContext!
+        .findRenderObject() as RenderRepaintBoundary;
+
+    final image = await boundary.toImage(pixelRatio: 3);
+
+    final byteData =
+        await image.toByteData(format: ImageByteFormat.png);
+
+    final pngBytes = byteData!.buffer.asUint8List();
+
+    final dir = await getApplicationDocumentsDirectory();
+
+    final now = DateTime.now();
+    final timestamp = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}-${now.minute.toString().padLeft(2, '0')}-${now.second.toString().padLeft(2, '0')}";
+    
+    final fileName = "${widget.data.type.name}($timestamp).png";
+    final file = File("${dir.path}/$fileName");
+    
+    await file.writeAsBytes(pngBytes);
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Сохранено: ${file.path}")),
+    );
+  }
 }
+
 
 /// Направления изменения размера окна
 enum _ResizeDirection {
