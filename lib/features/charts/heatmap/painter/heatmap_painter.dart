@@ -3,8 +3,8 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:stat_flow/features/charts/heatmap/model/heatmap_data.dart';
 
-import '../model/correlation_matrix.dart';
 import '../color/heatmap_color_mapper.dart';
+import '../model/heatmap_state.dart';
 
 /// {@template heatmap_painter}
 /// Кастомный рисовальщик для отрисовки тепловой карты корреляции.
@@ -53,7 +53,11 @@ class HeatmapPainter extends CustomPainter {
   /// (скрывает нижнюю половину матрицы)
   final bool triangleMode;
 
-  final bool showPercentage;
+  /// Отображать ли значения в процентах
+  final PercentageMode percentageMode;
+
+  /// Смещение от края для подписей осей 
+  final double axisOffset;
 
   /// {@macro heatmap_painter}
   HeatmapPainter({
@@ -62,18 +66,22 @@ class HeatmapPainter extends CustomPainter {
     this.triangleMode = false,
     this.showValues = true,
     this.showAxisLabels = false,
-    this.showPercentage = true,
+    this.percentageMode = PercentageMode.none,
     required this.data,
     required this.colorMapper,
     required this.previousMapper,
     required this.animationValue,
     required this.cellSize,
+    required this.axisOffset,
   });
 
   /// Кэш статического слоя (сетка + подписи осей).
   /// Перестраивается только при изменении матрицы или размера ячейки.
   ui.Picture? _staticLayer;
 
+  /// Ключ для идентификации текущего статического слоя.
+  String? _cachedStaticLayerKey;
+  
   /// Кэш текстовых рисовальщиков для избежания повторного создания.
   /// Ключ: строка + стиль текста.
   final Map<String, TextPainter> _textCache = {};
@@ -92,6 +100,9 @@ class HeatmapPainter extends CustomPainter {
     ..color = Colors.black
     ..style = PaintingStyle.stroke
     ..strokeWidth = 1;
+
+  /// Генерирует ключ для кэша статического слоя.
+  String _staticLayerKey() => '${data.rowLabels.length}_${data.columnLabels.length}_${cellSize}_${axisOffset}_$showAxisLabels';
 
   /// Получает или создает TextPainter для заданного текста и стиля.
   ///
@@ -139,7 +150,6 @@ class HeatmapPainter extends CustomPainter {
     final rowCount = data.rowLabels.length;
     final colCount = data.columnLabels.length;
     final n = rowCount > colCount ? rowCount : colCount;
-    final axisOffset = showLabels ? cellSize : 0.0; // Отступ от края для подписей
 
     final gridPaint = Paint()
       ..color = Colors.grey.shade300
@@ -222,15 +232,19 @@ class HeatmapPainter extends CustomPainter {
 
   /// Рисует тултип с информацией о ячейке под курсором.
   void _drawTooltip(Canvas canvas, int row, int col) {
-    final axisOffset = showAxisLabels ? cellSize : 0.0;
 
-    final value = showPercentage ? data.values[row][col] * 100 : data.values[row][col];
+    final value = data.values[row][col];
     final rowName = data.rowLabels[row];
     final colName = data.columnLabels[col];
 
-    final suffix = showPercentage ? " %" : "";  
+    String suffix = '';
+    double displayValue = value;
+    if (percentageMode != PercentageMode.none) {
+      suffix = '%';
+      displayValue = value;
+    }
 
-    final text = "$rowName ↔ $colName\n${value.toStringAsFixed(value.abs() < 10 ? 2 : 1)} $suffix";
+    final text = "$rowName ↔ $colName\n${displayValue.toStringAsFixed(displayValue.abs() < 10 ? 2 : 1)} $suffix";
 
     if (_tooltipText != text) {
       _tooltipText = text;
@@ -311,9 +325,11 @@ class HeatmapPainter extends CustomPainter {
     final isSquare = rowCount == colCount;
     final effectiveTriangleMode = triangleMode && isSquare;
 
-    final axisOffset = showAxisLabels ? cellSize : 0.0;
-
-    // Отрисовка статического слоя (кэшированного)
+    // Отрисовка статического слоя
+    if (_cachedStaticLayerKey != _staticLayerKey()) {
+      _staticLayer = null; // Сбрасываем кэш при изменении ключа
+      _cachedStaticLayerKey = _staticLayerKey();
+    }
     _staticLayer ??= _buildStaticLayer(showAxisLabels);
     canvas.drawPicture(_staticLayer!);
 
@@ -340,9 +356,12 @@ class HeatmapPainter extends CustomPainter {
 
         // Отображение значений внутри ячеек
         if (showValues && cellSize > 25) { // Не показываем в слишком мелких ячейках
-          final displayValue = showPercentage ? value * 100 : value;
-          final suffix = showPercentage ? " %" : "";
-
+          String suffix = '';
+          double displayValue = value;
+          if (percentageMode != PercentageMode.none) {
+            suffix = '%';
+            displayValue = value;
+          }
           final tp = _getTextPainter(
             displayValue.toStringAsFixed(displayValue.abs() < 10 ? 2 : 1) + suffix,
             TextStyle(
@@ -392,6 +411,8 @@ class HeatmapPainter extends CustomPainter {
         old.triangleMode != triangleMode ||
         old.showValues != showValues ||
         old.hoverRow != hoverRow ||
-        old.hoverCol != hoverCol;
+        old.hoverCol != hoverCol ||
+        old.axisOffset != axisOffset ||
+        old.percentageMode != percentageMode;
   }
 }

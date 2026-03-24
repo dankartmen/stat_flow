@@ -4,8 +4,8 @@ import '../color/heatmap_palette.dart';
 
 enum NormalizeMode { none, row, column, total }
 enum SortMode { none, alphabetic, byValueAsc, byValueDesc }
-enum AggregationType { count, sum, avg, min, max }
-
+enum AggregationType { count, sum, avg, min, max, median }
+enum PercentageMode { none, row, column, total}
 /// {@template heatmap_state}
 /// Состояние тепловой карты для системы плагинов
 /// 
@@ -17,6 +17,7 @@ enum AggregationType { count, sum, avg, min, max }
 /// - Режим верхнего треугольника
 /// - Включение кластеризации
 /// - Режим раскраски (дискретный/градиентный)
+/// - Параметры нормализации, сортировки, агрегации и процентов
 /// 
 /// Наследуется от [ChartState] для интеграции с системой плагинов.
 /// {@endtemplate}
@@ -53,9 +54,6 @@ class HeatmapState extends ChartState {
 
   /// Режим масштабирования цветовой шкалы
   ColorScaleType scaleType;
-
-  /// Показывать ли проценты вместо абсолютных значений в ячейках
-  bool showPercentage;
   
   /// Имя колонки для X оси (если null — режим корреляции всех числовых)
   String? xColumn;
@@ -65,6 +63,10 @@ class HeatmapState extends ChartState {
 
   /// Тип агрегации, когда Y колонка числовая
   AggregationType aggregationType;
+
+  /// Режим отображения значений в процентах
+  PercentageMode percentageMode;
+
   /// {@macro heatmap_state}
   HeatmapState({
     this.showAxisLabels = false,
@@ -78,10 +80,10 @@ class HeatmapState extends ChartState {
     this.sortX = SortMode.none,
     this.sortY = SortMode.none,
     this.scaleType = ColorScaleType.linear,
-    this.showPercentage = false,
     this.xColumn,
     this.yColumn,
     this.aggregationType = AggregationType.count,
+    this.percentageMode = PercentageMode.none,
   });
 
 
@@ -98,10 +100,10 @@ class HeatmapState extends ChartState {
     SortMode? sortX,
     SortMode? sortY,
     ColorScaleType? scaleType,
-    bool? showPercentage,
     String? xColumn,
     String? yColumn,
     AggregationType? aggregationType,
+    PercentageMode? percentageMode,
   }) {
     return HeatmapState(
       palette: palette ?? this.palette,
@@ -115,10 +117,10 @@ class HeatmapState extends ChartState {
       sortX: sortX ?? this.sortX,
       sortY: sortY ?? this.sortY,
       scaleType: scaleType ?? this.scaleType,
-      showPercentage: showPercentage ?? this.showPercentage,
       xColumn: xColumn ?? this.xColumn,
       yColumn: yColumn ?? this.yColumn,
       aggregationType: aggregationType ?? this.aggregationType,
+      percentageMode: percentageMode ?? this.percentageMode,
     );
   }
 }

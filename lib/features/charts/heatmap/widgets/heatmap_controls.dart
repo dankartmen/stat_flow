@@ -14,6 +14,8 @@ import '../model/heatmap_state.dart';
 /// - Настройка количества сегментов (для дискретного режима)
 /// - Переключение режима верхнего треугольника
 /// - Включение/отключение кластеризации
+/// - Выбор режима процентов
+/// - Выбор осей и типа агрегации
 /// {@endtemplate}
 class HeatmapControls {
   /// Строит список виджетов управления на основе состояния
@@ -21,7 +23,8 @@ class HeatmapControls {
   /// Принимает:
   /// - [state] — текущее состояние тепловой карты
   /// - [onChanged] — колбэк для обновления состояния
-  ///
+  /// - [dataset] — датасет для доступа к колонкам
+  /// 
   /// Возвращает:
   /// - [List<Widget>] — список виджетов для размещения в панели управления
   static List<Widget> build({
@@ -110,9 +113,31 @@ class HeatmapControls {
           state.clusterEnabled ? "Отключить кластеризацию" : "Кластеризовать",
         ),
       ),
+      const SizedBox(width: 16),
+      DropdownButton<PercentageMode>(
+        value: state.percentageMode,
+        items: PercentageMode.values.map((mode) {
+          return DropdownMenuItem(
+            value: mode,
+            child: Text(_percentageModeName(mode)),
+          );
+        }).toList(),
+        onChanged: (v) => onChanged(state.copyWith(percentageMode: v!)),
+      ),
     ];
   }
   
+  /// Возвращает локализованное название режима процентов.
+  static String _percentageModeName(PercentageMode mode) {
+    switch (mode) {
+      case PercentageMode.none: return 'Без процентов';
+      case PercentageMode.row: return '% от строки';
+      case PercentageMode.column: return '% от столбца';
+      case PercentageMode.total: return '% от итога';
+    }
+  }
+
+  /// Строит виджеты выбора осей и типа агрегации.
   static Widget _buildAxisSelectors(
     HeatmapState state,
     ValueChanged<HeatmapState> onChanged,
@@ -149,6 +174,7 @@ class HeatmapControls {
     );
   }
 
+  /// Проверяет, является ли колонка числовой.
   static bool _isNumericColumn(Dataset dataset, String? columnName) {
     if (columnName == null) return false;
     final col = dataset.column(columnName);

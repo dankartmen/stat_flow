@@ -1,5 +1,6 @@
 import 'dart:developer';
 
+import 'package:flutter/foundation.dart';
 import 'package:stat_flow/core/dataset/dataset.dart';
 import '../../chart_state.dart';
 import '../model/heatmap_data.dart';
@@ -24,6 +25,9 @@ class HeatmapDataBuilder {
   /// Текущее состояние графика (выбранные колонки, тип агрегации)
   final HeatmapState state;
 
+  /// Максимальное количество уникальных категорий для отображения
+  static const int maxUniqueCategories = 50;
+  
   /// {@macro heatmap_data_builder}
   HeatmapDataBuilder(this.dataset, this.state);
 
@@ -98,6 +102,123 @@ class HeatmapDataBuilder {
     throw Exception('Неподдерживаемая комбинация типов колонок для тепловой карты');
   }
 
+  /// Асинхронно строит [HeatmapData] в отдельном изоляте.
+  ///
+  /// Используется для больших датасетов, чтобы не блокировать UI.
+  /// Принимает [dataset] и [state], возвращает [Future<HeatmapData>].
+  static Future<HeatmapData> computeAsync({
+    required Dataset dataset,
+    required HeatmapState state,
+  }) async {
+    // Извлекаем сырые значения колонок
+    final xCol = state.xColumn != null ? dataset.column(state.xColumn!) : null;
+    final yCol = state.yColumn != null ? dataset.column(state.yColumn!) : null;
+
+    final xValues = xCol != null
+        ? xCol.data.map((e) => e?.toString()).toList()
+        : <String?>[];
+    final yValues = yCol != null
+        ? yCol.data.map((e) => e?.toString()).toList()
+        : <String?>[];
+
+    final params = _ComputationParams(
+      xColumnName: state.xColumn,
+      yColumnName: state.yColumn,
+      xValues: xValues,
+      yValues: yValues,
+      aggregationType: state.aggregationType,
+      clusterEnabled: state.clusterEnabled,
+      sortX: state.sortX,
+      sortY: state.sortY,
+      normalizeMode: state.normalizeMode,
+      percentageMode: state.percentageMode,
+    );
+
+    return await compute(_performComputation, params);
+  }
+
+  /// Статический метод, выполняемый в изоляте.
+  static HeatmapData _performComputation(_ComputationParams params) {
+    if (params.xColumnName == null && params.yColumnName == null) {
+      return HeatmapData(rowLabels: [], columnLabels: [], values: []);
+    }
+
+    // Построение на основе сырых данных
+    return _buildFromRaw(params);
+  }
+
+  /// Строит [HeatmapData] из сырых строковых списков (без доступа к Dataset).
+  static HeatmapData _buildFromRaw(_ComputationParams params) {
+    final xValues = params.xValues;
+    final yValues = params.yValues;
+
+    // Проверяем, что данные не пусты
+    if (xValues.isEmpty || yValues.isEmpty) {
+      return HeatmapData(rowLabels: [], columnLabels: [], values: []);
+    }
+
+    // Определяем типы колонок по содержимому (простейшая эвристика)
+    final bool xIsNumeric = _isAllNumeric(xValues);
+    final bool yIsNumeric = _isAllNumeric(yValues);
+
+    // Обе числовые – не поддерживаем
+    if (xIsNumeric && yIsNumeric) {
+      return HeatmapData(rowLabels: [], columnLabels: [], values: []);
+    }
+
+    // Если одна из колонок числовая, а другая категориальная – агрегация
+    if ((xIsNumeric && !yIsNumeric) || (!xIsNumeric && yIsNumeric)) {
+      final catValues = !xIsNumeric ? xValues : yValues;
+      final numValues = xIsNumeric ? xValues : yValues;
+
+      final categories = _uniqueCategories(catValues);
+      final limitedCategories = _limitCategories(categories, catValues);
+
+      // Агрегируем
+      final aggregated = _aggregateNumerical(
+        catValues: catValues,
+        numValues: numValues,
+        categories: limitedCategories,
+        aggType: params.aggregationType,
+      );
+
+      // Возвращаем матрицу с одной колонкой
+      return HeatmapData(
+        rowLabels: limitedCategories,
+        columnLabels: [params.aggregationType.name],
+        values: aggregated.map((v) => [v]).toList(),
+      );
+    }
+
+    // Обе категориальные – таблица сопряжённости
+    final xCats = _uniqueCategories(xValues);
+    final yCats = _uniqueCategories(yValues);
+    final limitedXCats = _limitCategories(xCats, xValues);
+    final limitedYCats = _limitCategories(yCats, yValues);
+
+    final matrix = List.generate(
+      limitedXCats.length,
+      (_) => List.filled(limitedYCats.length, 0.0),
+    );
+
+    for (int i = 0; i < xValues.length; i++) {
+      final xv = xValues[i];
+      final yv = yValues[i];
+      if (xv == null || yv == null) continue;
+      final xi = limitedXCats.indexOf(xv);
+      final yi = limitedYCats.indexOf(yv);
+      if (xi != -1 && yi != -1) {
+        matrix[xi][yi] += 1;
+      }
+    }
+
+    return HeatmapData(
+      rowLabels: limitedXCats,
+      columnLabels: limitedYCats,
+      values: matrix,
+    );
+  }
+  
   /// Строит таблицу сопряжённости для двух категориальных колонок
   ///
   /// Каждая ячейка матрицы содержит количество совместных появлений
@@ -110,11 +231,13 @@ class HeatmapDataBuilder {
   /// Возвращает:
   /// - [HeatmapData] — матрица с частотами.
   HeatmapData _buildContingencyTable(CategoricalColumn x, CategoricalColumn y) {
-    final xCategories = _uniqueCategories(x);
-    final yCategories = _uniqueCategories(y);
+    final xCategories = _uniqueCategories(x.data);
+    final yCategories = _uniqueCategories(y.data);
+    final limitedXCats = _limitCategories(xCategories, x.data);
+    final limitedYCats = _limitCategories(yCategories, y.data);
 
     final matrix = List.generate(
-      xCategories.length,
+      limitedXCats.length,
       (_) => List.filled(yCategories.length, 0.0),
     );
 
@@ -122,16 +245,16 @@ class HeatmapDataBuilder {
       final xv = x[i];
       final yv = y[i];
       if (xv == null || yv == null) continue;
-      final xi = xCategories.indexOf(xv);
-      final yi = yCategories.indexOf(yv);
+      final xi = limitedXCats.indexOf(xv);
+      final yi = limitedYCats.indexOf(yv);
       if (xi != -1 && yi != -1) {
         matrix[xi][yi] += 1;
       }
     }
 
     return HeatmapData(
-      rowLabels: xCategories,
-      columnLabels: yCategories,
+      rowLabels: limitedXCats,
+      columnLabels: limitedYCats,
       values: matrix,
     );
   }
@@ -153,29 +276,80 @@ class HeatmapDataBuilder {
   /// Возвращает:
   /// - [HeatmapData] — матрица с одной колонкой (значения по категориям).
   HeatmapData _buildAggregationTable(CategoricalColumn cat, NumericColumn num) {
-    final categories = _uniqueCategories(cat);
+    final categories = _uniqueCategories(cat.data);
+    final limitedCategories = _limitCategories(categories, cat.data);
+    final aggregated = _aggregateNumerical(
+      catValues: cat.data,
+      numValues: num.data.map((e) => e?.toString()).toList(),
+      categories: limitedCategories,
+      aggType: state.aggregationType,
+    );
+
+    // Возвращаем матрицу с одной колонкой (значения по категориям)
+    return HeatmapData(
+      rowLabels: categories,
+      columnLabels: [state.aggregationType.name],
+      values: aggregated.map((v) => [v]).toList(),
+    );
+  }
+  
+  static bool _isAllNumeric(List<String?> values) {
+    for (final v in values) {
+      if (v != null && double.tryParse(v) == null) return false;
+    }
+    return true;
+  }
+
+  /// Ограничивает количество категорий, оставляя наиболее частые.
+  ///
+  /// Если количество уникальных категорий превышает [maxUniqueCategories],
+  /// возвращает только [maxUniqueCategories] самых частых.
+  static List<String> _limitCategories(List<String> all, List<String?> data) {
+    if (all.length <= maxUniqueCategories) return all;
+
+    final freq = <String, int>{};
+    for (final v in data) {
+      if (v != null) freq[v] = (freq[v] ?? 0) + 1;
+    }
+
+    final sorted = List<String>.from(all)
+      ..sort((a, b) => (freq[b] ?? 0).compareTo(freq[a] ?? 0));
+    return sorted.take(maxUniqueCategories).toList();
+  }
+
+  /// Вычисляет агрегированное значение для каждой категории
+  static List<double> _aggregateNumerical({
+    required List<String?> catValues,
+    required List<String?> numValues,
+    required List<String> categories,
+    required AggregationType aggType,
+  }) {
     final counts = List.filled(categories.length, 0);
     final sums = List.filled(categories.length, 0.0);
     final mins = List.filled(categories.length, double.infinity);
     final maxs = List.filled(categories.length, -double.infinity);
+    final medians = List.filled(categories.length, <double>[]);
 
-    for (int i = 0; i < cat.length; i++) {
-      final c = cat[i];
-      final n = num[i];
-      if (c == null || n == null) continue;
+    for (int i = 0; i < catValues.length; i++) {
+      final c = catValues[i];
+      final nStr = numValues[i];
+      if (c == null || nStr == null) continue;
+      final n = double.tryParse(nStr);
+      if (n == null) continue;
+
       final idx = categories.indexOf(c);
       if (idx == -1) continue;
 
       counts[idx]++;
       sums[idx] += n;
+      medians[idx].add(n);
       if (n < mins[idx]) mins[idx] = n;
       if (n > maxs[idx]) maxs[idx] = n;
     }
 
-    // Вычисляем итоговые значения в зависимости от выбранной агрегации
     final values = List.filled(categories.length, 0.0);
     for (int i = 0; i < categories.length; i++) {
-      switch (state.aggregationType) {
+      switch (aggType) {
         case AggregationType.count:
           values[i] = counts[i].toDouble();
           break;
@@ -191,15 +365,23 @@ class HeatmapDataBuilder {
         case AggregationType.max:
           values[i] = counts[i] > 0 ? maxs[i] : 0;
           break;
+        case AggregationType.median:
+          final list = medians[i];
+          if (list.isEmpty) {
+            values[i] = 0;
+          } else {
+            list.sort();
+            final mid = list.length ~/ 2;
+            if (list.length % 2 == 0) {
+              values[i] = (list[mid - 1] + list[mid]) / 2;
+            } else {
+              values[i] = list[mid];
+            }
+          }
+          break;
       }
     }
-
-    // Возвращаем матрицу с одной колонкой (значения по категориям)
-    return HeatmapData(
-      rowLabels: categories,
-      columnLabels: [state.aggregationType.name],
-      values: values.map((v) => [v]).toList(),
-    );
+    return values;
   }
 
   /// Возвращает отсортированный список уникальных значений категориальной колонки
@@ -209,9 +391,9 @@ class HeatmapDataBuilder {
   ///
   /// Возвращает:
   /// - [List<String>] — отсортированные по алфавиту уникальные значения.
-  List<String> _uniqueCategories(CategoricalColumn col) {
+  static List<String> _uniqueCategories(List<String?> data) {
     final set = <String>{};
-    for (final v in col.data) {
+    for (final v in data) {
       if (v != null) set.add(v);
     }
     return set.toList()..sort();
@@ -264,4 +446,54 @@ class HeatmapDataBuilder {
         throw Exception('Неизвестный тип колонки: ${col.name}');
     }
   }
+}
+
+/// {@template computation_params}
+/// Параметры для передачи в isolate.
+///
+/// Содержит все необходимые данные для построения [HeatmapData] без доступа к [Dataset].
+/// {@endtemplate}
+class _ComputationParams {
+  /// Имя колонки X 
+  final String? xColumnName;
+
+  /// Имя колонки Y 
+  final String? yColumnName;
+
+  /// Значения колонки X в виде строк
+  final List<String?> xValues;
+
+  /// Значения колонки Y в виде строк
+  final List<String?> yValues;
+
+  /// Тип агрегации для числовых данных
+  final AggregationType aggregationType;
+
+  /// Включена ли кластеризация
+  final bool clusterEnabled;
+
+  /// Режим сортировки строк
+  final SortMode sortX;
+
+  /// Режим сортировки столбцов
+  final SortMode sortY;
+
+  /// Режим нормализации
+  final NormalizeMode normalizeMode;
+
+  /// Режим процентов
+  final PercentageMode percentageMode;
+
+  _ComputationParams({
+    this.xColumnName,
+    this.yColumnName,
+    required this.xValues,
+    required this.yValues,
+    required this.aggregationType,
+    required this.clusterEnabled,
+    required this.sortX,
+    required this.sortY,
+    required this.normalizeMode,
+    required this.percentageMode,
+  });
 }

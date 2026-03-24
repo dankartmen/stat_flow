@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:stat_flow/core/dataset/dataset.dart';
 import '../../../core/providers/providers.dart';
 import '../chart_plugin.dart';
 import '../chart_type.dart';
@@ -23,7 +22,7 @@ class HeatmapPlugin extends ChartPlugin {
     final state = data.state as HeatmapState;
     final heatmapData = HeatmapDataBuilder(data.dataset, state).build();
     return HeatmapView(
-      heatmapData: heatmapData, 
+      dataset: data.dataset, 
       state: state
     );
   }

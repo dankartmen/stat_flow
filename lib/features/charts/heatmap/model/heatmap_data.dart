@@ -214,4 +214,56 @@ class HeatmapData {
       values: values.map((row) => indices.map((i) => row[i]).toList()).toList(),
     );
   }
+
+  /// Преобразует значения в проценты от суммы по строке, столбцу или общей суммы
+  ///
+  /// Режимы:
+  /// - [PercentageMode.none] — без изменений
+  /// - [PercentageMode.row] — значения в процентах от суммы по строке
+  /// - [PercentageMode.column] — значения в процентах от суммы по столб
+  /// - [PercentageMode.total] — значения в процентах от общей суммы
+  HeatmapData toPercentages(PercentageMode mode) {
+    if (mode == PercentageMode.none) return this;
+
+    final newValues = values.map((row) => row.toList()).toList();
+
+    if (mode == PercentageMode.row) {
+      for (int i = 0; i < newValues.length; i++) {
+        final rowSum = newValues[i].fold(0.0, (a, b) => a + b);
+        if (rowSum == 0) continue;
+        for (int j = 0; j < newValues[i].length; j++) {
+          newValues[i][j] = newValues[i][j] / rowSum * 100;
+        }
+      }
+    } else if (mode == PercentageMode.column) {
+      final cols = newValues.isEmpty ? 0 : newValues[0].length;
+      for (int j = 0; j < cols; j++) {
+        double colSum = 0;
+        for (int i = 0; i < newValues.length; i++) {
+          colSum += newValues[i][j];
+        }
+        if (colSum == 0) continue;
+        for (int i = 0; i < newValues.length; i++) {
+          newValues[i][j] = newValues[i][j] / colSum * 100;
+        }
+      }
+    } else if (mode == PercentageMode.total) {
+      double total = 0;
+      for (var row in newValues) {
+        total += row.fold(0.0, (a, b) => a + b);
+      }
+      if (total == 0) return this;
+      for (int i = 0; i < newValues.length; i++) {
+        for (int j = 0; j < newValues[i].length; j++) {
+          newValues[i][j] = newValues[i][j] / total * 100;
+        }
+      }
+    }
+
+    return HeatmapData(
+      rowLabels: rowLabels,
+      columnLabels: columnLabels,
+      values: newValues,
+    );
+  }
 }

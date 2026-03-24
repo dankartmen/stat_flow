@@ -3,8 +3,9 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:stat_flow/features/charts/heatmap/widgets/heatmap_legend.dart';
 
+import '../../../../core/dataset/dataset.dart';
+import '../calculator/heatmap_data_builder.dart';
 import '../model/correlation_clusterer.dart';
-import '../model/correlation_matrix.dart';
 import '../color/heatmap_color_mapper.dart';
 import '../model/heatmap_data.dart';
 import '../model/heatmap_state.dart';
@@ -25,7 +26,7 @@ import '../color/heatmap_palette.dart';
 /// {@endtemplate}
 class HeatmapView extends StatefulWidget {
   /// Данные для отображения тепловой карты, включая значения и метки
-  final HeatmapData heatmapData;
+  final Dataset dataset;
 
   /// Состояние тепловой карты, содержащее настройки отображения
   final HeatmapState state;
@@ -33,7 +34,7 @@ class HeatmapView extends StatefulWidget {
   /// {@macro heatmap_view}
   const HeatmapView({
     super.key,
-    required this.heatmapData,
+    required this.dataset,
     required this.state,
   });
 
@@ -61,45 +62,32 @@ class _HeatmapViewState extends State<HeatmapView>
   /// Контроллер трансформации для масштабирования
   final TransformationController _zoomController = TransformationController();
 
-  /// Кэшированная кластеризованная матрица.
-  /// Перестраивается только при изменении исходной матрицы или
-  /// при включении/выключении кластеризации.
-  CorrelationMatrix? _clusteredMatrix;
-
-  /// Кэш последних параметров, влияющих на цветовую схему
-  HeatmapPalette? _lastPalette;
-
-  /// Кэш последнего количества сегментов для дискретного режима
-  int? _lastSegments;
-
-  /// Кэш последнего режима отображения цветов
-  HeatmapColorMode? _lastMode;
-
   /// Данные, подготовленные для отображения (после кластеризации, сортировки, нормализации)
-  late HeatmapData _displayData;
+  late HeatmapData? _displayData;
 
-  /// Минимальное и максимальное значение в отображаемых данных для настройки цветовой шкалы
-  late double _currentMin;
-  late double _currentMax;
-  
+  /// Текущий минимум для цветовой шкалы
+  double? _currentMin;
+
+  /// Текущий максимум для цветовой шкалы
+  double? _currentMax;
+
+  /// Кэш ключа данных для оптимизации повторных вычислений
+  String? _currentDataKey;
+
+  /// Future для асинхронного вычисления данных  
+  Future<HeatmapData>? _computeFuture;
+
   @override
   void initState() {
     super.initState();
-
+    _startComputation();
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 350),
     );
-    _recomputeDisplayData();
     // Создание начального маппера на основе текущих настроек
     _currentMapper = _createMapper();
     _previousMapper = _currentMapper; // Начальное состояние без анимации
-
-    _lastPalette = widget.state.palette;
-    _lastSegments = widget.state.segments;
-    _lastMode = widget.state.colorMode;
-
-    
   }
 
   @override
@@ -107,18 +95,23 @@ class _HeatmapViewState extends State<HeatmapView>
     super.didUpdateWidget(oldWidget);
 
     // Проверяем изменения, которые влияют на данные / цвета
-    if (oldWidget.state.normalizeMode != widget.state.normalizeMode ||
-        oldWidget.state.sortX != widget.state.sortX ||
-        oldWidget.state.sortY != widget.state.sortY ||
-        oldWidget.state.clusterEnabled != widget.state.clusterEnabled ||
-        oldWidget.heatmapData != widget.heatmapData) {
-      _recomputeDisplayData();
+    if (widget.state != oldWidget.state ||
+        widget.dataset != oldWidget.dataset) {
+      _startComputation();
+      if (_displayData?.rowLabels.isEmpty != null){
+        _currentMin = _displayData!.min;
+        _currentMax = _displayData!.max;
+      }
+      else{
+        _currentMin = 0;
+        _currentMax = 1; 
+      }
     }
 
     // Проверяем, изменились ли параметры, влияющие на цветовую схему
-    if (_lastPalette != widget.state.palette ||
-        _lastSegments != widget.state.segments ||
-        _lastMode != widget.state.colorMode) {
+    if (oldWidget.state.palette != widget.state.palette ||
+        oldWidget.state.segments != widget.state.segments ||
+        oldWidget.state.colorMode != widget.state.colorMode) {
       // Сохраняем текущий маппер как предыдущий для анимации перехода
       _previousMapper = _currentMapper;
 
@@ -127,16 +120,6 @@ class _HeatmapViewState extends State<HeatmapView>
 
       // Запускаем анимацию перехода от старой цветовой схемы к новой
       _controller.forward(from: 0);
-
-      _lastPalette = widget.state.palette;
-      _lastSegments = widget.state.segments;
-      _lastMode = widget.state.colorMode;
-    }
-
-    // При изменении состояния кластеризации сбрасываем кэш,
-    // чтобы при следующем обращении матрица была перекластеризована
-    if (oldWidget.state.clusterEnabled != widget.state.clusterEnabled) {
-      _clusteredMatrix = null;
     }
   }
 
@@ -147,53 +130,92 @@ class _HeatmapViewState extends State<HeatmapView>
     super.dispose();
   }
 
+  
   @override
   Widget build(BuildContext context) {
-    if (widget.heatmapData.rowLabels.isEmpty) {
-      return const Center(
-        child: Text(
-          'Нет данных для отображения (выбраны две числовые колонки?)',
-          style: TextStyle(fontSize: 16, color: Colors.grey),
-        ),
-      );
+    if (_displayData == null) {
+      return const Center(child: CircularProgressIndicator());
     }
-    // Проверка на пустую матрицу - показываем информационное сообщение
-    if (widget.heatmapData.values.isEmpty) {
-      return const Center(
-        child: Text(
-          'Нет данных для отображения',
-          style: TextStyle(fontSize: 16, color: Colors.grey),
-        ),
-      );
+    return _buildHeatmap();
+  }
+
+  /// Запускает вычисление данных тепловой карты.
+  ///
+  /// Если данные уже вычислены для текущего ключа, пропускает.
+  /// В противном случае вычисляет синхронно (для корреляции) или асинхронно (для выбранных осей).
+  void _startComputation() {
+    final key = _computeKey();
+    if (_currentDataKey == key && _displayData != null) return;
+    _currentDataKey = key;
+
+    // Сбрасываем текущие данные
+    setState(() {
+      _displayData = null;
+      _computeFuture = null;
+    });
+
+    // Режим корреляции (обе оси не выбраны) – строим синхронно
+    if (widget.state.xColumn == null && widget.state.yColumn == null) {
+      final matrix = widget.dataset.corr();
+      var data = HeatmapData.fromCorrelation(matrix);
+      data = _applyTransformations(data);
+      setState(() => _displayData = data);
+      return;
     }
 
-    if (widget.heatmapData.rowLabels.isEmpty) {
-      return const Center(
-        child: Text(
-          'Нет данных для отображения (выбраны две числовые колонки?)',
-          style: TextStyle(fontSize: 16, color: Colors.grey),
-        ),
-      );
-    }
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: _buildHeatmap(constraints.biggest),
-            ),
-            HeatmapLegend(
-              mapper: _currentMapper,
-              min: -1,
-              max: 1,
-              segments: widget.state.segments,
-            ),
-          ],
-        );
-      },
+    // Режим выбранных осей – асинхронно
+    _computeFuture = HeatmapDataBuilder.computeAsync(
+      dataset: widget.dataset,
+      state: widget.state,
     );
+    _computeFuture!.then((data) {
+      if (mounted) {
+        setState(() => _displayData = data);
+      }
+    }).catchError((error) {
+      if (mounted) {
+        setState(() => _displayData = HeatmapData(rowLabels: [], columnLabels: [], values: []));
+        // Можно показать SnackBar с ошибкой
+      }
+    });
+  }
+  
+  /// Применяет к данным все трансформации: кластеризацию, сортировку, нормализацию, проценты.
+  HeatmapData _applyTransformations(HeatmapData data) {
+    // Кластеризация только для корреляционной матрицы
+    if (widget.state.clusterEnabled &&
+        widget.state.xColumn == null &&
+        widget.state.yColumn == null) {
+      data = CorrelationClusterer.clusterHeatmapData(data);
+    }
+
+    // Сортировка
+    if (widget.state.sortX != SortMode.none) {
+      data = data.sortRows(widget.state.sortX);
+    }
+    if (widget.state.sortY != SortMode.none) {
+      data = data.sortCols(widget.state.sortY);
+    }
+
+    // Нормализация
+    if (widget.state.normalizeMode != NormalizeMode.none) {
+      data = data.normalize(widget.state.normalizeMode);
+    }
+
+    // Проценты
+    if (widget.state.percentageMode != PercentageMode.none) {
+      data = data.toPercentages(widget.state.percentageMode);
+    }
+
+    return data;
+  }
+
+  /// Генерирует ключ для кэширования данных на основе настроек
+  String _computeKey() {
+    return '${widget.state.xColumn}_${widget.state.yColumn}_'
+        '${widget.state.aggregationType}_${widget.state.clusterEnabled}_'
+        '${widget.state.sortX}_${widget.state.sortY}_'
+        '${widget.state.normalizeMode}_${widget.state.percentageMode}';
   }
 
   /// Создание маппера цветов на основе текущих настроек.
@@ -205,52 +227,30 @@ class _HeatmapViewState extends State<HeatmapView>
   ///   (лучше для визуального восприятия общей структуры)
   HeatmapColorMapper _createMapper() {
     final paletteColors = HeatmapPaletteFactory.baseColors(widget.state.palette);
-
-    if (widget.state.colorMode == HeatmapColorMode.discrete) {
-      // Здесь можно позже добавить логику scaleType == quantile
+    if (_displayData?.rowLabels.isEmpty == null){
+      _currentMin = _displayData!.min;
+      _currentMax = _displayData!.max;
+    }
+    else{
+      _currentMin = 0;
+      _currentMax = 1; 
+    }
+    if (widget.state.colorMode == HeatmapColorMode.discrete) {      
       return DiscreteColorMapper(
-        min: _currentMin,
-        max: _currentMax,
+        min: _currentMin!,
+        max: _currentMax!,
         segments: widget.state.segments,
         baseColors: paletteColors,
       );
     } else {
       return GradientColorMapper(
         paletteType: widget.state.palette,
-        min: _currentMin,
-        max: _currentMax,
+        min: _currentMin!,
+        max: _currentMax!,
       );
     }
   }
 
-  /// Пересчет данных для отображения на основе текущих настроек.
-  ///
-  /// Выполняет следующие шаги:
-  /// 1. Кластеризация (если включена) — меняет порядок строк
-  /// 2. Сортировка (после кластеризации, т.к. она тоже сортирует)
-  /// 3. Нормализация (после сортировки — логичнее для интерпретации)
-  void _recomputeDisplayData() {
-    HeatmapData data = widget.heatmapData;
-
-    // 1. кластеризация (если включена) — меняет порядок строк
-    if (widget.state.clusterEnabled &&
-      widget.state.xColumn == null &&
-      widget.state.yColumn == null) {
-      data = CorrelationClusterer.clusterHeatmapData(data);
-    }
-
-    // 2. сортировка
-    data = data.sortRows(widget.state.sortX);
-    data = data.sortCols(widget.state.sortY);
-
-    // 3. нормализация
-    data = data.normalize(widget.state.normalizeMode);
-
-    _displayData = data;
-    _currentMin = data.min;
-    _currentMax = data.max;
-
-  }
 
   /// Построение виджета тепловой карты с поддержкой масштабирования.
   ///
@@ -261,87 +261,118 @@ class _HeatmapViewState extends State<HeatmapView>
   ///
   /// Также реализует интерактивную подсветку ячеек при наведении мыши
   /// (для десктопных и веб-версий).
-  Widget _buildHeatmap(Size viewport) {
-    final rowCount = _displayData.rowLabels.length;
-    final colCount = _displayData.columnLabels.length;
-    debugPrint('Кол-во строк: $rowCount, Кол-во столбцов: $colCount');
-    final cellSizeByWidth = viewport.width / colCount;
-    final cellSizeByHeight = viewport.height / rowCount;
+  Widget _buildHeatmap() {
+    if (_displayData!.rowLabels.isEmpty) {
+      return const Center(
+        child: Text(
+          'Нет данных для отображения (выбраны две числовые колонки?)',
+          style: TextStyle(fontSize: 16, color: Colors.grey),
+        ),
+      );
+    }
+    final rowCount = _displayData!.rowLabels.length;
+    final colCount = _displayData!.columnLabels.length;
+    if (rowCount == 0 || colCount == 0) {
+      return const Center(child: Text('Нет данных для отображения'));
+    }
+    final axisOffset = widget.state.showAxisLabels ? 40.0 : 0.0;
 
-    final cellSize = min(cellSizeByWidth, cellSizeByHeight).clamp(20.0, 80.0);
+    final availableWidth = MediaQuery.of(context).size.width - axisOffset;
+    final availableHeight = MediaQuery.of(context).size.height - axisOffset;
+  
+    final cellSizeByWidth = availableWidth / colCount;
+    final cellSizeByHeight = availableHeight / rowCount;
+
+    double cellSize = min(cellSizeByWidth, cellSizeByHeight).clamp(20.0, 80.0);
+
 
     final showValues = cellSize > 35;
 
-    return Stack(
-      children: [
-        InteractiveViewer(
-          transformationController: _zoomController,
-          constrained: false,
-          minScale: 0.5, // Минимальное увеличение
-          maxScale: 5.0, // Максимальное увеличение
-          boundaryMargin: const EdgeInsets.all(8), // Отступы от границ для удобства
-
-          child: MouseRegion(
-            // Отслеживание мыши для интерактивной подсветки
-            onHover: (event) {
-              final localPos = event.localPosition;
-
-              // Вычисляем индекс ячейки под курсором.
-              // Вычитаем cellSize для учета отступа под подписи осей,
-              // который добавляется в HeatmapPainter.
-              final axisOffset = widget.state.showAxisLabels ? cellSize : 0;
-              final row = ((localPos.dy - axisOffset) / cellSize).floor();
-              final col = ((localPos.dx - axisOffset) / cellSize).floor();
-
-              // Проверяем, что курсор находится в пределах матрицы
-              if (row >= 0 && row < rowCount && col >= 0 && col < colCount) {
-                if (row != hoverRow || col != hoverCol) {
-                  setState(() {
-                    hoverRow = row;
-                    hoverCol = col;
-                  });
-                }
-              } else {
-                if (hoverRow != null) {
-                  setState(() {
-                    hoverRow = null;
-                    hoverCol = null;
-                  });
-                }
-              }
-            },
-            // Сброс подсветки при уходе мыши с виджета
-            onExit: (_) {
-              setState(() {
-                hoverRow = null;
-                hoverCol = null;
-              });
-            },
-
-            child: AnimatedBuilder(
-              animation: _controller,
-              builder: (_, __) {
-                return CustomPaint(
-                  size: Size(colCount * cellSize, rowCount * cellSize),
-                  painter: HeatmapPainter(
-                    data: _displayData,
-                    colorMapper: _currentMapper,
-                    previousMapper: _previousMapper,
-                    animationValue: _controller.value,
-                    cellSize: cellSize,
-                    showValues: showValues,
-                    showAxisLabels: false,
-                    triangleMode: widget.state.triangleMode,
-                    hoverRow: hoverRow,
-                    hoverCol: hoverCol,
-                    showPercentage: widget.state.showPercentage,
+    final totalWidth = colCount * cellSize + axisOffset;
+    final totalHeight = rowCount * cellSize + axisOffset;
+    return LayoutBuilder(
+      builder: (context, constraints){
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: InteractiveViewer(
+                transformationController: _zoomController,
+                constrained: false,
+                minScale: 0.5, // Минимальное увеличение
+                maxScale: 5.0, // Максимальное увеличение
+                boundaryMargin: const EdgeInsets.all(8), // Отступы от границ для удобства
+          
+                child: MouseRegion(
+                  // Отслеживание мыши для интерактивной подсветки
+                  onHover: (event) {
+                    final localPos = event.localPosition;
+          
+                    // Вычисляем индекс ячейки под курсором.
+                    // Вычитаем cellSize для учета отступа под подписи осей,
+                    // который добавляется в HeatmapPainter.
+                    final row = ((localPos.dy - axisOffset) / cellSize).floor();
+                    final col = ((localPos.dx - axisOffset) / cellSize).floor();
+          
+                    // Проверяем, что курсор находится в пределах матрицы
+                    if (row >= 0 && row < rowCount && col >= 0 && col < colCount) {
+                      if (row != hoverRow || col != hoverCol) {
+                        setState(() {
+                          hoverRow = row;
+                          hoverCol = col;
+                        });
+                      }
+                    } else {
+                      if (hoverRow != null) {
+                        setState(() {
+                          hoverRow = null;
+                          hoverCol = null;
+                        });
+                      }
+                    }
+                  },
+                  // Сброс подсветки при уходе мыши с виджета
+                  onExit: (_) {
+                    setState(() {
+                      hoverRow = null;
+                      hoverCol = null;
+                    });
+                  },
+          
+                  child: AnimatedBuilder(
+                    animation: _controller,
+                    builder: (_, __) {
+                      return CustomPaint(
+                        size: Size(totalWidth, totalHeight),
+                        painter: HeatmapPainter(
+                          data: _displayData!,
+                          axisOffset: axisOffset,
+                          colorMapper: _currentMapper,
+                          previousMapper: _previousMapper,
+                          animationValue: _controller.value,
+                          cellSize: cellSize,
+                          showValues: showValues,
+                          showAxisLabels: false,
+                          triangleMode: widget.state.triangleMode,
+                          hoverRow: hoverRow,
+                          hoverCol: hoverCol,
+                          percentageMode: widget.state.percentageMode,
+                        ),
+                      );
+                    },
                   ),
-                );
-              },
+                ),
+              ),
             ),
-          ),
-        ),
-      ],
+            HeatmapLegend(
+              mapper: _currentMapper,
+              min: _currentMin!,
+              max: _currentMax!,
+              segments: widget.state.segments,
+            ),
+          ],
+        );
+      }
     );
   }
 }
