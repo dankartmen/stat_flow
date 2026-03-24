@@ -4,10 +4,12 @@
   import 'package:stat_flow/features/canvas/canvas_workspace.dart';
   import 'package:stat_flow/features/charts/chart_renderer.dart';
   import '../../core/providers/providers.dart';
-  import '../bars/left_sidebar.dart';
+  import '../bars/context_panel.dart';
+import '../bars/left_sidebar.dart';
   import '../bars/right_dataset_panel.dart';
   import '../bars/top_control_panel.dart';
-  import '../charts/chart_registry.dart';
+  import '../bars/top_nav_bar.dart';
+import '../charts/chart_registry.dart';
   import '../charts/chart_state.dart';
   import '../charts/chart_type.dart';
   import '../table/widget/full_table_screen.dart';
@@ -303,80 +305,80 @@
       final charts = ref.watch(chartsProvider);
       final selectedId = ref.watch(selectedChartIdProvider);
       final isRightExpanded = ref.watch(rightPanelExpandedProvider);
+      final currentScreen = ref.watch(currentScreenProvider);
 
       final selectedChart = selectedId != null
           ? charts.firstWhere((c) => c.id == selectedId)
           : null;
 
       return Scaffold(
-        body: Stack(
+        body: Column(
           children: [
-            // Верхняя панель управления (отображается только при выбранном графике)
-            if (selectedChart != null)
-              Positioned(
-                left: 72,
-                right: isRightExpanded ? 280 : 0,
-                top: 0,
-                child: TopControlPanel(
-                  chart: selectedChart,
-                  onChanged: () {
-                    setState(() {}); // временно, позже уйдёт
-                  },
-                ),
-              ),
-            
-            // Центральный канвас с графиками
-            Positioned.fill(
-              left: 72,
-              right: isRightExpanded ? 280 : 0,
-              top: selectedChart != null ? 80 : 0,
-              child: Container(
-                color: Colors.grey[100],
-                child: CanvasWorkspace(
-                  children: [
-                    ...charts.map((chart) => FloatingChart(
-                          key: ValueKey(chart.id),
-                          data: chart,
-                          isSelected: chart.id == selectedId,
-                          onSelect: () {
-                            ref.read(chartsProvider.notifier).selectChart(chart.id);
-                            ref.read(selectedChartIdProvider.notifier).state = chart.id;
-                          },
-                          onPositionChanged: (pos) =>
-                              ref.read(chartsProvider.notifier).updatePosition(chart.id, pos),
-                          onSizeChanged: (size) =>
-                              ref.read(chartsProvider.notifier).updateSize(chart.id, size),
-                          onClose: () {
-                            ref.read(chartsProvider.notifier).removeChart(chart.id);
-                            if (chart.id == selectedId) {
-                              final newSelected = charts.length > 1 ? charts.last.id : null;
-                              ref.read(selectedChartIdProvider.notifier).state = newSelected;
-                            }
-                          },
-                          onFullscreen: () => _openFullscreen(chart.id),
-                          child: ChartRenderer.build(chart),
-                        )),
-                    if (charts.isEmpty && dataset != null) _buildEmptyState(),
-                  ],
-                ),
+            // Верхняя панель навигации
+            TopNavBar(
+              onLoadDataset: _loadDataset,
+              onShowInfo: _showInfoDialog,
+              currentScreen: currentScreen,
+              onScreenChanged: (screen) =>
+                  ref.read(currentScreenProvider.notifier).state = screen,
+            ),
+            Expanded(
+              child: Row(
+                children: [
+                  // Левая контекстная панель
+                  ContextPanel(
+                    dataset: dataset,
+                    selectedChart: selectedChart,
+                    onAddChart: _addChart,
+                    onCreateChartForField: _createChartForField,
+                    onUpdateChartState: (id, newState) {
+                      ref.read(chartsProvider.notifier).updateChartState(id, newState);
+                    },
+                  ),
+                  // Центральная область
+                  Expanded(
+                    child: IndexedStack(
+                      index: currentScreen == ScreenType.canvas ? 0 : 1,
+                      children: [
+                        // Канвас с графиками
+                        CanvasWorkspace(
+                          children: [
+                            ...charts.map((chart) => FloatingChart(
+                                  key: ValueKey(chart.id),
+                                  data: chart,
+                                  isSelected: chart.id == selectedId,
+                                  onSelect: () {
+                                    ref.read(chartsProvider.notifier).selectChart(chart.id);
+                                    ref.read(selectedChartIdProvider.notifier).state = chart.id;
+                                  },
+                                  onPositionChanged: (pos) =>
+                                      ref.read(chartsProvider.notifier).updatePosition(chart.id, pos),
+                                  onSizeChanged: (size) =>
+                                      ref.read(chartsProvider.notifier).updateSize(chart.id, size),
+                                  onClose: () {
+                                    ref.read(chartsProvider.notifier).removeChart(chart.id);
+                                    if (chart.id == selectedId) {
+                                      final newSelected = charts.length > 1 ? charts.last.id : null;
+                                      ref.read(selectedChartIdProvider.notifier).state = newSelected;
+                                    }
+                                  },
+                                  onFullscreen: () => _openFullscreen(chart.id),
+                                  child: ChartRenderer.build(chart),
+                                )),
+                            if (charts.isEmpty && dataset != null) _buildEmptyState(),
+                          ],
+                        ),
+                        // Таблица данных (встраиваем FullTableScreen как виджет)
+                        if (dataset != null)
+                          FullTableScreen(dataset: dataset)
+                        else
+                          const Center(child: Text('Нет данных')),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
-            
-            // Левая боковая панель
-            Positioned(
-              left: 0,
-              top: 0,
-              bottom: 0,
-              child: LeftSidebar(
-                onLoadDataset: _loadDataset,
-                onAddChart: _addChart,
-                onShowInfo: _showInfoDialog,
-                onShowTable: _showFullTable,
-              ),
-            ),
-            
-            // Правая панель с данными (условно)
-            if (dataset != null) _buildRightPanel(dataset, isRightExpanded),
           ],
         ),
       );

@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:stat_flow/features/charts/heatmap/widgets/heatmap_legend.dart';
 
@@ -22,8 +24,8 @@ import '../color/heatmap_palette.dart';
 /// - Компактная легенда под картой
 /// {@endtemplate}
 class HeatmapView extends StatefulWidget {
-  /// Матрица корреляции для отображения
-  final CorrelationMatrix matrix;
+  /// Данные для отображения тепловой карты, включая значения и метки
+  final HeatmapData heatmapData;
 
   /// Состояние тепловой карты, содержащее настройки отображения
   final HeatmapState state;
@@ -31,7 +33,7 @@ class HeatmapView extends StatefulWidget {
   /// {@macro heatmap_view}
   const HeatmapView({
     super.key,
-    required this.matrix,
+    required this.heatmapData,
     required this.state,
   });
 
@@ -109,7 +111,7 @@ class _HeatmapViewState extends State<HeatmapView>
         oldWidget.state.sortX != widget.state.sortX ||
         oldWidget.state.sortY != widget.state.sortY ||
         oldWidget.state.clusterEnabled != widget.state.clusterEnabled ||
-        oldWidget.matrix != widget.matrix) {
+        oldWidget.heatmapData != widget.heatmapData) {
       _recomputeDisplayData();
     }
 
@@ -147,11 +149,28 @@ class _HeatmapViewState extends State<HeatmapView>
 
   @override
   Widget build(BuildContext context) {
+    if (widget.heatmapData.rowLabels.isEmpty) {
+      return const Center(
+        child: Text(
+          'Нет данных для отображения (выбраны две числовые колонки?)',
+          style: TextStyle(fontSize: 16, color: Colors.grey),
+        ),
+      );
+    }
     // Проверка на пустую матрицу - показываем информационное сообщение
-    if (widget.matrix.isEmpty) {
+    if (widget.heatmapData.values.isEmpty) {
       return const Center(
         child: Text(
           'Нет данных для отображения',
+          style: TextStyle(fontSize: 16, color: Colors.grey),
+        ),
+      );
+    }
+
+    if (widget.heatmapData.rowLabels.isEmpty) {
+      return const Center(
+        child: Text(
+          'Нет данных для отображения (выбраны две числовые колонки?)',
           style: TextStyle(fontSize: 16, color: Colors.grey),
         ),
       );
@@ -211,10 +230,12 @@ class _HeatmapViewState extends State<HeatmapView>
   /// 2. Сортировка (после кластеризации, т.к. она тоже сортирует)
   /// 3. Нормализация (после сортировки — логичнее для интерпретации)
   void _recomputeDisplayData() {
-    HeatmapData data = HeatmapData.fromCorrelation(widget.matrix);
+    HeatmapData data = widget.heatmapData;
 
     // 1. кластеризация (если включена) — меняет порядок строк
-    if (widget.state.clusterEnabled) {
+    if (widget.state.clusterEnabled &&
+      widget.state.xColumn == null &&
+      widget.state.yColumn == null) {
       data = CorrelationClusterer.clusterHeatmapData(data);
     }
 
@@ -231,23 +252,6 @@ class _HeatmapViewState extends State<HeatmapView>
 
   }
 
-  /// Получение актуальной матрицы для отображения.
-  ///
-  /// Возвращает либо исходную матрицу, либо кластеризованную,
-  /// в зависимости от настройки [clusterEnabled].
-  /// 
-  /// Результат кластеризации кэшируется для оптимизации производительности,
-  /// так как операция кластеризации может быть вычислительно затратной
-  /// для больших матриц.
-  CorrelationMatrix _getDisplayMatrix() {
-    if (!widget.state.clusterEnabled) return widget.matrix;
-
-    // Ленивая инициализация: кластеризуем только при первом запросе
-    _clusteredMatrix ??= CorrelationClusterer.cluster(widget.matrix);
-
-    return _clusteredMatrix!;
-  }
-
   /// Построение виджета тепловой карты с поддержкой масштабирования.
   ///
   /// Использует [InteractiveViewer] для обеспечения:
@@ -258,11 +262,13 @@ class _HeatmapViewState extends State<HeatmapView>
   /// Также реализует интерактивную подсветку ячеек при наведении мыши
   /// (для десктопных и веб-версий).
   Widget _buildHeatmap(Size viewport) {
-    final n = _displayData.rowLabels.length;
+    final rowCount = _displayData.rowLabels.length;
+    final colCount = _displayData.columnLabels.length;
+    debugPrint('Кол-во строк: $rowCount, Кол-во столбцов: $colCount');
+    final cellSizeByWidth = viewport.width / colCount;
+    final cellSizeByHeight = viewport.height / rowCount;
 
-    final cellSize = (viewport.width / n).clamp(20.0, 80.0);
-
-    final totalSize = n * cellSize;
+    final cellSize = min(cellSizeByWidth, cellSizeByHeight).clamp(20.0, 80.0);
 
     final showValues = cellSize > 35;
 
@@ -288,7 +294,7 @@ class _HeatmapViewState extends State<HeatmapView>
               final col = ((localPos.dx - axisOffset) / cellSize).floor();
 
               // Проверяем, что курсор находится в пределах матрицы
-              if (row >= 0 && row < n && col >= 0 && col < n) {
+              if (row >= 0 && row < rowCount && col >= 0 && col < colCount) {
                 if (row != hoverRow || col != hoverCol) {
                   setState(() {
                     hoverRow = row;
@@ -316,16 +322,15 @@ class _HeatmapViewState extends State<HeatmapView>
               animation: _controller,
               builder: (_, __) {
                 return CustomPaint(
-                  size: Size(totalSize, totalSize),
+                  size: Size(colCount * cellSize, rowCount * cellSize),
                   painter: HeatmapPainter(
-                    matrix: _getDisplayMatrix(),
                     data: _displayData,
                     colorMapper: _currentMapper,
                     previousMapper: _previousMapper,
                     animationValue: _controller.value,
                     cellSize: cellSize,
                     showValues: showValues,
-                    showAxisLabels: widget.state.showAxisLabels,
+                    showAxisLabels: false,
                     triangleMode: widget.state.triangleMode,
                     hoverRow: hoverRow,
                     hoverCol: hoverCol,

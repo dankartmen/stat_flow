@@ -5,13 +5,45 @@ import '../../chart_state.dart';
 import '../model/heatmap_data.dart';
 import '../model/heatmap_state.dart';
 
-
+/// {@template heatmap_data_builder}
+/// Строитель данных для тепловой карты на основе датасета и состояния графика
+///
+/// Отвечает за:
+/// - Определение типа входных колонок (числовые, категориальные, текстовые)
+/// - Построение корреляционной матрицы для всех числовых полей
+/// - Построение таблицы сопряжённости для двух категориальных колонок
+/// - Построение агрегированных данных для пары "категориальная + числовая"
+/// - Обработку случаев, когда одна из колонок не указана (режим корреляции)
+///
+/// Возвращает готовый объект [HeatmapData], который может быть отрисован.
+/// {@endtemplate}
 class HeatmapDataBuilder {
+  /// Датасет, содержащий данные для построения тепловой карты
   final Dataset dataset;
+
+  /// Текущее состояние графика (выбранные колонки, тип агрегации)
   final HeatmapState state;
 
+  /// {@macro heatmap_data_builder}
   HeatmapDataBuilder(this.dataset, this.state);
 
+  /// Строит [HeatmapData] на основе текущего состояния и датасета
+  ///
+  /// Логика построения:
+  /// - Если ни одна из колонок не выбрана (state.xColumn == null && state.yColumn == null):
+  ///   возвращается корреляционная матрица всех числовых полей датасета.
+  /// - Если выбраны обе колонки, анализируются их типы:
+  ///   - Обе числовые: не поддерживается (возвращается пустая матрица).
+  ///   - Обе категориальные (текст или категория): строится таблица сопряжённости (counts).
+  ///   - Одна категориальная, другая числовая: строится агрегация (сумма, среднее и т.д.)
+  ///   по категориям.
+  /// - Если комбинация типов не поддерживается, выбрасывается исключение.
+  ///
+  /// Возвращает:
+  /// - [HeatmapData] — данные для отображения тепловой карты.
+  ///
+  /// Выбрасывает:
+  /// - [Exception] — при неподдерживаемой комбинации типов колонок.
   HeatmapData build() {
     // Режим корреляции всех числовых полей
     if (state.xColumn == null && state.yColumn == null) {
@@ -66,11 +98,21 @@ class HeatmapDataBuilder {
     throw Exception('Неподдерживаемая комбинация типов колонок для тепловой карты');
   }
 
-  /// Таблица сопряжённости (counts) для двух категориальных колонок
+  /// Строит таблицу сопряжённости для двух категориальных колонок
+  ///
+  /// Каждая ячейка матрицы содержит количество совместных появлений
+  /// соответствующих категорий.
+  ///
+  /// Принимает:
+  /// - [x] — первая категориальная колонка (строки матрицы)
+  /// - [y] — вторая категориальная колонка (столбцы матрицы)
+  ///
+  /// Возвращает:
+  /// - [HeatmapData] — матрица с частотами.
   HeatmapData _buildContingencyTable(CategoricalColumn x, CategoricalColumn y) {
     final xCategories = _uniqueCategories(x);
     final yCategories = _uniqueCategories(y);
-    
+
     final matrix = List.generate(
       xCategories.length,
       (_) => List.filled(yCategories.length, 0.0),
@@ -94,7 +136,22 @@ class HeatmapDataBuilder {
     );
   }
 
-  /// Агрегация: категориальная колонка (cat) и числовая (num)
+  /// Строит агрегированные данные для пары "категориальная + числовая"
+  ///
+  /// Для каждой категории вычисляется значение в зависимости от выбранного
+  /// типа агрегации ([AggregationType]):
+  /// - [AggregationType.count] — количество значений в категории
+  /// - [AggregationType.sum] — сумма числовых значений в категории
+  /// - [AggregationType.avg] — среднее арифметическое
+  /// - [AggregationType.min] — минимальное значение
+  /// - [AggregationType.max] — максимальное значение
+  ///
+  /// Принимает:
+  /// - [cat] — категориальная колонка (определяет строки)
+  /// - [num] — числовая колонка (значения для агрегации)
+  ///
+  /// Возвращает:
+  /// - [HeatmapData] — матрица с одной колонкой (значения по категориям).
   HeatmapData _buildAggregationTable(CategoricalColumn cat, NumericColumn num) {
     final categories = _uniqueCategories(cat);
     final counts = List.filled(categories.length, 0);
@@ -145,7 +202,13 @@ class HeatmapDataBuilder {
     );
   }
 
-  /// Получить уникальные значения из категориальной колонки (сортированные)
+  /// Возвращает отсортированный список уникальных значений категориальной колонки
+  ///
+  /// Принимает:
+  /// - [col] — категориальная колонка.
+  ///
+  /// Возвращает:
+  /// - [List<String>] — отсортированные по алфавиту уникальные значения.
   List<String> _uniqueCategories(CategoricalColumn col) {
     final set = <String>{};
     for (final v in col.data) {
@@ -154,7 +217,20 @@ class HeatmapDataBuilder {
     return set.toList()..sort();
   }
 
-  /// Приведение DataColumn к CategoricalColumn (если это TextColumn, конвертируем)
+  /// Приводит [DataColumn] к [CategoricalColumn]
+  ///
+  /// Если колонка уже [CategoricalColumn], возвращает её.
+  /// Если колонка [TextColumn], создаёт новый [CategoricalColumn] с теми же данными.
+  /// В противном случае выбрасывает исключение.
+  ///
+  /// Принимает:
+  /// - [col] — колонка для преобразования.
+  ///
+  /// Возвращает:
+  /// - [CategoricalColumn] — категориальное представление колонки.
+  ///
+  /// Выбрасывает:
+  /// - [Exception] — если колонку невозможно преобразовать.
   CategoricalColumn _toCategorical(DataColumn col) {
     if (col is CategoricalColumn) return col;
     if (col is TextColumn) {
@@ -164,11 +240,28 @@ class HeatmapDataBuilder {
     throw Exception('Невозможно преобразовать колонку ${col.name} в категориальную');
   }
 
+  /// Определяет тип колонки из перечисления [ColumnType]
+  ///
+  /// Принимает:
+  /// - [col] — колонка для анализа.
+  ///
+  /// Возвращает:
+  /// - [ColumnType] — тип колонки.
+  ///
+  /// Выбрасывает:
+  /// - [Exception] — если тип колонки неизвестен.
   ColumnType _getColumnType(DataColumn col) {
-    if (col is NumericColumn) return ColumnType.numeric;
-    if (col is DateTimeColumn) return ColumnType.dateTime;
-    if (col is CategoricalColumn) return ColumnType.categorical;
-    if (col is TextColumn) return ColumnType.text;
-    throw Exception('Неизвестный тип колонки');
+    switch (col.runtimeType) {
+      case const (NumericColumn):
+        return ColumnType.numeric;
+      case const (DateTimeColumn):
+        return ColumnType.dateTime;
+      case const (CategoricalColumn):
+        return ColumnType.categorical;
+      case const (TextColumn):
+        return ColumnType.text;
+      default:
+        throw Exception('Неизвестный тип колонки: ${col.name}');
+    }
   }
 }

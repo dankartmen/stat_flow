@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:stat_flow/core/dataset/dataset.dart';
 import '../color/heatmap_color_mapper.dart';
 import '../color/heatmap_palette.dart';
 import '../model/heatmap_state.dart';
@@ -26,8 +27,31 @@ class HeatmapControls {
   static List<Widget> build({
     required HeatmapState state,
     required ValueChanged<HeatmapState> onChanged,
+    required Dataset dataset,
   }) {
+    final isCorrelationMode = state.xColumn == null && state.yColumn == null;
+
     return [
+      Column(
+        children: [
+          Radio<bool>(
+            value: true,
+            groupValue: isCorrelationMode,
+            onChanged: (_) => onChanged(state.copyWith(xColumn: null, yColumn: null)),
+          ),
+          const Text('Все числовые поля (корреляция)'),
+          Radio<bool>(
+            value: false,
+            groupValue: isCorrelationMode,
+            onChanged: (_) => onChanged(state.copyWith(xColumn: '', yColumn: '')), // временно
+          ),
+          const Text('Выбрать оси'),
+        ],
+      ),
+      if (!isCorrelationMode) ...[
+        const SizedBox(height: 16),
+        _buildAxisSelectors(state, onChanged, dataset),
+      ],
       // Выбор палитры
       DropdownButton<HeatmapPalette>(
         value: state.palette,
@@ -87,5 +111,47 @@ class HeatmapControls {
         ),
       ),
     ];
+  }
+  
+  static Widget _buildAxisSelectors(
+    HeatmapState state,
+    ValueChanged<HeatmapState> onChanged,
+    Dataset dataset,
+  ) {
+    final columns = dataset.columns;
+    final columnNames = columns.map((c) => c.name).toList();
+
+    return Column(
+      children: [
+        DropdownButtonFormField<String>(
+          value: state.xColumn?.isNotEmpty == true ? state.xColumn : null,
+          hint: const Text('X ось'),
+          items: columnNames.map((name) => DropdownMenuItem(value: name, child: Text(name))).toList(),
+          onChanged: (value) => onChanged(state.copyWith(xColumn: value)),
+        ),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<String>(
+          value: state.yColumn?.isNotEmpty == true ? state.yColumn : null,
+          hint: const Text('Y ось'),
+          items: columnNames.map((name) => DropdownMenuItem(value: name, child: Text(name))).toList(),
+          onChanged: (value) => onChanged(state.copyWith(yColumn: value)),
+        ),
+        if (_isNumericColumn(dataset, state.yColumn))
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: DropdownButtonFormField<AggregationType>(
+              value: state.aggregationType,
+              items: AggregationType.values.map((a) => DropdownMenuItem(value: a, child: Text(a.name))).toList(),
+              onChanged: (value) => onChanged(state.copyWith(aggregationType: value!)),
+            ),
+          ),
+      ],
+    );
+  }
+
+  static bool _isNumericColumn(Dataset dataset, String? columnName) {
+    if (columnName == null) return false;
+    final col = dataset.column(columnName);
+    return col is NumericColumn;
   }
 }

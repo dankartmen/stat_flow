@@ -42,38 +42,50 @@ class _FullTableScreenState extends State<FullTableScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Полная таблица данных'),
-        backgroundColor: Colors.blue,
-        foregroundColor: Colors.white,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
-        actions: [ 
-          // Информация о датасете
-          _buildDatasetInfo(),
+    return Container(
+      color: Colors.white,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Датасет: ${widget.dataset.name}',
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+          ),
+          const Divider(),
+          Expanded(
+            child: SfDataGrid(
+              source: _gridData.source,
+              columns: _gridData.columns,
+              gridLinesVisibility: GridLinesVisibility.both,
+              headerGridLinesVisibility: GridLinesVisibility.both,
+              allowSorting: true,
+              allowMultiColumnSorting: true,
+              allowTriStateSorting: true,
+              allowFiltering: true,
+              allowColumnsResizing: true,
+              selectionMode: SelectionMode.multiple,
+              navigationMode: GridNavigationMode.cell,
+              columnWidthMode: ColumnWidthMode.auto,
+              defaultColumnWidth: 100.0,
+              rowHeight: 40.0,
+              headerRowHeight: 50.0,
+              isScrollbarAlwaysShown: true,
+              frozenColumnsCount: 0,
+            ),
+          ),
         ],
-      ),
-      body: SfDataGrid(
-        source: _gridData.source,
-        columns: _gridData.columns,
-        gridLinesVisibility: GridLinesVisibility.both,
-        headerGridLinesVisibility: GridLinesVisibility.both,
-        allowSorting: true,
-        allowMultiColumnSorting: true,
-        allowTriStateSorting: true,
-        allowFiltering: true,
-        allowColumnsResizing: true,
-        selectionMode: SelectionMode.multiple,
-        navigationMode: GridNavigationMode.cell,
-        columnWidthMode: ColumnWidthMode.auto,
-        defaultColumnWidth: 100.0,
-        rowHeight: 40.0,
-        headerRowHeight: 50.0,
-        isScrollbarAlwaysShown: true,
-        frozenColumnsCount: 0,
       ),
     );
   }

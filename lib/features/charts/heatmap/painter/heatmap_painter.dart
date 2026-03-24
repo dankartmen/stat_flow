@@ -22,9 +22,7 @@ import '../color/heatmap_color_mapper.dart';
 /// - Минимизация создания объектов в методе paint
 /// {@endtemplate}
 class HeatmapPainter extends CustomPainter {
-  /// Матрица корреляции для визуализации
-  final CorrelationMatrix matrix;
-
+  /// Данные для отображения тепловой карты
   final HeatmapData data;
 
   /// Текущий маппер цветов
@@ -65,7 +63,6 @@ class HeatmapPainter extends CustomPainter {
     this.showValues = true,
     this.showAxisLabels = false,
     this.showPercentage = true,
-    required this.matrix,
     required this.data,
     required this.colorMapper,
     required this.previousMapper,
@@ -139,7 +136,9 @@ class HeatmapPainter extends CustomPainter {
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
 
-    final n = matrix.size;
+    final rowCount = data.rowLabels.length;
+    final colCount = data.columnLabels.length;
+    final n = rowCount > colCount ? rowCount : colCount;
     final axisOffset = showLabels ? cellSize : 0.0; // Отступ от края для подписей
 
     final gridPaint = Paint()
@@ -147,20 +146,23 @@ class HeatmapPainter extends CustomPainter {
       ..strokeWidth = 0.5
       ..style = PaintingStyle.stroke;
 
-    final total = cellSize * n + axisOffset;
     final path = Path();
 
     // Рисуем горизонтальные и вертикальные линии сетки
     for (int i = 0; i <= n; i++) {
       final pos = axisOffset + i * cellSize;
 
-      // Горизонтальная линия
-      path.moveTo(axisOffset, pos);
-      path.lineTo(total, pos);
+      if (i < rowCount){
+        // Горизонтальная линия
+        path.moveTo(axisOffset, pos);
+        path.lineTo(axisOffset + colCount * cellSize, pos);
+      }
 
-      // Вертикальная линия
-      path.moveTo(pos, axisOffset);
-      path.lineTo(pos, total);
+      if (i < colCount) {
+        // Вертикальная линия
+        path.moveTo(pos, axisOffset);
+        path.lineTo(pos, axisOffset + rowCount * cellSize);
+      }
     }
     canvas.drawPath(path, gridPaint);
 
@@ -170,7 +172,7 @@ class HeatmapPainter extends CustomPainter {
       final step = _computeLabelStep();
 
       for (int i = 0; i < n; i += step) {
-        final label = _smartLabel(matrix.fieldNames[i], max: 6);
+        final label = _smartLabel(data.columnLabels[i], max: 6);
 
         final style = TextStyle(
           fontSize: cellSize * 0.25, // Размер шрифта относительно ячейки
@@ -185,26 +187,33 @@ class HeatmapPainter extends CustomPainter {
         // Перемещаемся к верхней части колонки
         canvas.translate(
           axisOffset + i * cellSize + cellSize / 2,
-          axisOffset - 6,
+          -axisOffset + 6,
         );
 
         canvas.rotate(angle); // Поворачиваем для лучшей читаемости
 
-        tp.paint(
-          canvas,
-          Offset(-tp.width / 2 + 37, -tp.height), // Смещение для повернутого текста
-        );
+        if (i < colCount) {
+          // Рисуем подпись колонки
+          tp.paint(
+            canvas,
+            Offset(-tp.width / 2 + 37, -tp.height), // Смещение для повернутого текста
+          );
+        }
+        
 
         canvas.restore();
 
-        // Подписи для строк (слева)
-        tp.paint(
-          canvas,
-          Offset(
-            -axisOffset, // Слева от сетки
-            axisOffset + i * cellSize + cellSize / 2 - tp.height / 2,
-          ),
-        );
+        // Рисуем подпись строки
+        if (i < rowCount) {  
+          // Подписи для строк (слева)
+          tp.paint(
+            canvas,
+            Offset(
+              -axisOffset, // Слева от сетки
+              axisOffset + i * cellSize + cellSize / 2 - tp.height / 2,
+            ),
+          );
+        }
       }
     }
 
@@ -295,8 +304,12 @@ class HeatmapPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final n = data.rowLabels.length;
-    if (n == 0) return;
+    final rowCount = data.rowLabels.length;
+    final colCount = data.columnLabels.length;
+    if (rowCount == 0 || colCount == 0) return;
+    
+    final isSquare = rowCount == colCount;
+    final effectiveTriangleMode = triangleMode && isSquare;
 
     final axisOffset = showAxisLabels ? cellSize : 0.0;
 
@@ -306,10 +319,10 @@ class HeatmapPainter extends CustomPainter {
 
     // Отрисовка ячеек тепловой карты (динамический слой)
     // Этот слой перерисовывается при каждом изменении из-за анимации
-    for (int row = 0; row < n; row++) {
-      for (int col = 0; col < n; col++) {
+    for (int row = 0; row < rowCount; row++) {
+      for (int col = 0; col < colCount; col++) {
         // В режиме треугольника пропускаем нижнюю половину
-        if (triangleMode && col < row) continue;
+        if (effectiveTriangleMode && col < row) continue;
 
         final value = data.values[row][col];
 
@@ -371,7 +384,7 @@ class HeatmapPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant HeatmapPainter old) {
     // Перерисовываем только если изменились параметры
-    return old.matrix != matrix ||
+    return old.data != data ||
         old.colorMapper != colorMapper ||
         old.previousMapper != previousMapper ||
         old.animationValue != animationValue ||

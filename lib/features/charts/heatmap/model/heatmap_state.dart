@@ -4,7 +4,7 @@ import '../color/heatmap_palette.dart';
 
 enum NormalizeMode { none, row, column, total }
 enum SortMode { none, alphabetic, byValueAsc, byValueDesc }
-
+enum AggregationType { count, sum, avg, min, max }
 
 /// {@template heatmap_state}
 /// Состояние тепловой карты для системы плагинов
@@ -57,6 +57,14 @@ class HeatmapState extends ChartState {
   /// Показывать ли проценты вместо абсолютных значений в ячейках
   bool showPercentage;
   
+  /// Имя колонки для X оси (если null — режим корреляции всех числовых)
+  String? xColumn;
+
+  /// Имя колонки для Y оси (если null — режим корреляции всех числовых)
+  String? yColumn;
+
+  /// Тип агрегации, когда Y колонка числовая
+  AggregationType aggregationType;
   /// {@macro heatmap_state}
   HeatmapState({
     this.showAxisLabels = false,
@@ -66,11 +74,14 @@ class HeatmapState extends ChartState {
     this.triangleMode = false,
     this.clusterEnabled = false,
     this.colorMode = HeatmapColorMode.discrete,
-    this.normalizeMode = NormalizeMode.row,
+    this.normalizeMode = NormalizeMode.none,
     this.sortX = SortMode.none,
     this.sortY = SortMode.none,
     this.scaleType = ColorScaleType.linear,
     this.showPercentage = false,
+    this.xColumn,
+    this.yColumn,
+    this.aggregationType = AggregationType.count,
   });
 
 
@@ -88,6 +99,9 @@ class HeatmapState extends ChartState {
     SortMode? sortY,
     ColorScaleType? scaleType,
     bool? showPercentage,
+    String? xColumn,
+    String? yColumn,
+    AggregationType? aggregationType,
   }) {
     return HeatmapState(
       palette: palette ?? this.palette,
@@ -102,6 +116,9 @@ class HeatmapState extends ChartState {
       sortY: sortY ?? this.sortY,
       scaleType: scaleType ?? this.scaleType,
       showPercentage: showPercentage ?? this.showPercentage,
+      xColumn: xColumn ?? this.xColumn,
+      yColumn: yColumn ?? this.yColumn,
+      aggregationType: aggregationType ?? this.aggregationType,
     );
   }
 }

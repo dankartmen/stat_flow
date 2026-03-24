@@ -11,6 +11,9 @@ import '../../features/charts/histogram/histogram_state.dart';
 import '../../features/charts/line_chart/line_state.dart';
 import '../../features/charts/scatterplot/scatter_state.dart';
 
+/// Тип текущего отображаемого экрана
+enum ScreenType { canvas, data }
+
 /// Провайдер для хранения текущего загруженного датасета
 /// 
 /// Изначально равен `null`. Устанавливается после успешной загрузки CSV-файла
@@ -31,6 +34,13 @@ final rightPanelExpandedProvider = StateProvider<bool>((ref) => true);
 /// - Отображения контекстной панели управления (TopControlPanel)
 /// - Определения, какой график получает фокус при взаимодействии
 final selectedChartIdProvider = StateProvider<int?>((ref) => null);
+
+/// Провайдер текущего экрана
+/// 
+/// Хранит тип текущего отображаемого экрана (канвас или данные). Используется для
+/// переключения между основным рабочим пространством (канвасом) и панелью с данными (список колонок, предпросмотр данных).
+/// При загрузке приложения по умолчанию установлен на `ScreenType.canvas`.
+final currentScreenProvider = StateProvider<ScreenType>((ref) => ScreenType.canvas);
 
 /// {@template charts_notifier}
 /// Управляет списком плавающих графиков на канвасе
