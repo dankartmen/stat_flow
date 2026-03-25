@@ -19,7 +19,7 @@ import 'correlation_matrix.dart';
 /// - Любых двумерных числовых данных
 /// {@endtemplate}
 class HeatmapData {
-  /// Подписи строк (обычно названия признаков или категорий)
+  /// Подписи строк
   final List<String> rowLabels;
   
   /// Подписи столбцов

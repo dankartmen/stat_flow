@@ -92,7 +92,7 @@ class _FloatingChartState extends State<FloatingChart> {
   static const _headerHeight = 36.0;
 
   /// Минимальный размер окна
-  final Size _minSize = const Size(50, 200);
+  final Size _minSize = const Size(100, 200);
 
   /// Максимальный размер окна (ограничение)
   static const _maxSize = 4000.0;

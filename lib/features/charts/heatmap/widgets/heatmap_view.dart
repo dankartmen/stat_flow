@@ -1,5 +1,5 @@
-import 'dart:math';
-
+import 'dart:math' show min, max;
+import 'dart:developer' show log;
 import 'package:flutter/material.dart';
 import 'package:stat_flow/features/charts/heatmap/widgets/heatmap_legend.dart';
 
@@ -277,21 +277,32 @@ class _HeatmapViewState extends State<HeatmapView>
     }
     final axisOffset = widget.state.showAxisLabels ? 40.0 : 0.0;
 
-    final availableWidth = MediaQuery.of(context).size.width - axisOffset;
-    final availableHeight = MediaQuery.of(context).size.height - axisOffset;
-  
-    final cellSizeByWidth = availableWidth / colCount;
-    final cellSizeByHeight = availableHeight / rowCount;
-
-    double cellSize = min(cellSizeByWidth, cellSizeByHeight).clamp(20.0, 80.0);
-
-
-    final showValues = cellSize > 35;
-
-    final totalWidth = colCount * cellSize + axisOffset;
-    final totalHeight = rowCount * cellSize + axisOffset;
     return LayoutBuilder(
       builder: (context, constraints){
+        final availableWidth =constraints.maxWidth - axisOffset;
+        final availableHeight = constraints.maxHeight - axisOffset;
+      
+        double cellSizeByWidth = availableWidth / colCount;
+        double cellSizeByHeight = availableHeight / rowCount;
+
+        log(name: 'HeatmapView', 'cellSizeByWidth: $cellSizeByWidth, cellSizeByHeight: $cellSizeByHeight');
+        log(name: 'HeatmapView', 'availableWidth: $availableWidth, availableHeight: $availableHeight');
+
+        // Если матрица квадратная, делаем ячейки квадратными
+        if (rowCount == colCount) {
+          final cellSize = min(cellSizeByWidth, cellSizeByHeight);
+          cellSizeByWidth = cellSize;
+          cellSizeByHeight = cellSize;
+        }
+
+        cellSizeByWidth = cellSizeByWidth.clamp(20.0, 200.0);
+        cellSizeByHeight = cellSizeByHeight.clamp(20.0, 200.0);
+
+        final showValues = min(cellSizeByWidth, cellSizeByHeight) > 35;
+
+        final totalWidth = colCount * cellSizeByWidth + axisOffset;
+        final totalHeight = rowCount * cellSizeByHeight + axisOffset;
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -311,8 +322,8 @@ class _HeatmapViewState extends State<HeatmapView>
                     // Вычисляем индекс ячейки под курсором.
                     // Вычитаем cellSize для учета отступа под подписи осей,
                     // который добавляется в HeatmapPainter.
-                    final row = ((localPos.dy - axisOffset) / cellSize).floor();
-                    final col = ((localPos.dx - axisOffset) / cellSize).floor();
+                    final row = ((localPos.dy - axisOffset) / cellSizeByHeight).floor();
+                    final col = ((localPos.dx - axisOffset) / cellSizeByWidth).floor();
           
                     // Проверяем, что курсор находится в пределах матрицы
                     if (row >= 0 && row < rowCount && col >= 0 && col < colCount) {
@@ -350,7 +361,8 @@ class _HeatmapViewState extends State<HeatmapView>
                           colorMapper: _currentMapper,
                           previousMapper: _previousMapper,
                           animationValue: _controller.value,
-                          cellSize: cellSize,
+                          cellWidth: cellSizeByWidth,
+                          cellHeight: cellSizeByHeight,
                           showValues: showValues,
                           showAxisLabels: false,
                           triangleMode: widget.state.triangleMode,

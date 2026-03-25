@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -34,8 +35,11 @@ class HeatmapPainter extends CustomPainter {
   /// Значение анимации перехода между мапперами (0..1)
   final double animationValue;
 
-  /// Размер ячейки в пикселях
-  final double cellSize;
+  /// Ширина ячейки в пикселях
+  final double cellWidth;
+
+  /// Высота ячейки в пикселях
+  final double cellHeight;
 
   /// Отображать ли значения внутри ячеек
   final bool showValues;
@@ -71,7 +75,8 @@ class HeatmapPainter extends CustomPainter {
     required this.colorMapper,
     required this.previousMapper,
     required this.animationValue,
-    required this.cellSize,
+    required this.cellWidth,
+    required this.cellHeight,
     required this.axisOffset,
   });
 
@@ -102,7 +107,7 @@ class HeatmapPainter extends CustomPainter {
     ..strokeWidth = 1;
 
   /// Генерирует ключ для кэша статического слоя.
-  String _staticLayerKey() => '${data.rowLabels.length}_${data.columnLabels.length}_${cellSize}_${axisOffset}_$showAxisLabels';
+  String _staticLayerKey() => '${data.rowLabels.length}_${data.columnLabels.length}_${cellWidth}_${cellHeight}_${axisOffset}_$showAxisLabels';
 
   /// Получает или создает TextPainter для заданного текста и стиля.
   ///
@@ -149,7 +154,6 @@ class HeatmapPainter extends CustomPainter {
 
     final rowCount = data.rowLabels.length;
     final colCount = data.columnLabels.length;
-    final n = rowCount > colCount ? rowCount : colCount;
 
     final gridPaint = Paint()
       ..color = Colors.grey.shade300
@@ -158,72 +162,59 @@ class HeatmapPainter extends CustomPainter {
 
     final path = Path();
 
-    // Рисуем горизонтальные и вертикальные линии сетки
-    for (int i = 0; i <= n; i++) {
-      final pos = axisOffset + i * cellSize;
+    final totalWidth = colCount * cellWidth + axisOffset;
+    final totalHeight = rowCount * cellHeight + axisOffset;
 
-      if (i < rowCount){
-        // Горизонтальная линия
-        path.moveTo(axisOffset, pos);
-        path.lineTo(axisOffset + colCount * cellSize, pos);
-      }
-
-      if (i < colCount) {
-        // Вертикальная линия
-        path.moveTo(pos, axisOffset);
-        path.lineTo(pos, axisOffset + rowCount * cellSize);
-      }
+    // Горизонтальные линии
+    for (int i = 0; i <= rowCount; i++) {
+      final y = axisOffset + i * cellHeight;
+      canvas.drawLine(Offset(axisOffset, y), Offset(totalWidth, y), gridPaint);
     }
-    canvas.drawPath(path, gridPaint);
 
-    if (showLabels) {
-      // Отрисовка подписей осей
+    // Вертикальные линии
+    for (int i = 0; i <= colCount; i++) {
+      final x = axisOffset + i * cellWidth;
+      canvas.drawLine(Offset(x, axisOffset), Offset(x, totalHeight), gridPaint);
+    }
+
+    if (showAxisLabels) {
       final angle = _computeLabelAngle();
-      final step = _computeLabelStep();
-
-      for (int i = 0; i < n; i += step) {
-        final label = _smartLabel(data.columnLabels[i], max: 6);
-
+      final stepRows = _computeLabelStep(cellHeight);
+      final stepCols = _computeLabelStep(cellWidth);
+    
+      // Подписи строк (слева)
+      for (int i = 0; i < rowCount; i += stepRows) {
+        final label = _smartLabel(data.rowLabels[i], max: 6);
         final style = TextStyle(
-          fontSize: cellSize * 0.25, // Размер шрифта относительно ячейки
+          fontSize: min(cellHeight, cellWidth) * 0.25,
           color: Colors.black,
         );
-
         final tp = _getTextPainter(label, style);
-
-        // Подписи для колонок (сверху)
-        canvas.save();
-
-        // Перемещаемся к верхней части колонки
-        canvas.translate(
-          axisOffset + i * cellSize + cellSize / 2,
-          -axisOffset + 6,
+        tp.paint(
+          canvas,
+          Offset(
+            axisOffset - tp.width - 4,
+            axisOffset + i * cellHeight + cellHeight / 2 - tp.height / 2,
+          ),
         );
+      }
 
-        canvas.rotate(angle); // Поворачиваем для лучшей читаемости
-
-        if (i < colCount) {
-          // Рисуем подпись колонки
-          tp.paint(
-            canvas,
-            Offset(-tp.width / 2 + 37, -tp.height), // Смещение для повернутого текста
-          );
-        }
-        
-
+      // Подписи колонок (сверху)
+      for (int i = 0; i < colCount; i += stepCols) {
+        final label = _smartLabel(data.columnLabels[i], max: 6);
+        final style = TextStyle(
+          fontSize: min(cellHeight, cellWidth) * 0.25,
+          color: Colors.black,
+        );
+        final tp = _getTextPainter(label, style);
+        canvas.save();
+        canvas.translate(
+          axisOffset + i * cellWidth + cellWidth / 2,
+          axisOffset - 6,
+        );
+        canvas.rotate(angle);
+        tp.paint(canvas, Offset(-tp.width / 2, -tp.height));
         canvas.restore();
-
-        // Рисуем подпись строки
-        if (i < rowCount) {  
-          // Подписи для строк (слева)
-          tp.paint(
-            canvas,
-            Offset(
-              -axisOffset, // Слева от сетки
-              axisOffset + i * cellSize + cellSize / 2 - tp.height / 2,
-            ),
-          );
-        }
       }
     }
 
@@ -263,8 +254,8 @@ class HeatmapPainter extends CustomPainter {
 
     final tp = _tooltipPainter!;
 
-    final x = axisOffset + col * cellSize + cellSize + 6;
-    final y = axisOffset + row * cellSize - tp.height / 2;
+    final x = axisOffset + col * cellWidth + cellWidth + 6;
+    final y = axisOffset + row * cellHeight - tp.height / 2;
 
     final rect = Rect.fromLTWH(
       x - 6,
@@ -302,17 +293,18 @@ class HeatmapPainter extends CustomPainter {
   ///
   /// При маленьких ячейках поворачиваем сильнее для экономии места.
   double _computeLabelAngle() {
-    if (cellSize > 90) return 0;        // Большие ячейки - без наклона
-    if (cellSize > 55) return -0.6;     // Средние - небольшой наклон
+    final minDim = min(cellWidth, cellHeight);
+    if (minDim > 90) return 0;
+    if (minDim > 55) return -0.6;
     return -1.5708;                     // Маленькие - вертикально (-90°)
   }
 
   /// Вычисляет шаг отображения подписей для перегруженных матриц.
   ///
   /// При маленьких ячейках показываем подписи реже, чтобы избежать наложения.
-  int _computeLabelStep() {
-    if (cellSize > 39) return 1;         // Крупные ячейки - все подписи
-    if (cellSize > 25) return 2;         // Средние - каждую вторую
+  int _computeLabelStep(double cellDim) {
+    if (cellDim > 39) return 1;         // Крупные ячейки - все подписи
+    if (cellDim > 25) return 2;         // Средние - каждую вторую
     return 4;                             // Мелкие - каждую четвертую
   }
 
@@ -346,16 +338,16 @@ class HeatmapPainter extends CustomPainter {
         _paint.color = _getAnimatedColor(value);
 
         final rect = Rect.fromLTWH(
-          axisOffset + col * cellSize,
-          axisOffset + row * cellSize,
-          cellSize,
-          cellSize,
+          axisOffset + col * cellWidth,
+          axisOffset + row * cellHeight,
+          cellWidth,
+          cellHeight,
         );
 
         canvas.drawRect(rect, _paint);
 
         // Отображение значений внутри ячеек
-        if (showValues && cellSize > 25) { // Не показываем в слишком мелких ячейках
+        if (showValues && min(cellWidth, cellHeight) > 25) { // Не показываем в слишком мелких ячейках
           String suffix = '';
           double displayValue = value;
           if (percentageMode != PercentageMode.none) {
@@ -365,7 +357,7 @@ class HeatmapPainter extends CustomPainter {
           final tp = _getTextPainter(
             displayValue.toStringAsFixed(displayValue.abs() < 10 ? 2 : 1) + suffix,
             TextStyle(
-              fontSize: cellSize * 0.3,
+              fontSize: min(cellWidth, cellHeight) * 0.3,
               // Контрастный цвет текста в зависимости от яркости фона
               color: value.abs() > 0.5 ? Colors.white : Colors.black,
               fontWeight: FontWeight.bold,
@@ -388,11 +380,11 @@ class HeatmapPainter extends CustomPainter {
 
     // Подсветка ячейки под курсором и тултип
     if (hoverRow != null && hoverCol != null) {
-      double left = axisOffset + hoverCol! * cellSize;
-      double top = axisOffset + hoverRow! * cellSize;
+      double left = axisOffset + hoverCol! * cellWidth;
+      double top = axisOffset + hoverRow! * cellHeight;
 
       canvas.drawRect(
-        Rect.fromLTWH(left, top, cellSize, cellSize),
+        Rect.fromLTWH(left, top, cellWidth, cellHeight),
         _highlightPaint,
       );
       _drawTooltip(canvas, hoverRow!, hoverCol!);
@@ -407,7 +399,8 @@ class HeatmapPainter extends CustomPainter {
         old.colorMapper != colorMapper ||
         old.previousMapper != previousMapper ||
         old.animationValue != animationValue ||
-        old.cellSize != cellSize ||
+        old.cellWidth != cellWidth ||
+        old.cellHeight != cellHeight ||
         old.triangleMode != triangleMode ||
         old.showValues != showValues ||
         old.hoverRow != hoverRow ||
