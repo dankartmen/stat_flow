@@ -6,6 +6,7 @@ import 'package:stat_flow/features/charts/heatmap/model/heatmap_data.dart';
 
 import '../color/heatmap_color_mapper.dart';
 import '../model/heatmap_state.dart';
+import '../model/hover_range.dart';
 
 /// {@template heatmap_painter}
 /// Кастомный рисовальщик для отрисовки тепловой карты корреляции.
@@ -63,6 +64,9 @@ class HeatmapPainter extends CustomPainter {
   /// Смещение от края для подписей осей 
   final double axisOffset;
 
+  /// Информация о наведении на легенду для подсветки соответствующих ячеек
+  final HoverRange? hoverRange;
+
   /// {@macro heatmap_painter}
   HeatmapPainter({
     this.hoverRow,
@@ -78,6 +82,7 @@ class HeatmapPainter extends CustomPainter {
     required this.cellWidth,
     required this.cellHeight,
     required this.axisOffset,
+    required this.hoverRange,
   });
 
   /// Кэш статического слоя (сетка + подписи осей).
@@ -374,6 +379,37 @@ class HeatmapPainter extends CustomPainter {
               rect.center.dy - tp.height / 2,
             ),
           );
+        }
+      }
+    }
+
+    if (hoverRange != null) {
+      final highlightPaint = Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.0;
+
+      for (int row = 0; row < rowCount; row++) {
+        for (int col = 0; col < colCount; col++) {
+          final value = data.values[row][col];
+          bool match = false;
+          if (hoverRange!.value != null) {
+            // градиентный режим – выделяем ячейки, значение которых близко к hoveredValue
+            const tolerance = 0.05;
+            match = (value - hoverRange!.value!).abs() < tolerance;
+          } else if (hoverRange!.min != null && hoverRange!.max != null) {
+            // дискретный режим
+            match = value >= hoverRange!.min! && value <= hoverRange!.max!;
+          }
+          if (match) {
+            final rect = Rect.fromLTWH(
+              axisOffset + col * cellWidth,
+              axisOffset + row * cellHeight,
+              cellWidth,
+              cellHeight,
+            );
+            canvas.drawRect(rect, highlightPaint);
+          }
         }
       }
     }

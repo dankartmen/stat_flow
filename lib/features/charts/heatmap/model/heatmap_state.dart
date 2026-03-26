@@ -1,6 +1,7 @@
 import '../../chart_state.dart';
 import '../color/heatmap_color_mapper.dart';
 import '../color/heatmap_palette.dart';
+import 'hover_range.dart';
 
 enum NormalizeMode { none, row, column, total }
 enum SortMode { none, alphabetic, byValueAsc, byValueDesc }
@@ -66,7 +67,9 @@ class HeatmapState extends ChartState {
 
   /// Режим отображения значений в процентах
   PercentageMode percentageMode;
-
+  /// Информация о наведении на легенду для подсветки соответствующих ячеек
+  HoverRange? hoverRange;
+  
   /// {@macro heatmap_state}
   HeatmapState({
     this.showAxisLabels = false,
@@ -84,6 +87,7 @@ class HeatmapState extends ChartState {
     this.yColumn,
     this.aggregationType = AggregationType.count,
     this.percentageMode = PercentageMode.none,
+    this.hoverRange,
   });
 
 
@@ -91,6 +95,7 @@ class HeatmapState extends ChartState {
   HeatmapState copyWith({
     HeatmapPalette? palette,
     int? segments,
+    HoverRange? hoverRange,
     bool? showAxisLabels,
     bool? showValues,
     bool? triangleMode,
@@ -108,6 +113,7 @@ class HeatmapState extends ChartState {
     return HeatmapState(
       palette: palette ?? this.palette,
       segments: segments ?? this.segments,
+      hoverRange: hoverRange ?? this.hoverRange,
       showAxisLabels: showAxisLabels ?? this.showAxisLabels,
       showValues: showValues ?? this.showValues,
       triangleMode: triangleMode ?? this.triangleMode,

@@ -9,6 +9,7 @@ import '../model/correlation_clusterer.dart';
 import '../color/heatmap_color_mapper.dart';
 import '../model/heatmap_data.dart';
 import '../model/heatmap_state.dart';
+import '../model/hover_range.dart';
 import '../painter/heatmap_painter.dart';
 import '../color/heatmap_palette.dart';
 
@@ -76,7 +77,10 @@ class _HeatmapViewState extends State<HeatmapView>
 
   /// Future для асинхронного вычисления данных  
   Future<HeatmapData>? _computeFuture;
-
+  /// Диапазон значений, соответствующий наведению на легенду.
+  /// Используется для подсветки ячеек с близкими значениями.
+  HoverRange? _hoverRange;
+  
   @override
   void initState() {
     super.initState();
@@ -98,12 +102,12 @@ class _HeatmapViewState extends State<HeatmapView>
     if (widget.state != oldWidget.state ||
         widget.dataset != oldWidget.dataset) {
       _startComputation();
-      if (_displayData?.rowLabels.isEmpty != null){
+      if (_displayData?.rowLabels.isEmpty != null && _displayData?.columnLabels.isEmpty != null && widget.state.xColumn == null && widget.state.yColumn == null) {
         _currentMin = _displayData!.min;
         _currentMax = _displayData!.max;
       }
       else{
-        _currentMin = 0;
+        _currentMin = -1;
         _currentMax = 1; 
       }
     }
@@ -232,7 +236,7 @@ class _HeatmapViewState extends State<HeatmapView>
       _currentMax = _displayData!.max;
     }
     else{
-      _currentMin = 0;
+      _currentMin = -1;
       _currentMax = 1; 
     }
     if (widget.state.colorMode == HeatmapColorMode.discrete) {      
@@ -251,6 +255,10 @@ class _HeatmapViewState extends State<HeatmapView>
     }
   }
 
+  /// Обработчик наведения на легенду. Обновляет [_hoverRange] для подсветки ячеек.
+  void _onLegendHover(HoverRange? range) {
+    setState(() => _hoverRange = range);
+  }
 
   /// Построение виджета тепловой карты с поддержкой масштабирования.
   ///
@@ -279,8 +287,8 @@ class _HeatmapViewState extends State<HeatmapView>
 
     return LayoutBuilder(
       builder: (context, constraints){
-        final availableWidth =constraints.maxWidth - axisOffset;
-        final availableHeight = constraints.maxHeight - axisOffset;
+        final availableWidth = constraints.maxWidth - axisOffset - 16; // Учитываем отступы и место для легенды
+        final availableHeight = constraints.maxHeight - axisOffset - 60; // Учитываем место для легенды
       
         double cellSizeByWidth = availableWidth / colCount;
         double cellSizeByHeight = availableHeight / rowCount;
@@ -289,14 +297,14 @@ class _HeatmapViewState extends State<HeatmapView>
         log(name: 'HeatmapView', 'availableWidth: $availableWidth, availableHeight: $availableHeight');
 
         // Если матрица квадратная, делаем ячейки квадратными
-        if (rowCount == colCount) {
-          final cellSize = min(cellSizeByWidth, cellSizeByHeight);
-          cellSizeByWidth = cellSize;
-          cellSizeByHeight = cellSize;
-        }
+        // if (rowCount == colCount) {
+        //   final cellSize = min(cellSizeByWidth, cellSizeByHeight);
+        //   cellSizeByWidth = cellSize;
+        //   cellSizeByHeight = cellSize;
+        // }
 
-        cellSizeByWidth = cellSizeByWidth.clamp(20.0, 200.0);
-        cellSizeByHeight = cellSizeByHeight.clamp(20.0, 200.0);
+        cellSizeByWidth = cellSizeByWidth.clamp(0.0, 200.0);
+        cellSizeByHeight = cellSizeByHeight.clamp(0.0, 200.0);
 
         final showValues = min(cellSizeByWidth, cellSizeByHeight) > 35;
 
@@ -368,6 +376,7 @@ class _HeatmapViewState extends State<HeatmapView>
                           triangleMode: widget.state.triangleMode,
                           hoverRow: hoverRow,
                           hoverCol: hoverCol,
+                          hoverRange: _hoverRange,
                           percentageMode: widget.state.percentageMode,
                         ),
                       );
@@ -381,6 +390,8 @@ class _HeatmapViewState extends State<HeatmapView>
               min: _currentMin!,
               max: _currentMax!,
               segments: widget.state.segments,
+              onHover: _onLegendHover,
+              colorMode: widget.state.colorMode,
             ),
           ],
         );
