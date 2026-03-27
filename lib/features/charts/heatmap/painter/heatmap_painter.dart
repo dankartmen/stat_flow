@@ -395,7 +395,7 @@ class HeatmapPainter extends CustomPainter {
           bool match = false;
           if (hoverRange!.value != null) {
             // градиентный режим – выделяем ячейки, значение которых близко к hoveredValue
-            const tolerance = 0.05;
+            const tolerance = 0.005;
             match = (value - hoverRange!.value!).abs() < tolerance;
           } else if (hoverRange!.min != null && hoverRange!.max != null) {
             // дискретный режим

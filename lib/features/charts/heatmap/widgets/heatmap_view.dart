@@ -84,14 +84,11 @@ class _HeatmapViewState extends State<HeatmapView>
   @override
   void initState() {
     super.initState();
-    _startComputation();
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 350),
     );
-    // Создание начального маппера на основе текущих настроек
-    _currentMapper = _createMapper();
-    _previousMapper = _currentMapper; // Начальное состояние без анимации
+    _startComputation();
   }
 
   @override
@@ -102,28 +99,17 @@ class _HeatmapViewState extends State<HeatmapView>
     if (widget.state != oldWidget.state ||
         widget.dataset != oldWidget.dataset) {
       _startComputation();
-      if (_displayData?.rowLabels.isEmpty != null && _displayData?.columnLabels.isEmpty != null && widget.state.xColumn == null && widget.state.yColumn == null) {
-        _currentMin = _displayData!.min;
-        _currentMax = _displayData!.max;
-      }
-      else{
-        _currentMin = -1;
-        _currentMax = 1; 
-      }
     }
 
     // Проверяем, изменились ли параметры, влияющие на цветовую схему
     if (oldWidget.state.palette != widget.state.palette ||
         oldWidget.state.segments != widget.state.segments ||
         oldWidget.state.colorMode != widget.state.colorMode) {
-      // Сохраняем текущий маппер как предыдущий для анимации перехода
-      _previousMapper = _currentMapper;
-
-      // Создаем новый маппер с обновленными настройками
-      _currentMapper = _createMapper();
-
-      // Запускаем анимацию перехода от старой цветовой схемы к новой
-      _controller.forward(from: 0);
+      if (_displayData != null) {
+        _previousMapper = _currentMapper;
+        _currentMapper = _createMapper();
+        _controller.forward(from: 0);
+      }
     }
   }
 
@@ -142,6 +128,17 @@ class _HeatmapViewState extends State<HeatmapView>
     }
     return _buildHeatmap();
   }
+
+  /// Обработчик готовности данных. Устанавливает [_displayData] и обновляет мапперы цветов.
+  void _onDataReady(HeatmapData data) {
+      if (!mounted) return;
+      setState(() {
+        _displayData = data;
+        _currentMapper = _createMapper();
+        _previousMapper = _currentMapper; // сброс анимации
+        _controller.value = 0;
+      });
+    }
 
   /// Запускает вычисление данных тепловой карты.
   ///
@@ -163,23 +160,21 @@ class _HeatmapViewState extends State<HeatmapView>
       final matrix = widget.dataset.corr();
       var data = HeatmapData.fromCorrelation(matrix);
       data = _applyTransformations(data);
+      _onDataReady(data);
       setState(() => _displayData = data);
       return;
     }
+
+    
 
     // Режим выбранных осей – асинхронно
     _computeFuture = HeatmapDataBuilder.computeAsync(
       dataset: widget.dataset,
       state: widget.state,
     );
-    _computeFuture!.then((data) {
+    _computeFuture!.then(_onDataReady).catchError((error) {
       if (mounted) {
-        setState(() => _displayData = data);
-      }
-    }).catchError((error) {
-      if (mounted) {
-        setState(() => _displayData = HeatmapData(rowLabels: [], columnLabels: [], values: []));
-        // Можно показать SnackBar с ошибкой
+        _onDataReady(HeatmapData(rowLabels: [], columnLabels: [], values: []));
       }
     });
   }
@@ -231,26 +226,20 @@ class _HeatmapViewState extends State<HeatmapView>
   ///   (лучше для визуального восприятия общей структуры)
   HeatmapColorMapper _createMapper() {
     final paletteColors = HeatmapPaletteFactory.baseColors(widget.state.palette);
-    if (_displayData?.rowLabels.isEmpty == null){
-      _currentMin = _displayData!.min;
-      _currentMax = _displayData!.max;
-    }
-    else{
-      _currentMin = -1;
-      _currentMax = 1; 
-    }
+    final min = _displayData?.min ?? -1.0;
+    final max = _displayData?.max ?? 1.0;
     if (widget.state.colorMode == HeatmapColorMode.discrete) {      
       return DiscreteColorMapper(
-        min: _currentMin!,
-        max: _currentMax!,
+        min: min,
+        max: max,
         segments: widget.state.segments,
         baseColors: paletteColors,
       );
     } else {
       return GradientColorMapper(
         paletteType: widget.state.palette,
-        min: _currentMin!,
-        max: _currentMax!,
+        min: min,
+        max: max,
       );
     }
   }
@@ -270,14 +259,6 @@ class _HeatmapViewState extends State<HeatmapView>
   /// Также реализует интерактивную подсветку ячеек при наведении мыши
   /// (для десктопных и веб-версий).
   Widget _buildHeatmap() {
-    if (_displayData!.rowLabels.isEmpty) {
-      return const Center(
-        child: Text(
-          'Нет данных для отображения (выбраны две числовые колонки?)',
-          style: TextStyle(fontSize: 16, color: Colors.grey),
-        ),
-      );
-    }
     final rowCount = _displayData!.rowLabels.length;
     final colCount = _displayData!.columnLabels.length;
     if (rowCount == 0 || colCount == 0) {
@@ -292,16 +273,6 @@ class _HeatmapViewState extends State<HeatmapView>
       
         double cellSizeByWidth = availableWidth / colCount;
         double cellSizeByHeight = availableHeight / rowCount;
-
-        log(name: 'HeatmapView', 'cellSizeByWidth: $cellSizeByWidth, cellSizeByHeight: $cellSizeByHeight');
-        log(name: 'HeatmapView', 'availableWidth: $availableWidth, availableHeight: $availableHeight');
-
-        // Если матрица квадратная, делаем ячейки квадратными
-        // if (rowCount == colCount) {
-        //   final cellSize = min(cellSizeByWidth, cellSizeByHeight);
-        //   cellSizeByWidth = cellSize;
-        //   cellSizeByHeight = cellSize;
-        // }
 
         cellSizeByWidth = cellSizeByWidth.clamp(0.0, 200.0);
         cellSizeByHeight = cellSizeByHeight.clamp(0.0, 200.0);
@@ -387,8 +358,8 @@ class _HeatmapViewState extends State<HeatmapView>
             ),
             HeatmapLegend(
               mapper: _currentMapper,
-              min: _currentMin!,
-              max: _currentMax!,
+              min: _displayData!.min,
+              max: _displayData!.max,
               segments: widget.state.segments,
               onHover: _onLegendHover,
               colorMode: widget.state.colorMode,

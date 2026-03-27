@@ -33,6 +33,9 @@ enum HeatmapPalette {
 
   /// Палитра CoolWarm — мягкий градиент от холодных к тёплым тонам
   coolWarm,
+
+  /// Палитра Teal-Orange — от бирюзового (отрицательная корреляция) к оранжево-жёлтому (положительная корреляция)
+  tealOrange
 }
 
 /// {@template heatmap_palette_factory}
@@ -144,6 +147,12 @@ class HeatmapPaletteFactory {
           const Color(0xFFA1D99B), // зелёный
           const Color(0xFF31A354), // тёмно-зелёный
           const Color(0xFF006D2C), // очень тёмно-зелёный
+        ];
+      case HeatmapPalette.tealOrange:
+        return [
+          const Color(0xFF06D2C2), // rgb(6,210,194) — бирюзовый
+          const Color(0xFFFFFFFF), // белый
+          const Color(0xFFFFB70B), // rgb(255,183,11) — оранжево-жёлтый
         ];
     }
   }

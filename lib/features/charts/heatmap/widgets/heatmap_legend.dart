@@ -15,7 +15,7 @@ import '../color/heatmap_color_mapper.dart';
 /// - Автоматическое форматирование подписей
 /// - Интерактивная подсветка ячеек при наведении
 /// {@endtemplate}
-class HeatmapLegend extends StatelessWidget {
+class HeatmapLegend extends StatefulWidget {
   /// Маппер цветов для генерации градиента
   final HeatmapColorMapper mapper;
 
@@ -46,121 +46,33 @@ class HeatmapLegend extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 40,
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          if (colorMode == HeatmapColorMode.discrete) {
-            return _buildDiscreteLegend(constraints.maxWidth);
-          } else {
-            return _buildGradientLegend(constraints.maxWidth);
-          }
-        },
-      ),
-    );
-  }
-
-  /// Строит легенду для дискретного режима.
-  Widget _buildDiscreteLegend(double width) {
-    final step = (max - min) / segments;
-    final segmentWidth = width / segments;
-
-    final children = <Widget>[];
-    for (int i = 0; i < segments; i++) {
-      final segmentMin = min + step * i;
-      final segmentMax = min + step * (i + 1);
-      final color = mapper.map(segmentMin + step / 2);
-      children.add(
-        _LegendSegment(
-          width: segmentWidth,
-          color: color,
-          tooltip: '${segmentMin.toStringAsFixed(2)} – ${segmentMax.toStringAsFixed(2)}',
-          onHover: () => onHover(HoverRange(min: segmentMin, max: segmentMax)),
-          onExit: () => onHover(null),
-        ),
-      );
-    }
-    return Row(children: children);
-  }
-
-  /// Строит легенду для градиетного режима.
-  Widget _buildGradientLegend(double width) {
-    final colors = List.generate(segments + 1, (i) => mapper.map(min + i * (max - min) / segments));
-    return _GradientLegend(
-      width: width,
-      colors: colors,
-      min: min,
-      max: max,
-      onHover: onHover,
-    );
-  }
+  State<HeatmapLegend> createState() => _HeatmapLegendState();
 }
 
-/// {@template legend_segment}
-/// Сегмент дискретной легенды с интерактивным выделением.
-/// 
-/// Представляет один цветовой интервал с всплывающей подсказкой
-/// и реакцией на наведение мыши.
-class _LegendSegment extends StatelessWidget {
-  final double width;
-  final Color color;
-  final String tooltip;
-  final VoidCallback onHover;
-  final VoidCallback onExit;
-
-  const _LegendSegment({required this.width, required this.color, required this.tooltip, required this.onHover, required this.onExit});
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => onHover(),
-      onExit: (_) => onExit(),
-      child: Container(
-        width: width,
-        height: 24,
-        decoration: BoxDecoration(color: color, border: Border(right: BorderSide(color: Colors.grey.shade300))),
-        child: Tooltip(message: tooltip, child: Container()),
-      ),
-    );
-  }
-}
-
-/// {@template gradient_legend}
-/// Легенда для градиентного режима с плавным переходом цветов
-/// и отображением точного значения при наведении.
-/// {@endtemplate}
-class _GradientLegend extends StatefulWidget {
-  final double width;
-  final List<Color> colors;
-  final double min;
-  final double max;
-  final ValueChanged<HoverRange?> onHover;
-
-  const _GradientLegend({
-    required this.width,
-    required this.colors,
-    required this.min,
-    required this.max,
-    required this.onHover,
-  });
-
-  @override
-  State<_GradientLegend> createState() => _GradientLegendState();
-}
-
-class _GradientLegendState extends State<_GradientLegend> {
+class _HeatmapLegendState extends State<HeatmapLegend> {
+  /// Данные для отображения в легенде
   OverlayEntry? _tooltipEntry;
+
+  /// Флаг, указывающий, находится ли курсор на легендой
   bool _isHovering = false;
+  
+  /// Позиция тултипа
   double _tooltipX = 0;
   double _tooltipY = 0;
+
+  /// Текущее значение, отображаемое в тултипе
   double? _currentValue;
+
+
+  /// Позиция маркера для градиентного режима
+  double _markerX = 0;
+
+  /// Флаг для отображения маркера в градиентном режиме
+  bool _showMarker = false;
 
   @override
   void initState() {
     super.initState();
-    _createOverlayEntry();
   }
 
   @override
@@ -169,9 +81,14 @@ class _GradientLegendState extends State<_GradientLegend> {
     super.dispose();
   }
 
-  void _createOverlayEntry() {
-    _tooltipEntry = OverlayEntry(builder: (context) {
-      return Positioned(
+
+  /// Создаёт оверлей для отображения тултипа при наведении на легенду
+  /// Тултип показывает диапазон значений для дискретного режима или точное значение для градиентного режима
+  /// Позиция тултипа рассчитывается так, чтобы он не выходил за пределы экрана
+  /// Тултип автоматически обновляется при перемещении мыши по легенде
+  void _createTooltipEntry() {
+    _tooltipEntry = OverlayEntry(
+      builder: (context) => Positioned(
         left: _tooltipX,
         top: _tooltipY,
         child: Material(
@@ -183,63 +100,187 @@ class _GradientLegendState extends State<_GradientLegend> {
               borderRadius: BorderRadius.circular(4),
             ),
             child: Text(
-              _currentValue != null ? _currentValue!.toStringAsFixed(2) : '',
+              _tooltipText(),
               style: const TextStyle(color: Colors.white, fontSize: 12),
             ),
           ),
         ),
-      );
+      ),
+    );
+  }
+
+  /// Генерирует текст для тултипа в зависимости от текущего значения и режима раскраски
+  String _tooltipText() {
+    if (_currentValue == null) return '';
+    if (widget.colorMode == HeatmapColorMode.discrete) {
+      final step = (widget.max - widget.min) / widget.segments;
+      final segmentIndex = ((_currentValue! - widget.min) / step).floor();
+      final segmentMin = widget.min + step * segmentIndex;
+      final segmentMax = widget.min + step * (segmentIndex + 1);
+      return '${_formatNumber(segmentMin)} – ${_formatNumber(segmentMax)}';
+    } else {
+      return _formatNumber(_currentValue!);
+    }
+  }
+
+  /// Обновляет позицию и содержимое тултипа при перемещении мыши по легенде
+  void _updateTooltip(Offset position, RenderBox renderBox) {
+    // Преобразуем глобальную позицию мыши в локальную относительно легенды
+    final local = renderBox.globalToLocal(position);
+    final width = renderBox.size.width;
+    /// Вычисляем значение на шкале, соответствующее текущей позиции мыши
+    final t = (local.dx / width).clamp(0.0, 1.0);
+    /// Интерполируем значение между min и max на основе позиции мыши
+    final value = widget.min + t * (widget.max - widget.min);
+    _currentValue = value;
+
+    if (widget.colorMode == HeatmapColorMode.gradient) {
+      _markerX = local.dx;
+      _showMarker = true;
+    }
+
+    // Вызываем колбек с информацией о наведении в зависимости от режима раскраски
+    if (widget.colorMode == HeatmapColorMode.discrete) {
+      final step = (widget.max - widget.min) / widget.segments;
+      final segmentIndex = ((value - widget.min) / step).floor();
+      final segmentMin = widget.min + step * segmentIndex;
+      final segmentMax = widget.min + step * (segmentIndex + 1);
+      widget.onHover(HoverRange(min: segmentMin, max: segmentMax));
+    } else {
+      widget.onHover(HoverRange(value: value));
+    }
+
+    // Рассчитываем позицию тултипа так, чтобы он не выходил за пределы экрана
+    const barHeight = 16.0;
+    const spacing = 6.0;
+    const tooltipWidth = 80.0;
+    const tooltipHeight = 28.0;
+
+    final legendGlobalTop = renderBox.localToGlobal(Offset.zero);
+    final barBottom = legendGlobalTop.dy + barHeight;
+
+    final globalMarkerCenter = renderBox.localToGlobal(Offset(_markerX, 0));
+
+    double tooltipLeft = globalMarkerCenter.dx - tooltipWidth / 2;
+    double tooltipTop = barBottom + spacing;
+    final screenSize = MediaQuery.of(context).size;
+    tooltipLeft = tooltipLeft.clamp(0.0, screenSize.width - tooltipWidth);
+    tooltipTop = tooltipTop.clamp(0.0, screenSize.height - tooltipHeight);
+    _tooltipX = tooltipLeft;
+    _tooltipY = tooltipTop;
+    _tooltipEntry?.markNeedsBuild();
+    setState(() {
     });
   }
 
-  void _updateTooltip(Offset position) {
-    final t = (position.dx / widget.width).clamp(0.0, 1.0);
-    final value = widget.min + t * (widget.max - widget.min);
-    _currentValue = value;
-    widget.onHover(HoverRange(value: value));
-
-    // Обновляем позицию тултипа
-    final renderBox = context.findRenderObject() as RenderBox?;
-    if (renderBox != null) {
-      final local = renderBox.globalToLocal(position);
-      const tooltipWidth = 60.0;
-      const tooltipHeight = 30.0;
-      final left = local.dx - tooltipWidth / 2;
-      final top = local.dy - tooltipHeight - 8;
-      _tooltipX = left;
-      _tooltipY = top;
-      _tooltipEntry?.markNeedsBuild();
+  /// Форматирует число для отображения в тултипе и подписях легенды
+  /// - Если значение близко к целому, отображает его без десятичных знаков
+  /// - Для значений до 1000 отображает с двумя десятичными знаками
+  /// - Для тысяч и миллионов использует суффиксы K и M соответственно
+  String _formatNumber(double value) {
+    // Если значение очень близко к целому
+    if ((value - value.round()).abs() < 0.001) {
+      return value.round().toString();
     }
+    // Для значений в диапазоне до 1000 показываем 2 знака
+    if (value.abs() < 1000) {
+      return value.toStringAsFixed(2);
+    }
+    // Для тысяч
+    if (value.abs() < 1e6) {
+      return '${(value / 1000).toStringAsFixed(1)}K';
+    }
+    // Для миллионов
+    return '${(value / 1e6).toStringAsFixed(1)}M';
   }
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onHover: (event) {
-        if (!_isHovering) {
-          _isHovering = true;
-          Overlay.of(context).insert(_tooltipEntry!);
-        }
-        _updateTooltip(event.position);
-      },
-      onExit: (_) {
-        _isHovering = false;
-        _tooltipEntry?.remove();
-        widget.onHover(null);
-      },
-      child: Container(
-        width: widget.width,
-        height: 24,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: widget.colors,
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        const height = 40.0;
+        final colors = List.generate(
+          widget.segments + 1,
+          (i) => widget.mapper.map(widget.min + i * (widget.max - widget.min) / widget.segments),
+        );
+
+        return SizedBox(
+          height: height,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              MouseRegion(
+                cursor: SystemMouseCursors.resizeLeftRight,
+                onHover: (event) {
+                  if (!_isHovering) {
+                    _isHovering = true;
+                    _createTooltipEntry();
+                    Overlay.of(context).insert(_tooltipEntry!);
+                  }
+                  final renderBox = context.findRenderObject() as RenderBox;
+                  _updateTooltip(event.position, renderBox);
+                },
+                onExit: (_) {
+                  _isHovering = false;
+                  _tooltipEntry?.remove();
+                  _showMarker = false;
+                  widget.onHover(null);
+                  setState(() {
+                  });
+                },
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Container(
+                      width: width,
+                      height: 16,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: colors,
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                    ),
+                    if (_showMarker)
+                      Positioned(
+                        left: _markerX - 6, // центрируем маркер
+                        top: 2,
+                        child: Container(
+                          width: 12,
+                          height: 12,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white70, width: 26),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.2),
+                                blurRadius: 2,
+                                offset: const Offset(0, 1),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ]
+                ),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(_formatNumber(widget.min), style: const TextStyle(fontSize: 11)),
+                  Text(_formatNumber(widget.max), style: const TextStyle(fontSize: 11)),
+                ],
+              ),
+            ],
           ),
-          borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: Colors.grey.shade300),
-        ),
-      ),
+        );
+      },
     );
   }
 }
