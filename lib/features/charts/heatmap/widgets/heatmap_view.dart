@@ -156,7 +156,7 @@ class _HeatmapViewState extends State<HeatmapView>
     });
 
     // Режим корреляции (обе оси не выбраны) – строим синхронно
-    if (widget.state.xColumn == null && widget.state.yColumn == null) {
+    if (widget.state.useCorrelation) {
       final matrix = widget.dataset.corr();
       var data = HeatmapData.fromCorrelation(matrix);
       data = _applyTransformations(data);
@@ -183,8 +183,7 @@ class _HeatmapViewState extends State<HeatmapView>
   HeatmapData _applyTransformations(HeatmapData data) {
     // Кластеризация только для корреляционной матрицы
     if (widget.state.clusterEnabled &&
-        widget.state.xColumn == null &&
-        widget.state.yColumn == null) {
+        widget.state.useCorrelation) {
       data = CorrelationClusterer.clusterHeatmapData(data);
     }
 
@@ -211,7 +210,7 @@ class _HeatmapViewState extends State<HeatmapView>
 
   /// Генерирует ключ для кэширования данных на основе настроек
   String _computeKey() {
-    return '${widget.state.xColumn}_${widget.state.yColumn}_'
+    return '${widget.state.xColumn}_${widget.state.yColumn}_${widget.state.useCorrelation}_'
         '${widget.state.aggregationType}_${widget.state.clusterEnabled}_'
         '${widget.state.sortX}_${widget.state.sortY}_'
         '${widget.state.normalizeMode}_${widget.state.percentageMode}';

@@ -50,16 +50,24 @@ class HeatmapDataBuilder {
   /// - [Exception] — при неподдерживаемой комбинации типов колонок.
   HeatmapData build() {
     // Режим корреляции всех числовых полей
-    if (state.xColumn == null && state.yColumn == null) {
+    if (state.useCorrelation) {
       final matrix = dataset.corr();
       return HeatmapData.fromCorrelation(matrix);
+    }
+
+    if (state.xColumn == null || state.yColumn == null) {
+      return HeatmapData(
+        rowLabels: [],
+        columnLabels: [],
+        values: [],
+      );
     }
 
     // Проверяем, что колонки существуют
     final xCol = dataset.column(state.xColumn!);
     final yCol = dataset.column(state.yColumn!);
     if (xCol == null || yCol == null) {
-      log('Колонки не найдены');
+      log('Одна из колонок не найдена: x=${state.xColumn}, y=${state.yColumn}');
       return HeatmapData(rowLabels: [], columnLabels: [], values: []);
     }
 

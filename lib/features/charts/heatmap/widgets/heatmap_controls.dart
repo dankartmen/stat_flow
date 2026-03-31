@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:stat_flow/core/dataset/dataset.dart';
+import '../../../../core/theme/controls_style.dart';
 import '../color/heatmap_color_mapper.dart';
 import '../color/heatmap_palette.dart';
 import '../model/heatmap_state.dart';
@@ -26,47 +27,56 @@ class HeatmapControls {
     required ValueChanged<HeatmapState> onChanged,
     required Dataset dataset,
   }) {
-    final isCorrelationMode = state.xColumn == null && state.yColumn == null;
-    final numericColumns = dataset.columns.whereType<NumericColumn>().toList();
+    final isCorrelationMode = state.useCorrelation;
+    final numericColumns = dataset.numericColumns;
 
     return [
       // Режим (корреляция / оси)
-      _buildSection(
-        title: 'Режим',
-        child: Column(
-          children: [
-            RadioListTile<bool>(
-              title: const Text('Корреляция всех числовых полей'),
+      buildSection(
+        title: Text('Режим', style: TextStyle(fontSize: 14)),
+        child: SegmentedButton<bool>(
+          segments: const [
+            ButtonSegment<bool>(
               value: true,
-              groupValue: isCorrelationMode,
-              onChanged: (_) => onChanged(state.copyWith(xColumn: null, yColumn: null)),
+              label: Text('Корреляция всех числовых полей'),
+              icon: Icon(Icons.show_chart),
             ),
-            RadioListTile<bool>(
-              title: const Text('Выбрать оси'),
+            ButtonSegment<bool>(
               value: false,
-              groupValue: isCorrelationMode,
-              onChanged: (_) => onChanged(state.copyWith(xColumn: '', yColumn: '')),
+              label: Text('Выбрать оси'),
+              icon: Icon(Icons.swap_horiz),
             ),
           ],
+          selected: {isCorrelationMode},
+          onSelectionChanged: (Set<bool> selection) {
+            final newMode = selection.first;
+            if (newMode != isCorrelationMode) {
+              onChanged(state.copyWith(
+                useCorrelation: newMode,
+                xColumn: null,
+                yColumn: null,
+              ));
+            }
+          },
         ),
       ),
 
       // Выбор осей (только если не корреляция)
       if (!isCorrelationMode) ...[
-        _buildSection(
-          title: 'Оси',
+        buildSection(
+          title: Text('Оси', style: TextStyle(fontSize: 14)),
           child: Column(
             children: [
-              _buildDropdown<String>(
+              buildDropdown<String>(
                 label: 'X ось',
-                value: state.xColumn!,
+                initialValue: state.xColumn,
                 items: dataset.columns.map((c) => c.name).toList(),
                 onChanged: (value) => onChanged(state.copyWith(xColumn: value)),
               ),
               const SizedBox(height: 12),
-              _buildDropdown<String>(
+              buildDropdown<String>(
                 label: 'Y ось',
-                value: state.yColumn!,
+                initialValue: state.yColumn,
                 items: dataset.columns.map((c) => c.name).toList(),
                 onChanged: (value) => onChanged(state.copyWith(yColumn: value)),
               ),
@@ -74,13 +84,13 @@ class HeatmapControls {
           ),
         ),
 
-        // === Агрегация (только если Y числовая) ===
+        // Агрегация (только если Y числовая)
         if (state.yColumn != null && _isNumericColumn(dataset, state.yColumn))
-          _buildSection(
-            title: 'Метрика',
-            child: _buildDropdown<AggregationType>(
+          buildSection(
+            title: Text('Метрика', style: TextStyle(fontSize: 14)),
+            child: buildDropdown<AggregationType>(
               label: 'Агрегация',
-              value: state.aggregationType,
+              initialValue: state.aggregationType,
               items: AggregationType.values,
               onChanged: (value) => onChanged(state.copyWith(aggregationType: value!)),
               displayName: (type) => _aggregationName(type),
@@ -89,11 +99,11 @@ class HeatmapControls {
       ],
 
       // Нормализация
-      _buildSection(
-        title: 'Нормализация',
-        child: _buildDropdown<NormalizeMode>(
+      buildSection(
+        title: Text('Нормализация', style: TextStyle(fontSize: 14)),
+        child: buildDropdown<NormalizeMode>(
           label: 'Тип',
-          value: state.normalizeMode,
+          initialValue: state.normalizeMode,
           items: NormalizeMode.values,
           onChanged: (value) => onChanged(state.copyWith(normalizeMode: value!)),
           displayName: (mode) => _normalizeModeName(mode),
@@ -101,21 +111,21 @@ class HeatmapControls {
       ),
 
       // Сортировка
-      _buildSection(
-        title: 'Сортировка',
+      buildSection(
+        title: Text('Сортировка'),
         child: Column(
           children: [
-            _buildDropdown<SortMode>(
-              label: 'Сортировка X (строки)',
-              value: state.sortX,
+            buildDropdown<SortMode>(
+              label: 'По X',
+              initialValue: state.sortX,
               items: SortMode.values,
               onChanged: (value) => onChanged(state.copyWith(sortX: value!)),
               displayName: (mode) => _sortModeName(mode),
             ),
             const SizedBox(height: 12),
-            _buildDropdown<SortMode>(
-              label: 'Сортировка Y (столбцы)',
-              value: state.sortY,
+            buildDropdown<SortMode>(
+              label: 'По Y',
+              initialValue: state.sortY,
               items: SortMode.values,
               onChanged: (value) => onChanged(state.copyWith(sortY: value!)),
               displayName: (mode) => _sortModeName(mode),
@@ -125,11 +135,14 @@ class HeatmapControls {
       ),
 
       // Проценты
-      _buildSection(
-        title: 'Проценты',
-        child: _buildDropdown<PercentageMode>(
+      buildSection(
+        title: Text(
+          'Проценты',
+          style: TextStyle(fontSize: 14),
+        ),
+        child: buildDropdown<PercentageMode>(
           label: 'Режим',
-          value: state.percentageMode,
+          initialValue: state.percentageMode,
           items: PercentageMode.values,
           onChanged: (value) => onChanged(state.copyWith(percentageMode: value!)),
           displayName: (mode) => _percentageModeName(mode),
@@ -137,30 +150,30 @@ class HeatmapControls {
       ),
 
       // Цвет
-      _buildSection(
-        title: 'Цвет',
+      buildSection(
+        title: Text('Цвет', style: TextStyle(fontSize: 14)),
         child: Column(
           children: [
-            _buildDropdown<HeatmapPalette>(
+            buildDropdown<HeatmapPalette>(
               label: 'Палитра',
-              value: state.palette,
+              initialValue: state.palette,
               items: HeatmapPalette.values,
               onChanged: (value) => onChanged(state.copyWith(palette: value!)),
               displayName: (p) => p.name,
             ),
             const SizedBox(height: 12),
-            _buildDropdown<HeatmapColorMode>(
+            buildDropdown<HeatmapColorMode>(
               label: 'Режим раскраски',
-              value: state.colorMode,
+              initialValue: state.colorMode,
               items: HeatmapColorMode.values,
               onChanged: (value) => onChanged(state.copyWith(colorMode: value!)),
               displayName: (mode) => mode == HeatmapColorMode.discrete ? 'Дискретный' : 'Градиент',
             ),
             if (state.colorMode == HeatmapColorMode.discrete) ...[
               const SizedBox(height: 12),
-              _buildDropdown<int>(
+              buildDropdown<int>(
                 label: 'Сегментов',
-                value: state.segments,
+                initialValue: state.segments,
                 items: const [5, 10, 20],
                 onChanged: (value) => onChanged(state.copyWith(segments: value!)),
                 displayName: (seg) => '$seg сегментов',
@@ -170,9 +183,9 @@ class HeatmapControls {
         ),
       ),
 
-      //Отображение
-      _buildSection(
-        title: 'Отображение',
+      // Отображение
+      buildSection(
+        title: Text('Отображение', style: TextStyle(fontSize: 14)),
         child: Column(
           children: [
             CheckboxListTile(
@@ -205,54 +218,6 @@ class HeatmapControls {
     ];
   }
 
-  /// Строит секцию с заголовком и разделителем.
-  ///
-  /// Используется для группировки связанных элементов управления.
-  static Widget _buildSection({required String title, required Widget child}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Text(
-            title,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-          ),
-        ),
-        child,
-        const Divider(),
-      ],
-    );
-  }
-
-  /// Строит выпадающий список с меткой.
-  ///
-  /// Поддерживает обобщённый тип [T] и опциональную функцию форматирования
-  /// отображаемого текста.
-  static Widget _buildDropdown<T>({
-    required String label,
-    required T value,
-    required List<T> items,
-    required ValueChanged<T?> onChanged,
-    String Function(T)? displayName,
-  }) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label),
-        DropdownButton<T>(
-          value: value,
-          items: items.map((item) {
-            return DropdownMenuItem(
-              value: item,
-              child: Text(displayName != null ? displayName(item) : item.toString()),
-            );
-          }).toList(),
-          onChanged: onChanged,
-        ),
-      ],
-    );
-  }
 
 
   /// Возвращает локализованное название типа агрегации.

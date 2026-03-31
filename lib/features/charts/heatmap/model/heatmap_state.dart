@@ -67,11 +67,16 @@ class HeatmapState extends ChartState {
 
   /// Режим отображения значений в процентах
   PercentageMode percentageMode;
+
   /// Информация о наведении на легенду для подсветки соответствующих ячеек
   HoverRange? hoverRange;
   
+  /// Использовать ли корреляцию всех числовых полей (вместо выбора осей)
+  bool useCorrelation;
+
   /// {@macro heatmap_state}
   HeatmapState({
+    this.useCorrelation = true,
     this.showAxisLabels = false,
     this.showValues = false,
     this.palette = HeatmapPalette.redBlue,
@@ -109,6 +114,7 @@ class HeatmapState extends ChartState {
     String? yColumn,
     AggregationType? aggregationType,
     PercentageMode? percentageMode,
+    bool? useCorrelation,
   }) {
     return HeatmapState(
       palette: palette ?? this.palette,
@@ -127,6 +133,8 @@ class HeatmapState extends ChartState {
       yColumn: yColumn ?? this.yColumn,
       aggregationType: aggregationType ?? this.aggregationType,
       percentageMode: percentageMode ?? this.percentageMode,
+      useCorrelation: useCorrelation ?? this.useCorrelation,
+
     );
   }
 }

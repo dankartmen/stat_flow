@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:stat_flow/core/theme/controls_style.dart';
 import '../../../core/dataset/dataset.dart';
 import 'scatter_state.dart';
 
@@ -30,32 +31,25 @@ class ScatterControls {
     final columns = dataset.numericColumns;
 
     return [
-      // Выбор первой колонки (ось X)
-      DropdownButton<String>(
-        hint: const Text("Ось X"),
-        value: state.firstColumnName,
-        items: columns.map((c) {
-          return DropdownMenuItem(value: c.name, child: Text(c.name));
-        }).toList(),
-        onChanged: (v) {
-          // Если выбрана та же колонка, что и для Y, сбрасываем Y
-          final newSecond = (v == state.secondColumnName) ? null : state.secondColumnName;
-          onChanged(state.copyWith(firstColumnName: v, secondColumnName: newSecond));
-        },
-      ),
-
-      const SizedBox(width: 16),
-
-      // Выбор второй колонки (ось Y)
-      DropdownButton<String>(
-        hint: const Text("Ось Y"),
-        value: state.secondColumnName,
-        items: columns
-            .where((c) => c.name != state.firstColumnName)
-            .map((c) {
-              return DropdownMenuItem(value: c.name, child: Text(c.name));
-            }).toList(),
-        onChanged: (v) => onChanged(state.copyWith(secondColumnName: v)),
+      buildSection(
+        title: Text("Оси", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),),
+        child: Column(
+          children: [
+            buildDropdown(
+              label: "Ось X",
+              initialValue: state.firstColumnName,
+              items: columns.map((c) => c.name).toList(),
+              onChanged: (value) => onChanged(state.copyWith(firstColumnName: value)),
+            ),
+            const SizedBox(height: 12),
+            buildDropdown(
+              label: "Ось Y",
+              initialValue: state.secondColumnName,
+              items: columns.map((c) => c.name).where((name) => name != state.firstColumnName).toList(),
+              onChanged: (value) => onChanged(state.copyWith(secondColumnName: value)),
+            ),
+          ],
+        )
       ),
     ];
   }
