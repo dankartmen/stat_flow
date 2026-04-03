@@ -57,33 +57,47 @@ class HistogramView extends StatelessWidget {
     final min = column.min() ?? values.first;
     final max = column.max() ?? values.first;
 
-    // Расчет интервала между корзинами
-    final interval = (max - min) / state.bins;
+    // Приоритет: если пользователь задал binInterval — используем его,
+    // иначе рассчитываем по количеству корзин
+    final binInterval = state.binInterval ?? (max - min) / state.bins;
 
     return SfCartesianChart(
-      
-      crosshairBehavior: CrosshairBehavior(enable: true, lineDashArray: [20, 10], hideDelay: 300),
-      // plotAreaBackgroundImage: AssetImage('assets/zzz_angel1.png'),
+      plotAreaBorderWidth: 0,
+
+      crosshairBehavior: CrosshairBehavior(enable: true, lineDashArray: [8, 4]),
       // Настройка всплывающих подсказок
       tooltipBehavior: TooltipBehavior(
         enable: true,
-        duration: 2000,
+        duration: 2500,
         header: column.name,
         activationMode: ActivationMode.singleTap,
       ),
 
       // Настройка осей
-      primaryXAxis: NumericAxis(),
-      primaryYAxis: NumericAxis(),
+      primaryXAxis: NumericAxis(
+        labelStyle: const TextStyle(fontSize: 12),
+      ),
+      primaryYAxis: NumericAxis(
+        labelStyle: const TextStyle(fontSize: 12),
+      ),
 
       // Серия данных - гистограмма
       series: <HistogramSeries<double, double>>[
         HistogramSeries<double, double>(
           dataSource: values,
           yValueMapper: (v, _) => v,
-          binInterval: interval,
+          binInterval: binInterval,
+          borderWidth: state.borderWidth,
+          borderColor: Theme.of(context).colorScheme.primary,
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
+          showNormalDistributionCurve: state.showNormalDistributionCurve,
+          curveColor: Theme.of(context).colorScheme.secondary,
+          curveWidth: 2.0,
           enableTooltip: true,
-          dataLabelSettings: DataLabelSettings(isVisible: false),
+          dataLabelSettings: DataLabelSettings(
+            isVisible: state.showDataLabels,
+            labelAlignment: ChartDataLabelAlignment.top,
+          ),
         ),
       ],
     );

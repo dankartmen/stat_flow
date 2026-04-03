@@ -26,6 +26,7 @@ class HeatmapControls {
     required HeatmapState state,
     required ValueChanged<HeatmapState> onChanged,
     required Dataset dataset,
+    required BuildContext context,
   }) {
     final isCorrelationMode = state.useCorrelation;
     final numericColumns = dataset.numericColumns;
@@ -33,18 +34,24 @@ class HeatmapControls {
     return [
       // Режим (корреляция / оси)
       buildSection(
-        title: Text('Режим', style: TextStyle(fontSize: 14)),
+        context: context,
+        title: 'Режим',
+        icon: Icons.tune_rounded,
         child: SegmentedButton<bool>(
+          style: SegmentedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
           segments: const [
             ButtonSegment<bool>(
               value: true,
-              label: Text('Корреляция всех числовых полей'),
-              icon: Icon(Icons.show_chart),
+              label: Text('Корреляция'),
+              icon: Icon(Icons.show_chart_rounded),
             ),
             ButtonSegment<bool>(
               value: false,
-              label: Text('Выбрать оси'),
-              icon: Icon(Icons.swap_horiz),
+              label: Text('Оси'),
+              icon: Icon(Icons.swap_horiz_rounded),
             ),
           ],
           selected: {isCorrelationMode},
@@ -64,17 +71,22 @@ class HeatmapControls {
       // Выбор осей (только если не корреляция)
       if (!isCorrelationMode) ...[
         buildSection(
-          title: Text('Оси', style: TextStyle(fontSize: 14)),
+          context: context,
+          title: 'Оси',
+          icon: Icons.swap_horiz_rounded,
+          initiallyExpanded: true,
           child: Column(
             children: [
               buildDropdown<String>(
+                context: context,
                 label: 'X ось',
                 initialValue: state.xColumn,
                 items: dataset.columns.map((c) => c.name).toList(),
                 onChanged: (value) => onChanged(state.copyWith(xColumn: value)),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 20),
               buildDropdown<String>(
+                context: context,
                 label: 'Y ось',
                 initialValue: state.yColumn,
                 items: dataset.columns.map((c) => c.name).toList(),
@@ -87,48 +99,58 @@ class HeatmapControls {
         // Агрегация (только если Y числовая)
         if (state.yColumn != null && _isNumericColumn(dataset, state.yColumn))
           buildSection(
-            title: Text('Метрика', style: TextStyle(fontSize: 14)),
+            context: context,
+            title: 'Метрика',
+            icon: Icons.functions_rounded,
             child: buildDropdown<AggregationType>(
+              context: context,
               label: 'Агрегация',
               initialValue: state.aggregationType,
               items: AggregationType.values,
               onChanged: (value) => onChanged(state.copyWith(aggregationType: value!)),
-              displayName: (type) => _aggregationName(type),
+              displayName: _aggregationName,
             ),
           ),
       ],
 
       // Нормализация
       buildSection(
-        title: Text('Нормализация', style: TextStyle(fontSize: 14)),
+        context: context,
+        title: 'Нормализация',
+        icon: Icons.scale_rounded,
         child: buildDropdown<NormalizeMode>(
-          label: 'Тип',
+          context: context,
+          label: 'Тип нормализации',
           initialValue: state.normalizeMode,
           items: NormalizeMode.values,
           onChanged: (value) => onChanged(state.copyWith(normalizeMode: value!)),
-          displayName: (mode) => _normalizeModeName(mode),
+          displayName: _normalizeModeName,
         ),
       ),
 
       // Сортировка
       buildSection(
-        title: Text('Сортировка'),
+        context: context,
+        title: 'Сортировка',
+        icon: Icons.sort_rounded,
         child: Column(
           children: [
             buildDropdown<SortMode>(
-              label: 'По X',
+              context: context,
+              label: 'По X (строки)',
               initialValue: state.sortX,
               items: SortMode.values,
               onChanged: (value) => onChanged(state.copyWith(sortX: value!)),
-              displayName: (mode) => _sortModeName(mode),
+              displayName: _sortModeName,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 20),
             buildDropdown<SortMode>(
-              label: 'По Y',
+              context: context,
+              label: 'По Y (столбцы)',
               initialValue: state.sortY,
               items: SortMode.values,
               onChanged: (value) => onChanged(state.copyWith(sortY: value!)),
-              displayName: (mode) => _sortModeName(mode),
+              displayName: _sortModeName,
             ),
           ],
         ),
@@ -136,33 +158,37 @@ class HeatmapControls {
 
       // Проценты
       buildSection(
-        title: Text(
-          'Проценты',
-          style: TextStyle(fontSize: 14),
-        ),
+        context: context,
+        title: 'Проценты',
+        icon: Icons.percent_rounded,
         child: buildDropdown<PercentageMode>(
-          label: 'Режим',
+          context: context,
+          label: 'Режим процентов',
           initialValue: state.percentageMode,
           items: PercentageMode.values,
           onChanged: (value) => onChanged(state.copyWith(percentageMode: value!)),
-          displayName: (mode) => _percentageModeName(mode),
+          displayName: _percentageModeName,
         ),
       ),
 
       // Цвет
       buildSection(
-        title: Text('Цвет', style: TextStyle(fontSize: 14)),
+        context: context,
+        title: 'Цветовая схема',
+        icon: Icons.palette_rounded,
         child: Column(
           children: [
             buildDropdown<HeatmapPalette>(
+              context: context,
               label: 'Палитра',
               initialValue: state.palette,
               items: HeatmapPalette.values,
               onChanged: (value) => onChanged(state.copyWith(palette: value!)),
               displayName: (p) => p.name,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 20),
             buildDropdown<HeatmapColorMode>(
+              context: context,
               label: 'Режим раскраски',
               initialValue: state.colorMode,
               items: HeatmapColorMode.values,
@@ -170,9 +196,10 @@ class HeatmapControls {
               displayName: (mode) => mode == HeatmapColorMode.discrete ? 'Дискретный' : 'Градиент',
             ),
             if (state.colorMode == HeatmapColorMode.discrete) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: 20),
               buildDropdown<int>(
-                label: 'Сегментов',
+                context: context,
+                label: 'Количество сегментов',
                 initialValue: state.segments,
                 items: const [5, 10, 20],
                 onChanged: (value) => onChanged(state.copyWith(segments: value!)),
@@ -185,39 +212,45 @@ class HeatmapControls {
 
       // Отображение
       buildSection(
-        title: Text('Отображение', style: TextStyle(fontSize: 14)),
+        context: context,
+        title: 'Отображение',
+        icon: Icons.visibility_rounded,
         child: Column(
           children: [
-            CheckboxListTile(
-              title: const Text('Подписи осей'),
-              value: state.showAxisLabels,
-              onChanged: (value) => onChanged(state.copyWith(showAxisLabels: value ?? false)),
-              controlAffinity: ListTileControlAffinity.leading,
-            ),
-            CheckboxListTile(
-              title: const Text('Значения в ячейках'),
-              value: state.showValues,
-              onChanged: (value) => onChanged(state.copyWith(showValues: value ?? false)),
-              controlAffinity: ListTileControlAffinity.leading,
-            ),
-            CheckboxListTile(
-              title: const Text('Только верхний треугольник'),
-              value: state.triangleMode,
-              onChanged: (value) => onChanged(state.copyWith(triangleMode: value ?? false)),
-              controlAffinity: ListTileControlAffinity.leading,
-            ),
-            CheckboxListTile(
-              title: const Text('Кластеризация'),
-              value: state.clusterEnabled,
-              onChanged: (value) => onChanged(state.copyWith(clusterEnabled: value ?? false)),
-              controlAffinity: ListTileControlAffinity.leading,
-            ),
+            buildSwitch(context, 'Подписи осей', state.showAxisLabels,
+                (v) => onChanged(state.copyWith(showAxisLabels: v))),
+            buildSwitch(context, 'Значения в ячейках', state.showValues,
+                (v) => onChanged(state.copyWith(showValues: v))),
+            buildSwitch(context, 'Только верхний треугольник', state.triangleMode,
+                (v) => onChanged(state.copyWith(triangleMode: v))),
+            buildSwitch(context, 'Кластеризация', state.clusterEnabled,
+                (v) => onChanged(state.copyWith(clusterEnabled: v))),
           ],
         ),
       ),
+
+      const SizedBox(height: 24),
+
+      // Кнопка сброса
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: OutlinedButton.icon(
+          onPressed: () {
+            onChanged(HeatmapState()); // сброс к дефолтным значениям
+          },
+          icon: const Icon(Icons.refresh_rounded),
+          label: const Text('Сбросить все настройки'),
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(double.infinity, 52),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          ),
+        ),
+      ),
+
+      const SizedBox(height: 32),
     ];
   }
-
+  
 
 
   /// Возвращает локализованное название типа агрегации.

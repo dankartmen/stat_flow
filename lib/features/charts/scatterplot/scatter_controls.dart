@@ -27,12 +27,15 @@ class ScatterControls {
     required Dataset dataset,
     required ScatterState state,
     required ValueChanged<ScatterState> onChanged,
+    required BuildContext context,
   }) {
     final columns = dataset.numericColumns;
 
     return [
       buildSection(
-        title: Text("Оси", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),),
+        title: "Оси",
+        context: context,
+        icon: null,
         child: Column(
           children: [
             buildDropdown(
@@ -40,6 +43,7 @@ class ScatterControls {
               initialValue: state.firstColumnName,
               items: columns.map((c) => c.name).toList(),
               onChanged: (value) => onChanged(state.copyWith(firstColumnName: value)),
+              context: context
             ),
             const SizedBox(height: 12),
             buildDropdown(
@@ -47,6 +51,7 @@ class ScatterControls {
               initialValue: state.secondColumnName,
               items: columns.map((c) => c.name).where((name) => name != state.firstColumnName).toList(),
               onChanged: (value) => onChanged(state.copyWith(secondColumnName: value)),
+              context: context
             ),
           ],
         )

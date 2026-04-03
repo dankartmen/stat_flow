@@ -36,6 +36,7 @@ class HeatmapPlugin extends ChartPlugin {
     final state = data.state as HeatmapState;
 
     return HeatmapControls.build(
+      context: ref.context,
       state: state,
       onChanged: (newState) {
         ref.read(chartsProvider.notifier).updateChartState(data.id, newState);

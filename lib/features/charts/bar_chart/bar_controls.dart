@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/dataset/dataset.dart';
+import '../../../core/theme/controls_style.dart';
 import 'bar_state.dart';
 
 /// {@template bar_controls}
@@ -8,76 +9,203 @@ import 'bar_state.dart';
 /// {@endtemplate}
 class BarControls {
   static List<Widget> build({
+    required BuildContext context,
     required Dataset dataset,
     required BarState state,
     required ValueChanged<BarState> onChanged,
   }) {
-    final columns = dataset.numericColumns;
+    final suitableColumns = dataset.columns
+        .where((c) => c is NumericColumn || c is CategoricalColumn || c is TextColumn)
+        .map((c) => c.name)
+        .toList();
 
     return [
+      const SizedBox(height: 8),
+
       // Выбор колонки
-      DropdownButton<String>(
-        hint: const Text("Колонка"),
-        value: state.columnName,
-        items: columns.map((c) {
-          return DropdownMenuItem(
-            value: c.name,
-            child: Text(c.name),
-          );
-        }).toList(),
-        onChanged: (v) => onChanged(state.copyWith(columnName: v)),
+      buildSection(
+        context: context,
+        title: 'Колонка',
+        icon: Icons.bar_chart_rounded,
+        child: buildDropdown<String>(
+          context: context,
+          label: 'Выбрать колонку',
+          initialValue: state.columnName,
+          items: suitableColumns,
+          onChanged: (value) => onChanged(state.copyWith(columnName: value)),
+        ),
       ),
 
-      const SizedBox(width: 16),
-
-      // Показывать значения
-      Row(
-        children: [
-          const Text("Значения"),
-          const SizedBox(width: 4),
-          Checkbox(
-            value: state.showValues,
-            onChanged: (v) => onChanged(state.copyWith(showValues: v ?? false)),
-          ),
-        ],
-      ),
-
-      const SizedBox(width: 16),
-
-      // Ширина столбцов
-      Row(
-        children: [
-          const Text("Ширина"),
-          const SizedBox(width: 8),
-          SizedBox(
-            width: 120,
-            child: Slider(
+      // Основные настройки
+      buildSection(
+        context: context,
+        title: 'Основные настройки',
+        icon: Icons.tune_rounded,
+        child: Column(
+          children: [
+            SwitchListTile(
+              title: const Text('Показывать значения'),
+              value: state.showValues,
+              onChanged: (v) => onChanged(state.copyWith(showValues: v)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Text('Ширина столбцов'),
+                const Spacer(),
+                Text(state.barWidth.toStringAsFixed(1)),
+              ],
+            ),
+            Slider(
               value: state.barWidth,
               min: 0.1,
               max: 1.0,
               divisions: 9,
-              label: state.barWidth.toStringAsFixed(1),
               onChanged: (v) => onChanged(state.copyWith(barWidth: v)),
             ),
+          ],
+        ),
+      ),
+
+      // Внешний вид
+      buildSection(
+        context: context,
+        title: 'Внешний вид',
+        icon: Icons.format_paint_rounded,
+        child: Column(
+          children: [
+            // Закругление
+            Row(
+              children: [
+                const Text('Закругление углов'),
+                const Spacer(),
+                Text('${state.borderRadius.toInt()}'),
+              ],
+            ),
+            Slider(
+              value: state.borderRadius,
+              min: 0,
+              max: 30,
+              divisions: 30,
+              onChanged: (v) => onChanged(state.copyWith(borderRadius: v)),
+            ),
+
+            const SizedBox(height: 12),
+
+            // Трек (фон за столбцами)
+            SwitchListTile(
+              title: const Text('Показывать трек (фон)'),
+              value: state.showTrack,
+              onChanged: (v) => onChanged(state.copyWith(showTrack: v)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+            ),
+
+            const SizedBox(height: 12),
+            // Расстояние между столбцами
+            const Text('Расстояние между столбцами', style: TextStyle(fontSize: 15)),
+            Row(
+              children: [
+                Expanded(
+                  child: Slider(
+                    value: state.spacing,
+                    min: 0,
+                    max: 1,
+                    divisions: 10,
+                    onChanged: (v) => onChanged(state.copyWith(spacing: v)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 48,
+                  child: Text(
+                    state.spacing.toStringAsFixed(1),
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                    textAlign: TextAlign.end,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+
+      // Для числовых данных
+      if (state.columnName != null &&
+          dataset.column(state.columnName!) is NumericColumn)
+        buildSection(
+          context: context,
+          title: 'Гистограмма (числовые данные)',
+          icon: Icons.grid_on_rounded,
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  const Text('Количество корзин'),
+                  const Spacer(),
+                  Text(state.binCount.toString()),
+                ],
+              ),
+              Slider(
+                value: state.binCount.toDouble(),
+                min: 5,
+                max: 30,
+                divisions: 25,
+                onChanged: (v) => onChanged(state.copyWith(binCount: v.toInt())),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
 
-      const SizedBox(width: 16),
+      // Для категориальных
+      if (state.columnName != null &&
+          (dataset.column(state.columnName!) is CategoricalColumn ||
+           dataset.column(state.columnName!) is TextColumn))
+        buildSection(
+          context: context,
+          title: 'Категории',
+          icon: Icons.category_rounded,
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  const Text('Максимум категорий'),
+                  const Spacer(),
+                  Text(state.maxCategories.toString()),
+                ],
+              ),
+              Slider(
+                value: state.maxCategories.toDouble(),
+                min: 5,
+                max: 40,
+                divisions: 35,
+                onChanged: (v) => onChanged(state.copyWith(maxCategories: v.toInt())),
+              ),
+              SwitchListTile(
+                title: const Text('Сортировка по убыванию'),
+                value: state.sortDescending,
+                onChanged: (v) => onChanged(state.copyWith(sortDescending: v)),
+              ),
+            ],
+          ),
+        ),
 
-      // Выравнивание
-      DropdownButton<BarAlignment>(
-        value: state.alignment,
-        items: BarAlignment.values.map((alignment) {
-          return DropdownMenuItem(
-            value: alignment,
-            child: Text(alignment.toString().split('.').last),
-          );
-        }).toList(),
-        onChanged: (v) {
-          if (v != null) onChanged(state.copyWith(alignment: v));
-        },
+      const SizedBox(height: 24),
+
+      // Кнопка сброса
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: OutlinedButton.icon(
+          onPressed: () => onChanged(BarState()),
+          icon: const Icon(Icons.refresh_rounded),
+          label: const Text('Сбросить настройки'),
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(double.infinity, 52),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          ),
+        ),
       ),
+      const SizedBox(height: 32),
     ];
   }
 }

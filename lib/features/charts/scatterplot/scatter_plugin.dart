@@ -40,6 +40,7 @@ class ScatterPlugin extends ChartPlugin {
     return ScatterControls.build(
       dataset: data.dataset,
       state: state,
+      context: ref.context,
       onChanged: (newState) {
         ref.read(chartsProvider.notifier).updateChartState(data.id, newState);
       },

@@ -18,10 +18,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
       return MaterialApp(
         showPerformanceOverlay: false,
         title: 'StatFlow',
-        theme: ThemeData(
-          primarySwatch: Colors.blue,
-          useMaterial3: true,
-        ),
         localizationsDelegates: [
           GlobalMaterialLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,
@@ -32,6 +28,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
           const Locale('ru', 'RU'),
         ],
         home: const MainScreen(),
+        theme: ThemeData(
+          useMaterial3: true,
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: Colors.blue,
+            brightness: Brightness.light,
+          ),
+        ),
+
+        darkTheme: ThemeData(
+          useMaterial3: true,
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: Colors.indigo,
+            brightness: Brightness.dark,
+          ),
+        ),
       );
     }
   }

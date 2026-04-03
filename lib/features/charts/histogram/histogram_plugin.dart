@@ -38,6 +38,7 @@ class HistogramPlugin extends ChartPlugin {
     final state = data.state as HistogramState;
 
     return HistogramControls.build(
+      context: ref.context,
       dataset: data.dataset,
       state: state,
       onChanged: (newState) {

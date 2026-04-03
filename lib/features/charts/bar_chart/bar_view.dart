@@ -53,7 +53,7 @@ class _BarViewState extends State<BarView> {
   @override
   void initState() {
     super.initState();
-    _updateData(widget.dataset, widget.state);
+    _updateData();
   }
 
   @override
@@ -61,20 +61,20 @@ class _BarViewState extends State<BarView> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.dataset != widget.dataset ||
         oldWidget.state.columnName != widget.state.columnName) {
-      _updateData(widget.dataset, widget.state);
+      _updateData();
     }
   }
 
   /// Обновляет данные на основе выбранной колонки
-  void _updateData(Dataset dataset, BarState state) {
-    log("Обновление данных в BarView с состоянием: ${state.toString()}", name: 'BarView');
+  void _updateData() {
+    log("Обновление данных в BarView с состоянием: ${widget.state.toString()}", name: 'BarView');
     
-    if (state.columnName == null) {
+    if (widget.state.columnName == null) {
       _clearData();
       return;
     }
 
-    final column = dataset.column(state.columnName!);
+    final column = widget.dataset.column(widget.state.columnName!);
     if (column == null) {
       _clearData();
       return;
@@ -188,20 +188,49 @@ class _BarViewState extends State<BarView> {
     }
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (_isSampled)
-          _buildSamplingInfo(),
+        if (_isSampled) _buildSamplingInfo(),
         Expanded(
           child: SfCartesianChart(
-            tooltipBehavior: _buildTooltipBehavior(),
-            primaryXAxis: _buildXAxis(),
-            primaryYAxis: _buildYAxis(),
-            series: _buildSeries(),
+            plotAreaBorderWidth: 0,
+            trackballBehavior: TrackballBehavior(
+              enable: true,
+              activationMode: ActivationMode.singleTap,
+              tooltipSettings: const InteractiveTooltip(format: 'point.x : point.y'),
+            ),
+            tooltipBehavior: TooltipBehavior(enable: false, duration: 2500),
+            primaryXAxis: CategoryAxis(
+              labelRotation: 45,
+              labelIntersectAction: AxisLabelIntersectAction.multipleRows,
+            ),
+            primaryYAxis: NumericAxis(),
+            series: _buildSeries(context),
           ),
         ),
       ],
     );
+  }
+
+  List<BarSeries<BarData, String>> _buildSeries(BuildContext context) {
+    return [
+      BarSeries<BarData, String>(
+        dataSource: _barData,
+        xValueMapper: (data, _) => data.category,
+        yValueMapper: (data, _) => data.value,
+        width: widget.state.barWidth,
+        spacing: widget.state.spacing,
+        borderRadius: BorderRadius.circular(widget.state.borderRadius),
+        borderWidth: widget.state.borderWidth,
+        borderColor: Theme.of(context).colorScheme.primary,
+        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.85),
+        isTrackVisible: widget.state.showTrack,
+        trackColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+        dataLabelSettings: DataLabelSettings(
+          isVisible: widget.state.showValues,
+          alignment: _getBarAlignment(widget.state.alignment),
+        ),
+      ),
+    ];
   }
 
   /// Строит информацию о сэмплировании
@@ -241,24 +270,7 @@ class _BarViewState extends State<BarView> {
       title: AxisTitle(text: widget.state.columnName),
     );
   }
-
-  /// Строит серию данных для столбчатой диаграммы
-  List<BarSeries<BarData, String>> _buildSeries() {
-    return [
-      BarSeries<BarData, String>(
-        dataSource: _barData,
-        xValueMapper: (data, _) => data.category,
-        yValueMapper: (data, _) => data.value,
-        width: widget.state.barWidth,
-        dataLabelSettings: DataLabelSettings(
-          alignment: _getBarAlignment(widget.state.alignment),
-          isVisible: widget.state.showValues,
-          textStyle: const TextStyle(fontSize: 10),
-        ),
-      ),
-    ];
-  }
-
+  
   /// Преобразование BarAlignment в ChartAlignment
   ChartAlignment _getBarAlignment(BarAlignment alignment) {
     switch (alignment) {

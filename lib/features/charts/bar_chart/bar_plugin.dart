@@ -44,6 +44,7 @@ class BarPlugin extends ChartPlugin {
     final state = data.state as BarState;
 
     return BarControls.build(
+      context: ref.context,
       dataset: data.dataset,
       state: state,
       onChanged: (newState) {
