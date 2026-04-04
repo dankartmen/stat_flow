@@ -15,6 +15,9 @@ const int _kMaxChartPoints = 5000;
 /// - Маркеров на точках данных
 /// - Сглаживания линии
 /// - Всплывающих подсказок
+/// - Сетки для удобства чтения
+/// - Сэмплирования для больших наборов данных
+/// 
 /// {@endtemplate}
 class LineView extends StatelessWidget {
   /// Датасет с данными для отображения
@@ -70,7 +73,7 @@ class LineView extends StatelessWidget {
       children: [
         if (isSampled)
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.all(8.0),
             child: Text(
               'Показано ${points.length} из ${allPoints.length} точек (сэмплирование)',
               style: const TextStyle(fontSize: 12, color: Colors.black54),
@@ -78,53 +81,96 @@ class LineView extends StatelessWidget {
           ),
         Expanded(
           child: SfCartesianChart(
-            // Настройка всплывающих подсказок
-            tooltipBehavior: TooltipBehavior(
-              enable: true,
-              duration: 2000,
-              header: column.name,
+            plotAreaBorderWidth: 0,
+            trackballBehavior: TrackballBehavior(
+              enable: state.trackballEnabled,
               activationMode: ActivationMode.singleTap,
-              format: 'Индекс: point.x\nЗначение: point.y',
+              tooltipSettings: const InteractiveTooltip(format: 'point.y'),
             ),
-
-            // Настройка осей
+            tooltipBehavior: TooltipBehavior(enable: true, duration: 2500),
             primaryXAxis: NumericAxis(
               title: const AxisTitle(text: 'Индекс'),
-              majorGridLines: state.showGridLines 
-                  ? const MajorGridLines(width: 1, color: Colors.grey)
+              majorGridLines: state.showGridLines
+                  ? const MajorGridLines(width: 1)
                   : const MajorGridLines(width: 0),
             ),
             primaryYAxis: NumericAxis(
               title: AxisTitle(text: column.name),
-              majorGridLines: state.showGridLines 
-                  ? const MajorGridLines(width: 1, color: Colors.grey)
+              majorGridLines: state.showGridLines
+                  ? const MajorGridLines(width: 1)
                   : const MajorGridLines(width: 0),
             ),
-
-            // Серия данных - линейный график
-            series: <LineSeries<ChartPoint, double>>[
-              LineSeries<ChartPoint, double>(
-                dataSource: points,
-                xValueMapper: (ChartPoint point, _) => point.x,
-                yValueMapper: (ChartPoint point, _) => point.y,
-                enableTooltip: true,
-                markerSettings: MarkerSettings(
-                  isVisible: state.showMarkers,
-                  shape: DataMarkerType.circle,
-                  width: 6,
-                  height: 6,
-                ),
-                color: Colors.blue,
-                width: 2,
-              ),
-            ],
+            series: _buildSeries(context, points),
           ),
         ),
       ],
     );
   }
-}
 
+  /// Строит серии данных для графика в зависимости от настроек
+  /// Поддерживает разные типы линий, маркеры, пунктир и тренды
+  /// Принимает на вход подготовленные точки данных и возвращает список серий для отображения
+  /// 
+  /// Принимает:
+  /// - [context] — контекст для доступа к теме и цветам
+  /// - [points] — список точек данных для построения графика
+  /// 
+  /// Возвращает список серий, который может содержать LineSeries, SplineSeries или StepLineSeries в зависимости от настроек
+  List<CartesianSeries> _buildSeries(BuildContext context, List<ChartPoint> points) {
+    final color = Theme.of(context).colorScheme.primary;
+
+    if (state.lineType == LineType.curved) {
+      return [
+        SplineSeries<ChartPoint, double>(
+          dataSource: points,
+          xValueMapper: (p, _) => p.x,
+          yValueMapper: (p, _) => p.y,
+          color: color,
+          width: state.lineWidth,
+          dashArray: state.isDashed ? const [5, 3] : null,
+          markerSettings: MarkerSettings(
+            isVisible: state.showMarkers,
+            width: state.markerSize,
+            height: state.markerSize,
+            borderColor: color,
+          ),
+          dataLabelSettings: DataLabelSettings(
+            isVisible: state.showDataLabels,
+          ),
+          enableTooltip: true,
+          animationDuration: state.animationEnabled ? 1500 : 0,
+          trendlines: state.showTrendline
+              ? [Trendline(type: TrendlineType.linear, color: Colors.orange)]
+              : null,
+        ),
+      ];
+    }
+
+    // По умолчанию — LineSeries
+    return [
+      LineSeries<ChartPoint, double>(
+        dataSource: points,
+        xValueMapper: (p, _) => p.x,
+        yValueMapper: (p, _) => p.y,
+        color: color,
+        width: state.lineWidth,
+        dashArray: state.isDashed ? const [5, 3] : null,
+        markerSettings: MarkerSettings(
+          isVisible: state.showMarkers,
+          width: state.markerSize,
+          height: state.markerSize,
+          borderColor: color,
+        ),
+        dataLabelSettings: DataLabelSettings(isVisible: state.showDataLabels),
+        enableTooltip: true,
+        animationDuration: state.animationEnabled ? 1500 : 0,
+        trendlines: state.showTrendline
+            ? [Trendline(type: TrendlineType.linear, color: Colors.orange)]
+            : null,
+      ),
+    ];
+  }
+}
 
 /// Вспомогательный класс для хранения точки данных
 class ChartPoint {

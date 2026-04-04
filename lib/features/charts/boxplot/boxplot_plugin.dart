@@ -38,6 +38,7 @@ class BoxPlotPlugin extends ChartPlugin {
     final state = data.state as BoxPlotState;
 
     return BoxPlotControls.build(
+      context: ref.context,
       dataset: data.dataset,
       state: state,
       onChanged: (newState) {

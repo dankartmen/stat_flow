@@ -38,6 +38,7 @@ class LinePlugin extends ChartPlugin {
     final state = data.state as LineState;
 
     return LineControls.build(
+      context: ref.context,
       dataset: data.dataset,
       state: state,
       onChanged: (newState) {

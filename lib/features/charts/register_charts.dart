@@ -13,6 +13,10 @@ import 'scatterplot/scatter_plugin.dart';
 /// - Тепловой карты ([HeatmapPlugin])
 /// - Гистограммы ([HistogramPlugin])
 /// - Ящика с усами ([BoxPlotPlugin])
+/// - Диаграммы рассеяния ([ScatterPlugin])
+/// - Линейного графика ([LinePlugin])
+/// - Столбчатой диаграммы ([BarPlugin])
+/// 
 /// 
 /// Плагины регистрируются в [ChartRegistry] для последующего
 /// динамического создания графиков по типу.

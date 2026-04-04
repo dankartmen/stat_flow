@@ -12,6 +12,8 @@ import 'boxplot_state.dart';
 /// - Автоматического расчета статистик (медиана, квартили, выбросы)
 /// - Отображения среднего значения на графике
 /// - Адаптивного отображения под разные размеры
+/// - Настройки визуального стиля (ширина, цвет, отступы)
+/// - Сэмплирования для больших наборов данных
 /// 
 /// Требует выбранную числовую колонку в [BoxPlotState].
 /// {@endtemplate}
@@ -53,7 +55,6 @@ class BoxPlotView extends StatelessWidget {
       );
     }
 
-    // Сэмплирование для ускорения рендеринга на больших наборах данных
     final maxPoints = state.maxPoints <= 0 ? values.length : state.maxPoints;
     final displayValues = values.length > maxPoints
         ? values.sample(maxPoints)
@@ -65,7 +66,7 @@ class BoxPlotView extends StatelessWidget {
       children: [
         if (isSampled)
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.all(8.0),
             child: Text(
               'Показано ${displayValues.length} из ${values.length} точек (сэмплирование)',
               style: const TextStyle(fontSize: 12, color: Colors.black54),
@@ -86,11 +87,21 @@ class BoxPlotView extends StatelessWidget {
                 dataSource: [displayValues],
                 xValueMapper: (_, __) => state.columnName!,
                 yValueMapper: (v, _) => v,
+                boxPlotMode: state.boxPlotMode,
+                width: state.boxWidth,
+                spacing: state.spacing,
+                borderWidth: state.borderWidth,
+                borderColor: Theme.of(context).colorScheme.primary,
+                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
                 showMean: state.showMean,
-                markerSettings: const MarkerSettings(isVisible: true),
-                dataLabelSettings: const DataLabelSettings(
-                  isVisible: false,
+                markerSettings: MarkerSettings(
+                  isVisible: state.showOutliers,
+                  width: state.outlierSize,
+                  height: state.outlierSize,
+                  shape: DataMarkerType.circle,
+                  borderColor: Theme.of(context).colorScheme.error,
                 ),
+                dataLabelSettings: const DataLabelSettings(isVisible: false),
               ),
             ],
           ),
