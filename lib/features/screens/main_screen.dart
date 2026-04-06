@@ -302,7 +302,6 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     final dataset = ref.watch(datasetProvider);
     final charts = ref.watch(chartsProvider);
     final selectedId = ref.watch(selectedChartIdProvider);
-    final isRightExpanded = ref.watch(rightPanelExpandedProvider);
     final currentScreen = ref.watch(currentScreenProvider);
 
     final selectedChart = selectedId != null
@@ -328,7 +327,6 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                   dataset: dataset,
                   selectedChart: selectedChart,
                   onAddChart: _addChart,
-                  onCreateChartForField: _createChartForField,
                   onUpdateChartState: (id, newState) {
                     ref.read(chartsProvider.notifier).updateChartState(id, newState);
                   },

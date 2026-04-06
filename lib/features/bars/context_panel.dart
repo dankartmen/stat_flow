@@ -1,8 +1,8 @@
+import 'package:expandable/expandable.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../core/dataset/dataset.dart';
-import '../../core/providers/providers.dart';
 
+import '../../core/dataset/dataset.dart';
 import '../charts/chart_registry.dart';
 import '../charts/chart_state.dart';
 import '../charts/chart_type.dart';
@@ -28,19 +28,15 @@ class ContextPanel extends ConsumerStatefulWidget {
   /// Коллбек для создания нового графика указанного типа
   final void Function(ChartType) onAddChart;
 
-  /// Коллбек для создания графика для конкретного поля датасета
-  final void Function(String, ChartType) onCreateChartForField;
 
   /// Коллбек для обновления состояния графика (после изменения настроек)
   final void Function(int, ChartState) onUpdateChartState;
 
-  /// {@macro context_panel}
   const ContextPanel({
     super.key,
     required this.dataset,
     required this.selectedChart,
     required this.onAddChart,
-    required this.onCreateChartForField,
     required this.onUpdateChartState,
   });
 
@@ -50,149 +46,59 @@ class ContextPanel extends ConsumerStatefulWidget {
 
 class _ContextPanelState extends ConsumerState<ContextPanel> {
   bool _isExpanded = true;
+  bool _showContent = true;
+  
+  void _togglePanel() {
+    setState(() {
+      _isExpanded = !_isExpanded;
+      if (!_isExpanded) {
+        _showContent = false;        // сразу прячем контент при сворачивании
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    final isDatasetLoaded = widget.dataset != null;
-
-    // Если датасет не загружен — показываем сообщение и кнопку загрузки (дублируем)
-    if (!isDatasetLoaded) {
-      return AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-        width: _isExpanded ? 280 : 48,
-        color: Colors.grey[100],
-        child: _isExpanded
-            ? Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text('Датасет не загружен'),
-                    const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: () => ref.read(datasetProvider.notifier).state = null,
-                      child: const Text('Загрузить датасет'),
-                    ),
-                  ],
-                ),
-              )
-            : _buildCollapsedButton(),
-      );
-    }
-
-    // Если датасет загружен, но нет выбранного графика — показываем кнопку создания
-    if (widget.selectedChart == null) {
-      return AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-        width: _isExpanded ? 280 : 48,
-        color: Colors.grey[100],
-        child: _isExpanded
-            ? Column(
-                children: [
-                  const SizedBox(height: 24),
-                  const Text(
-                    'Нет выбранного графика',
-                    style: TextStyle(fontSize: 16),
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () => _showChartMenu(context),
-                    child: const Text('Создать график'),
-                  ),
-                ],
-              )
-            : _buildCollapsedButton(),
-      );
-    }
-
-    // Есть выбранный график — показываем его настройки через плагин
-    final plugin = ChartRegistry.get(widget.selectedChart!.type);
-    final controls = plugin.buildControls(widget.selectedChart!, () {}, ref);
+    final panelWidth = _isExpanded ? 300.0 : 48.0;
 
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 280),
       curve: Curves.easeInOut,
-      width: _isExpanded ? 280 : 48,
+      width: panelWidth,
       color: Colors.grey[100],
-      child: _isExpanded
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 16),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Настройки: ${widget.selectedChart!.type.name}',
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: () {
-                          setState(() {
-                            _isExpanded = !_isExpanded;
-                          });
-                        },
-                        icon: Icon(
-                          Icons.chevron_left,
-                          color: Colors.grey[600],
-                        ),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        splashRadius: 20,
-                        tooltip: 'Свернуть',
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(),
-                Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: controls,
-                  ),
-                ),
-              ],
-            )
-          : _buildCollapsedButton(),
+      clipBehavior: Clip.hardEdge,
+      onEnd: () {
+        if (_isExpanded) {
+          setState(() => _showContent = true);
+        }
+      },
+      child: _isExpanded && _showContent
+          ? _buildExpandedContent()
+          : _buildCollapsedContent(),
     );
   }
 
-  /// Строит кнопку для разворачивания панели (свернутое состояние)
-  Widget _buildCollapsedButton() {
-    return SizedBox(
-      width: 48,
-      height: double.infinity,
+  
+  Widget _buildCollapsedContent() {
+    return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           IconButton(
-            onPressed: () {
-              setState(() {
-                _isExpanded = true;
-              });
-            },
-            icon: Icon(
-              Icons.chevron_right,
-              color: Colors.grey[600],
-              size: 24,
-            ),
+            onPressed: _togglePanel,
+            icon: Icon(Icons.chevron_right, color: Colors.grey[600], size: 28),
             tooltip: 'Развернуть панель',
-            style: IconButton.styleFrom(
-              padding: const EdgeInsets.all(8),
-            ),
+            style: IconButton.styleFrom(padding: const EdgeInsets.all(8)),
           ),
           const SizedBox(height: 8),
-          const RotatedBox(
+          RotatedBox(
             quarterTurns: 1,
             child: Text(
               'Настройки',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
+                color: Colors.grey[600],
               ),
             ),
           ),
@@ -201,11 +107,111 @@ class _ContextPanelState extends ConsumerState<ContextPanel> {
     );
   }
 
+  
+  Widget _buildExpandedContent() {
+    final isDatasetLoaded = widget.dataset != null;
+
+    if (!isDatasetLoaded) {
+      return _buildNoDatasetContent();
+    }
+
+    if (widget.selectedChart == null) {
+      return _buildNoChartContent();
+    }
+
+    // Есть выбранный график
+    final plugin = ChartRegistry.get(widget.selectedChart!.type);
+    final controls = plugin.buildControls(widget.selectedChart!, () {}, ref);
+
+    return SizedBox(
+      width: 300,
+      child: _buildChartSettingsContent(controls));
+  }
+
+  Widget _buildNoDatasetContent() {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Датасет не загружен', style: TextStyle(fontSize: 16)),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _loadDataset, // можно сделать _loadDataset асинхронным
+              child: const Text('Загрузить датасет'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNoChartContent() {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          const SizedBox(height: 24),
+          const Text('Нет выбранного графика', style: TextStyle(fontSize: 16)),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: () => _showChartMenu(context),
+            child: const Text('Создать график'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChartSettingsContent(List<Widget> controls) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 12, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Настройки: ${widget.selectedChart!.type.name}',
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+              ),
+              SizedBox(width: 6),
+              IconButton(
+                onPressed: _togglePanel,
+                icon: Icon(Icons.chevron_left, color: Colors.grey[600]),
+                tooltip: 'Свернуть панель',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              ),
+            ],
+          ),
+          const Divider(),
+          ...controls,
+        ],
+      ),
+    );
+  }
+
   /// Отображает всплывающее меню с доступными типами графиков
   void _showChartMenu(BuildContext context) {
+    // Находим позицию кнопки, чтобы привязать меню к ней
+    final RenderBox? button = context.findRenderObject() as RenderBox?;
+    if (button == null) return;
+
     showMenu(
       context: context,
-      position: const RelativeRect.fromLTRB(80, 200, 0, 0),
+      position: RelativeRect.fromRect(
+        Rect.fromPoints(
+          button.localToGlobal(Offset.zero),
+          button.localToGlobal(button.size.bottomRight(Offset.zero)),
+        ),
+        Offset.zero & MediaQuery.of(context).size,
+      ),
       items: ChartType.values.map((type) {
         return PopupMenuItem(
           onTap: () => widget.onAddChart(type),
@@ -218,6 +224,13 @@ class _ContextPanelState extends ConsumerState<ContextPanel> {
           ),
         );
       }).toList(),
+    );
+  }
+
+
+  void _loadDataset() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Загрузка датасета...')),
     );
   }
 
@@ -235,7 +248,7 @@ class _ContextPanelState extends ConsumerState<ContextPanel> {
       case ChartType.linechart:
         return Icons.line_axis;
       case ChartType.barchart:
-        return Icons.bar_chart;
+        return Icons.insert_chart; 
     }
   }
 }

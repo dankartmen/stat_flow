@@ -37,34 +37,42 @@ class HeatmapControls {
         context: context,
         title: 'Режим',
         icon: Icons.tune_rounded,
-        child: SegmentedButton<bool>(
-          style: SegmentedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        child: SizedBox(
+          width: double.infinity,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: SegmentedButton<bool>(
+              style: SegmentedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                textStyle: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500),
+              ),
+              segments: const [
+                ButtonSegment<bool>(
+                  value: true,
+                  label: Text('Корреляция', style: TextStyle(overflow: TextOverflow.ellipsis),),
+                  icon: Icon(Icons.show_chart_rounded, size: 18,),
+                ),
+                ButtonSegment<bool>(
+                  value: false,
+                  label: Text('Оси', style: TextStyle(overflow: TextOverflow.ellipsis),),
+                  icon: Icon(Icons.swap_horiz_rounded, size: 18,),
+                ),
+              ],
+              selected: {isCorrelationMode},
+              onSelectionChanged: (Set<bool> selection) {
+                final newMode = selection.first;
+                if (newMode != isCorrelationMode) {
+                  onChanged(state.copyWith(
+                    useCorrelation: newMode,
+                    xColumn: null,
+                    yColumn: null,
+                  ));
+                }
+              },
+            ),
           ),
-          segments: const [
-            ButtonSegment<bool>(
-              value: true,
-              label: Text('Корреляция'),
-              icon: Icon(Icons.show_chart_rounded),
-            ),
-            ButtonSegment<bool>(
-              value: false,
-              label: Text('Оси'),
-              icon: Icon(Icons.swap_horiz_rounded),
-            ),
-          ],
-          selected: {isCorrelationMode},
-          onSelectionChanged: (Set<bool> selection) {
-            final newMode = selection.first;
-            if (newMode != isCorrelationMode) {
-              onChanged(state.copyWith(
-                useCorrelation: newMode,
-                xColumn: null,
-                yColumn: null,
-              ));
-            }
-          },
         ),
       ),
 

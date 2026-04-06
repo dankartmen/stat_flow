@@ -32,6 +32,7 @@ dependencies:
   draggable_overlay_window: ^1.0.0
   draggable_widget: ^2.0.0
   dropdown_button2: ^3.0.0
+  expandable: ^5.0.1
   file_picker: ^10.3.10
   flutter:
     sdk: flutter
