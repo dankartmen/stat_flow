@@ -159,32 +159,6 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     ref.read(selectedChartIdProvider.notifier).state = newChart.id;
   }
 
-  /// Открывает график в полноэкранном режиме
-  void _openFullscreen(int id) {
-    final chart = ref.read(chartsProvider).firstWhere((c) => c.id == id);
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (context) => FullscreenChart(
-          title: chart.type.name,
-          child: ChartRenderer.build(chart),
-        ),
-      ),
-    );
-  }
-
-  /// Открывает полноэкранную таблицу данных
-  void _showFullTable() {
-    final dataset = ref.read(datasetProvider);
-    if (dataset == null) return;
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => FullTableScreen(dataset: dataset),
-      ),
-    );
-  }
 
   /// Отображает диалог с информацией о приложении
   void _showInfoDialog() {
@@ -220,20 +194,20 @@ class _MainScreenState extends ConsumerState<MainScreen> {
 
   /// Строит состояние пустого канваса (нет графиков, но данные загружены)
   Widget _buildEmptyState() {
-    return Center(
+    return const Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
             Icons.add_chart,
             size: 64,
-            color: Colors.grey[400],
+            color: Colors.grey,
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: 16),
           Text(
             'Добавьте график через боковое меню',
             style: TextStyle(
-              color: Colors.grey[600],
+              color: Colors.grey,
               fontSize: 16,
             ),
           ),
@@ -299,14 +273,8 @@ class _MainScreenState extends ConsumerState<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final dataset = ref.watch(datasetProvider);
-    final charts = ref.watch(chartsProvider);
-    final selectedId = ref.watch(selectedChartIdProvider);
+    final datasetExists = ref.watch(datasetProvider) != null;
     final currentScreen = ref.watch(currentScreenProvider);
-
-    final selectedChart = selectedId != null
-        ? charts.firstWhere((c) => c.id == selectedId)
-        : null;
 
     return Scaffold(
       body: Column(
@@ -323,9 +291,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
             child: Row(
               children: [
                 // Левая контекстная панель
-                ContextPanel(
-                  dataset: dataset,
-                  selectedChart: selectedChart,
+                _LeftPanel(
                   onAddChart: _addChart,
                   onUpdateChartState: (id, newState) {
                     ref.read(chartsProvider.notifier).updateChartState(id, newState);
@@ -337,36 +303,9 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                     index: currentScreen == ScreenType.canvas ? 0 : 1,
                     children: [
                       // Канвас с графиками
-                      CanvasWorkspace(
-                        children: [
-                          ...charts.map((chart) => FloatingChart(
-                                key: ValueKey(chart.id),
-                                data: chart,
-                                isSelected: chart.id == selectedId,
-                                onSelect: () {
-                                  ref.read(chartsProvider.notifier).selectChart(chart.id);
-                                  ref.read(selectedChartIdProvider.notifier).state = chart.id;
-                                },
-                                onPositionChanged: (pos) =>
-                                    ref.read(chartsProvider.notifier).updatePosition(chart.id, pos),
-                                onSizeChanged: (size) =>
-                                    ref.read(chartsProvider.notifier).updateSize(chart.id, size),
-                                onClose: () {
-                                  ref.read(chartsProvider.notifier).removeChart(chart.id);
-                                  if (chart.id == selectedId) {
-                                    final newSelected = charts.length > 1 ? charts.last.id : null;
-                                    ref.read(selectedChartIdProvider.notifier).state = newSelected;
-                                  }
-                                },
-                                onFullscreen: () => _openFullscreen(chart.id),
-                                child: ChartRenderer.build(chart),
-                              )),
-                          if (charts.isEmpty && dataset != null) _buildEmptyState(),
-                        ],
-                      ),
-                      // Таблица данных (встраиваем FullTableScreen как виджет)
-                      if (dataset != null)
-                        FullTableScreen(dataset: dataset)
+                      const _CanvasArea(),
+                      if (datasetExists)
+                        const _FullTableArea()
                       else
                         const Center(child: Text('Нет данных')),
                     ],
@@ -378,5 +317,135 @@ class _MainScreenState extends ConsumerState<MainScreen> {
         ],
       ),
     );
+  }
+}
+
+
+class _LeftPanel extends ConsumerWidget {
+  final void Function(ChartType) onAddChart;
+  final void Function(int, ChartState) onUpdateChartState;
+
+  const _LeftPanel({
+    required this.onAddChart,
+    required this.onUpdateChartState,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final dataset = ref.watch(datasetProvider);
+    final selectedChartId = ref.watch(selectedChartIdProvider);
+    final charts = ref.watch(chartsProvider);
+    final selectedChart = selectedChartId != null
+        ? charts.cast<FloatingChartData?>().firstWhere((c) => c?.id == selectedChartId, orElse: () => null)
+        : null;
+
+    return ContextPanel(
+      dataset: dataset,
+      selectedChart: selectedChart,
+      onAddChart: onAddChart,
+      onUpdateChartState: onUpdateChartState,
+    );
+  }
+}
+
+class _CanvasArea extends ConsumerWidget {
+  const _CanvasArea();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final charts = ref.watch(chartsProvider);
+    final selectedId = ref.watch(selectedChartIdProvider);
+    final dataset = ref.watch(datasetProvider);
+
+    void onSelectChart(int id) {
+      ref.read(chartsProvider.notifier).selectChart(id);
+      ref.read(selectedChartIdProvider.notifier).state = id;
+    }
+
+    void onPositionChanged(int id, Offset pos) {
+      ref.read(chartsProvider.notifier).updatePosition(id, pos);
+    }
+
+    void onSizeChanged(int id, Size size) {
+      ref.read(chartsProvider.notifier).updateSize(id, size);
+    }
+
+    void onCloseChart(int id) {
+      ref.read(chartsProvider.notifier).removeChart(id);
+      if (selectedId == id) {
+        final newSelectedChart = charts.length > 1
+          ? charts.last.id
+          : null;
+        ref.read(selectedChartIdProvider.notifier).state = newSelectedChart;
+      }
+    }
+
+    void onFullscreen(int id){
+      final chart = charts.firstWhere((c) => c.id == id);
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          fullscreenDialog: true,
+          builder: (context) => FullscreenChart(
+            title: chart.type.name,
+            child: ChartRenderer.build(chart),
+          )
+        ),
+      );
+    }
+
+    if (charts.isEmpty && dataset != null){
+      return const _EmptyCanvasState();
+    }
+
+
+    return CanvasWorkspace(
+      children: [
+        for (final chart in charts)
+          FloatingChart(
+            key: ValueKey(chart.id),
+            data: chart, 
+            isSelected: chart.id == selectedId, 
+            onPositionChanged: (pos) => onPositionChanged(chart.id, pos), 
+            onSizeChanged: (size) => onSizeChanged(chart.id, size), 
+            onSelect: () => onSelectChart(chart.id),
+            onClose: () => onCloseChart(chart.id), 
+            onFullscreen: () => onFullscreen(chart.id), 
+            child: ChartRenderer.build(chart)
+          )
+      ]
+    );
+  }
+}
+
+class _EmptyCanvasState extends StatelessWidget{
+  const _EmptyCanvasState();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.add_chart, size: 64, color: Colors.grey),
+          SizedBox(height: 16),
+          Text(
+            'Добавьте график через боковое меню',
+            style: TextStyle(color: Colors.grey, fontSize: 16),
+          ),
+        ],
+      )
+    );
+  }
+}
+
+
+class _FullTableArea extends ConsumerWidget {
+  const _FullTableArea();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final dataset = ref.watch(datasetProvider);
+    return FullTableScreen(dataset: dataset!);
   }
 }

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide DataColumn;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:stat_flow/features/charts/register_charts.dart';
@@ -16,15 +17,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
     @override
     Widget build(BuildContext context) {
       return MaterialApp(
-        showPerformanceOverlay: true,
+        showPerformanceOverlay: kDebugMode,
         title: 'StatFlow',
-        localizationsDelegates: [
+        localizationsDelegates: const [
           GlobalMaterialLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,
           SfGlobalLocalizations.delegate
         ],
-        supportedLocales: [
+        supportedLocales: const [
           const Locale('ru', 'RU'),
         ],
         home: const MainScreen(),

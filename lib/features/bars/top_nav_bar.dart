@@ -35,8 +35,7 @@ class TopNavBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final dataset = ref.watch(datasetProvider);
-    final isDatasetLoaded = dataset != null;
+    final isDatasetLoaded = ref.watch(datasetProvider) != null;
 
     return Container(
       height: 56,

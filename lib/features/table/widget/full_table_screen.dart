@@ -36,8 +36,7 @@ class _FullTableScreenState extends State<FullTableScreen> {
   @override
   void initState() {
     super.initState();
-    final converter = SyncfusionGridConverter();
-    _gridData = converter.convert(widget.dataset);
+    _gridData = SyncfusionGridConverter().convert(widget.dataset);
   }
 
   @override
@@ -46,28 +45,7 @@ class _FullTableScreenState extends State<FullTableScreen> {
       color: Colors.white,
       child: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Датасет: ${widget.dataset.name}',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.fade,
-                ),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-              ],
-            ),
-          ),
+          const _TableHeader(),
           const Divider(),
           Expanded(
             child: SfDataGrid(
@@ -94,28 +72,33 @@ class _FullTableScreenState extends State<FullTableScreen> {
       ),
     );
   }
+}
 
+///{@template table_header}
+/// Заголовок экрана полной таблицы с названием и кнопкой закрытия
+/// Расположен в верхней части экрана и обеспечивает быстрый доступ к закрытию просмотра таблицы
+/// Содержит:
+/// - Название "Таблица данных"
+/// - Кнопку "Закрыть", которая закрывает экран и возвращает пользователя к основному интерфейсу
+///{@endtemplate}
+class _TableHeader extends StatelessWidget {
+  const _TableHeader();
 
-  /// Строит информационную панель с количеством строк и колонок
-  Widget _buildDatasetInfo() {
+  @override
+  Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(8),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            '${widget.dataset.rowCount} строк',
-            style: const TextStyle(color: Colors.white70),
+          const Text(
+            'Таблица данных',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
-          const SizedBox(width: 8),
-          Container(
-            width: 1,
-            height: 20,
-            color: Colors.white30,
-          ),
-          const SizedBox(width: 8),
-          Text(
-            '${widget.dataset.columnCount} колонок',
-            style: const TextStyle(color: Colors.white70),
+          const Spacer(),
+          IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () => Navigator.of(context).pop(),
           ),
         ],
       ),

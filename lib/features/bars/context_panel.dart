@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:expandable/expandable.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -55,6 +57,10 @@ class _ContextPanelState extends ConsumerState<ContextPanel> {
       _isExpanded = !_isExpanded;
       if (!_isExpanded) {
         _showContent = false;        // сразу прячем контент при сворачивании
+      } else {
+        Future.delayed(const Duration(milliseconds: 280), () {
+          if (mounted && _isExpanded) setState(() => _showContent = true);
+        });
       }
     });
   }
@@ -62,7 +68,7 @@ class _ContextPanelState extends ConsumerState<ContextPanel> {
   @override
   Widget build(BuildContext context) {
     final panelWidth = _isExpanded ? 300.0 : 48.0;
-
+    log('Building ContextPanel');
     return AnimatedContainer(
       duration: const Duration(milliseconds: 280),
       curve: Curves.easeInOut,
@@ -82,28 +88,13 @@ class _ContextPanelState extends ConsumerState<ContextPanel> {
 
   
   Widget _buildCollapsedContent() {
-    return Center(
+    return const Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          IconButton(
-            onPressed: _togglePanel,
-            icon: Icon(Icons.chevron_right, color: Colors.grey[600], size: 28),
-            tooltip: 'Развернуть панель',
-            style: IconButton.styleFrom(padding: const EdgeInsets.all(8)),
-          ),
-          const SizedBox(height: 8),
-          RotatedBox(
-            quarterTurns: 1,
-            child: Text(
-              'Настройки',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: Colors.grey[600],
-              ),
-            ),
-          ),
+          _CollapseIcon(),
+          SizedBox(height: 8),
+          _RotatedLabel(),
         ],
       ),
     );
@@ -111,9 +102,7 @@ class _ContextPanelState extends ConsumerState<ContextPanel> {
 
   
   Widget _buildExpandedContent() {
-    final isDatasetLoaded = widget.dataset != null;
-
-    if (!isDatasetLoaded) {
+    if (widget.dataset == null) {
       return _buildNoDatasetContent();
     }
 
@@ -140,7 +129,7 @@ class _ContextPanelState extends ConsumerState<ContextPanel> {
             const Text('Датасет не загружен', style: TextStyle(fontSize: 16)),
             const SizedBox(height: 16),
             ElevatedButton(
-              onPressed: _loadDataset, // можно сделать _loadDataset асинхронным
+              onPressed: _loadDataset,
               child: const Text('Загрузить датасет'),
             ),
           ],
@@ -212,7 +201,7 @@ class _ContextPanelState extends ConsumerState<ContextPanel> {
           button.localToGlobal(Offset.zero),
           button.localToGlobal(button.size.bottomRight(Offset.zero)),
         ),
-        Offset.zero & MediaQuery.of(context).size,
+        Offset.zero & MediaQuery.sizeOf(context),
       ),
       items: ChartType.values.map((type) {
         return PopupMenuItem(
@@ -235,7 +224,7 @@ class _ContextPanelState extends ConsumerState<ContextPanel> {
       context,
       MaterialPageRoute(builder: (context) => const TablePreviewScreen()),
     );
-
+    if (!mounted) return;
     if (result != null && result is Dataset) {
       ref.read(datasetProvider.notifier).state = result;
     }
@@ -257,5 +246,37 @@ class _ContextPanelState extends ConsumerState<ContextPanel> {
       case ChartType.barchart:
         return Icons.insert_chart; 
     }
+  }
+}
+
+
+class _CollapseIcon extends StatelessWidget {
+  const _CollapseIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      onPressed: () => (context.findAncestorStateOfType<_ContextPanelState>())?._togglePanel(),
+      icon: const Icon(Icons.chevron_right, size: 28),
+      tooltip: 'Развернуть панель',
+      padding: const EdgeInsets.all(8),
+      style: IconButton.styleFrom(foregroundColor: Colors.grey),
+    );
+  }
+}
+
+
+class _RotatedLabel extends StatelessWidget {
+  const _RotatedLabel();
+
+  @override
+  Widget build(BuildContext context) {
+    return RotatedBox(
+      quarterTurns: 1,
+      child: Text(
+        'Настройки',
+        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.grey[600]),
+      ),
+    );
   }
 }

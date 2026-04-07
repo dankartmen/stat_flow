@@ -52,6 +52,7 @@ class _TablePreviewScreenState extends State<TablePreviewScreen> {
     _pickFile();
   }
 
+  
   /// Открывает диалог выбора файла
   /// 
   /// Особенности:
@@ -63,15 +64,14 @@ class _TablePreviewScreenState extends State<TablePreviewScreen> {
       allowedExtensions: ['csv'],
     );
 
+    if (!mounted) return;
     if (result == null) {
-      if (!mounted) return;
       Navigator.pop(context);
       return;
     }
 
     setState(() {
       _filePath = result.files.single.path;
-      _isLoading = true;
     });
 
     await _loadPreview();
@@ -85,10 +85,16 @@ class _TablePreviewScreenState extends State<TablePreviewScreen> {
   /// - Показывает ошибки при неудачной загрузке
   Future<void> _loadPreview() async {
     if (_filePath == null) return;
+    if (_isLoading) return;
+
+    setState(() {
+      _isLoading = true;
+    });
 
     try {
       final loader = CsvLoader.withDelimiter(_delimiter);
       final content = await loader.readFileContent(_filePath!, _delimiter);
+      if (!mounted) return;
 
       final lines = content
           .split('\n')
@@ -176,12 +182,22 @@ class _TablePreviewScreenState extends State<TablePreviewScreen> {
           : Column(
               children: [
                 // Панель выбора разделителя
-                _buildDelimiterPanel(),
+                _DelimiterPanel(
+                  delimiter: _delimiter,
+                  commonDelimiters: _commonDelimiters,
+                  rowsCount: _rows.length,
+                  onDelimiterChanged:  (newDelimiter) {
+                    setState(() {
+                      _delimiter = newDelimiter;
+                    });
+                    _loadPreview();
+                  },
+                ),
 
                 // Таблица предпросмотра
                 Expanded(
                   child: _headers.isEmpty || _dataSource == null
-                      ? _buildEmptyState()
+                      ? const _EmptyTableState()
                       : SfDataGrid(
                           source: _dataSource!,
                           columns: _headers.map((header) {
@@ -213,80 +229,119 @@ class _TablePreviewScreenState extends State<TablePreviewScreen> {
                 ),
 
                 // Кнопки действий
-                _buildActionButtons(),
+                _ActionButtons(
+                  onCancel: () => Navigator.pop(context),
+                  onLoad: _headers.isNotEmpty ? _loadFullDataset : null,
+                ),
               ],
             ),
     );
   }
 
-  /// Строит панель выбора разделителя
-  Widget _buildDelimiterPanel() {
+
+}
+
+/// {@template empty_table_state}
+/// Показ состояния при отсутствии данных для отображения в таблице
+/// Отображает:
+/// - Иконку таблицы с серым цветом
+/// - Сообщение "Нет данных для отображения" с серым цветом
+/// Используется в случае, если файл не содержит данных или произошла ошибка при загрузке
+/// {@endtemplate}
+class _EmptyTableState extends StatelessWidget {
+  const _EmptyTableState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.table_rows, size: 64, color: Colors.grey[400]),
+          const SizedBox(height: 16),
+          Text(
+            'Нет данных для отображения',
+            style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// {@template delimiter_panel}
+/// Панель выбора разделителя колонок для CSV-файла
+/// Отображается в верхней части экрана предпросмотра таблицы
+/// Содержит:
+/// - Метку "Разделитель:"
+/// - Набор кнопок для выбора распространенных разделителей (",", ";", "\t", "|")
+/// - Информацию о количестве отображаемых строк в предпросмотре
+/// Позволяет пользователю быстро переключаться между различными разделителями и видеть изменения в структуре данных в реальном времени
+/// {@endtemplate}
+class _DelimiterPanel extends StatelessWidget {
+  /// Текущий выбранный разделитель
+  final String delimiter;
+  /// Список распространенных разделителей для отображения в виде кнопок
+  final List<String> commonDelimiters;
+  /// Количество строк, отображаемых в предпросмотре
+  final int rowsCount;
+
+  /// Коллбек при изменении разделителя, который обновляет предпросмотр таблицы
+  final ValueChanged<String> onDelimiterChanged;
+
+  const _DelimiterPanel({
+    required this.delimiter,
+    required this.commonDelimiters,
+    required this.rowsCount,
+    required this.onDelimiterChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16),
       color: Colors.grey[100],
       child: Row(
         children: [
-          const Text(
-            'Разделитель:',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
+          const Text('Разделитель:', style: TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(width: 16),
-          ..._commonDelimiters.map((delimiter) {
-            final display = delimiter == '\t'
-                ? 'Tab'
-                : delimiter == '|'
-                    ? 'Pipe'
-                    : delimiter;
-
+          ...commonDelimiters.map((delim) {
+            final display = delim == '\t' ? 'Tab' : delim == '|' ? 'Pipe' : delim;
             return Padding(
               padding: const EdgeInsets.only(right: 8),
               child: FilterChip(
                 label: Text(display),
-                selected: _delimiter == delimiter,
-                onSelected: (_) {
-                  setState(() {
-                    _delimiter = delimiter;
-                    _isLoading = true;
-                  });
-                  _loadPreview();
-                },
+                selected: delimiter == delim,
+                onSelected: (_) => onDelimiterChanged(delim),
               ),
             );
           }),
           const Spacer(),
-          if (_rows.isNotEmpty)
-            Text('Показано ${_rows.length} из ${_rows.length}+ строк'),
+          if (rowsCount > 0)
+            Text('Показано $rowsCount из $rowsCount+ строк'),
         ],
       ),
     );
   }
+}
 
-  /// Строит состояние пустой таблицы
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.table_rows,
-            size: 64,
-            color: Colors.grey[400],
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Нет данных для отображения',
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.grey[600],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+/// {@template action_buttons}
+/// Панель кнопок действий для экрана предпросмотра таблицы
+/// Расположена в нижней части экрана и обеспечивает основные действия пользователя:
+/// - "Отмена" - возвращает пользователя на предыдущий экран без загрузки данных
+/// - "Загрузить полный датасет" - инициирует загрузку полного датасета и возвращает его на предыдущий экран при успешной загрузке
+/// Кнопка "Загрузить полный датасет" активна только при наличии данных в предпросмотре, предотвращая попытки загрузки пустого датасета
+/// {@endtemplate}
+class _ActionButtons extends StatelessWidget {
+  /// Коллбек для отмены загрузки и возврата на предыдущий экран
+  final VoidCallback onCancel;
+  /// Коллбек для загрузки полного датасета и возврата его на предыдущий экран
+  final VoidCallback? onLoad;
 
-  /// Строит панель с кнопками действий
-  Widget _buildActionButtons() {
+  const _ActionButtons({required this.onCancel, required this.onLoad});
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -303,25 +358,19 @@ class _TablePreviewScreenState extends State<TablePreviewScreen> {
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
           OutlinedButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: onCancel,
             style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 24,
-                vertical: 12,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             ),
             child: const Text('Отмена'),
           ),
           const SizedBox(width: 16),
           ElevatedButton(
-            onPressed: _headers.isNotEmpty ? _loadFullDataset : null,
+            onPressed: onLoad,
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.blue,
               foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(
-                horizontal: 32,
-                vertical: 12,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
             ),
             child: const Text('Загрузить полный датасет'),
           ),

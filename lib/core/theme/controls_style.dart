@@ -26,18 +26,20 @@ Widget buildSection({
   required Widget child,
   bool initiallyExpanded = true,
 }) {
+  final theme = Theme.of(context);
+
   return Card(
     elevation: 0,
-    color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
+    color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(20),
     ),
     child: ExpansionTile(
       initiallyExpanded: initiallyExpanded,
-      leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
+      leading: Icon(icon, color: theme.colorScheme.primary),
       title: Text(
         title,
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+        style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w600,
             ),
       ),
@@ -81,7 +83,7 @@ Widget buildDropdown<T>({
   String Function(T)? displayName,
 }) {
   final safeInitialValue = (initialValue == null || items.contains(initialValue)) ? initialValue : null;
-
+  final theme = Theme.of(context);
   final valueListenable = ValueNotifier<T?>(safeInitialValue);
 
   return Column(
@@ -89,9 +91,9 @@ Widget buildDropdown<T>({
     children: [
       Text(
         label,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+        style: theme.textTheme.bodyMedium?.copyWith(
               fontWeight: FontWeight.w500,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              color: theme.colorScheme.onSurfaceVariant,
             ),
       ),
       const SizedBox(height: 8),
@@ -102,7 +104,7 @@ Widget buildDropdown<T>({
           hint: Text(
             'Не выбрано',
             style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
             ),
           ),
           items: items.map((item) {
@@ -124,13 +126,13 @@ Widget buildDropdown<T>({
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.6),
+                color: theme.colorScheme.outline.withValues(alpha: 0.6),
               ),
             ),
           ),
           iconStyleData: IconStyleData(
             icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 24),
-            iconEnabledColor: Theme.of(context).colorScheme.onSurfaceVariant,
+            iconEnabledColor: theme.colorScheme.onSurfaceVariant,
           ),
           dropdownStyleData: DropdownStyleData(
             maxHeight: 280,
