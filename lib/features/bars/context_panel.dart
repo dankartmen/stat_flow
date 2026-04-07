@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/dataset/dataset.dart';
+import '../../core/providers/providers.dart';
 import '../charts/chart_registry.dart';
 import '../charts/chart_state.dart';
 import '../charts/chart_type.dart';
 import '../charts/floating_chart/floating_chart_data.dart';
+import '../table/widget/table_preview_screen.dart';
 
 /// {@template context_panel}
 /// Контекстная панель для настройки графиков и управления датасетом
@@ -228,10 +230,15 @@ class _ContextPanelState extends ConsumerState<ContextPanel> {
   }
 
 
-  void _loadDataset() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Загрузка датасета...')),
+  Future<void> _loadDataset() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const TablePreviewScreen()),
     );
+
+    if (result != null && result is Dataset) {
+      ref.read(datasetProvider.notifier).state = result;
+    }
   }
 
   /// Возвращает иконку для указанного типа графика

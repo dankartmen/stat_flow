@@ -104,13 +104,13 @@ class CsvLoader {
   Future<Dataset> loadFullDataset(String filePath) async {
     try {
       final file = File(filePath);
-      
+        
       if (!await file.exists()) {
         throw Exception('Файл не существует');
       }
       
       final content = await file.readAsString();
-      final fileName = filePath.split('/').last;
+      final fileName = filePath.split('\\').last;
       
       return _parseContent(content, fileName);
     } catch (e) {

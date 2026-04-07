@@ -16,7 +16,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
     @override
     Widget build(BuildContext context) {
       return MaterialApp(
-        showPerformanceOverlay: false,
+        showPerformanceOverlay: true,
         title: 'StatFlow',
         localizationsDelegates: [
           GlobalMaterialLocalizations.delegate,

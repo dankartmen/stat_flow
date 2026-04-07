@@ -117,7 +117,7 @@ class _HeatmapLegendState extends State<HeatmapLegend> {
       final segmentIndex = ((_currentValue! - widget.min) / step).floor();
       final segmentMin = widget.min + step * segmentIndex;
       final segmentMax = widget.min + step * (segmentIndex + 1);
-      return '${_formatNumber(segmentMin)} – ${_formatNumber(segmentMax)}';
+      return '[${_formatNumber(segmentMin)} , ${_formatNumber(segmentMax)}]';
     } else {
       return _formatNumber(_currentValue!);
     }
@@ -145,6 +145,7 @@ class _HeatmapLegendState extends State<HeatmapLegend> {
       final segmentIndex = ((value - widget.min) / step).floor();
       final segmentMin = widget.min + step * segmentIndex;
       final segmentMax = widget.min + step * (segmentIndex + 1);
+      _markerX = local.dx;
       widget.onHover(HoverRange(min: segmentMin, max: segmentMax));
     } else {
       widget.onHover(HoverRange(value: value));
@@ -152,7 +153,7 @@ class _HeatmapLegendState extends State<HeatmapLegend> {
 
     // Рассчитываем позицию тултипа так, чтобы он не выходил за пределы экрана
     const barHeight = 16.0;
-    const spacing = 6.0;
+    const spacing = 0.0;
     const tooltipWidth = 80.0;
     const tooltipHeight = 28.0;
 
@@ -224,6 +225,7 @@ class _HeatmapLegendState extends State<HeatmapLegend> {
                 onExit: (_) {
                   _isHovering = false;
                   _tooltipEntry?.remove();
+                  _tooltipEntry = null;
                   _showMarker = false;
                   widget.onHover(null);
                   setState(() {

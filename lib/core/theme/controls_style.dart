@@ -80,7 +80,6 @@ Widget buildDropdown<T>({
   required ValueChanged<T?> onChanged,
   String Function(T)? displayName,
 }) {
-  final effectiveItems = [null, ...items];
   final safeInitialValue = (initialValue == null || items.contains(initialValue)) ? initialValue : null;
 
   final valueListenable = ValueNotifier<T?>(safeInitialValue);
@@ -106,7 +105,7 @@ Widget buildDropdown<T>({
               color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
             ),
           ),
-          items: effectiveItems.map((item) {
+          items: items.map((item) {
             final text = item == null
                 ? 'Не выбрано'
                 : (displayName != null ? displayName(item as T) : item.toString());

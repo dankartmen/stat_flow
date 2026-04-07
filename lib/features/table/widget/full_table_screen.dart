@@ -53,7 +53,12 @@ class _FullTableScreenState extends State<FullTableScreen> {
               children: [
                 Text(
                   'Датасет: ${widget.dataset.name}',
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.fade,
                 ),
                 const Spacer(),
                 IconButton(
