@@ -26,7 +26,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
           SfGlobalLocalizations.delegate
         ],
         supportedLocales: const [
-          const Locale('ru', 'RU'),
+          Locale('ru', 'RU'),
         ],
         home: const MainScreen(),
         theme: ThemeData(
@@ -47,5 +47,3 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
       );
     }
   }
-
-  

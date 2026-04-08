@@ -18,6 +18,15 @@ import 'line_state.dart';
 /// {@endtemplate}
 class LineControls {
   /// Строит список виджетов управления на основе состояния
+  ///
+  /// Принимает:
+  /// - [dataset] — датасет с данными для анализа
+  /// - [state] — текущее состояние диаграммы рассеяния
+  /// - [onChanged] — колбэк для обновления состояния
+  /// - [context] — контекст для доступа к теме и локализации
+  /// 
+  /// Возвращает:
+  /// - [List<Widget>] — список виджетов для размещения в панели управления
   static List<Widget> build({
     required BuildContext context,
     required Dataset dataset,
@@ -89,7 +98,6 @@ class LineControls {
                       ? 'Сглаженная'
                       : 'Ступенчатая',
             ),
-
             const SizedBox(height: 16),
 
             // Толщина линии
@@ -107,7 +115,6 @@ class LineControls {
               divisions: 14,
               onChanged: (v) => onChanged(state.copyWith(lineWidth: v)),
             ),
-
             const SizedBox(height: 12),
 
             // Пунктир
@@ -149,7 +156,6 @@ class LineControls {
               divisions: 9,
               onChanged: (v) => onChanged(state.copyWith(markerSize: v)),
             ),
-
             SwitchListTile(
               title: const Text('Подписи значений'),
               value: state.showDataLabels,

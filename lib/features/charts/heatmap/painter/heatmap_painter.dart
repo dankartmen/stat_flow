@@ -165,8 +165,6 @@ class HeatmapPainter extends CustomPainter {
       ..strokeWidth = 0.5
       ..style = PaintingStyle.stroke;
 
-    final path = Path();
-
     final totalWidth = colCount * cellWidth + axisOffset;
     final totalHeight = rowCount * cellHeight + axisOffset;
 

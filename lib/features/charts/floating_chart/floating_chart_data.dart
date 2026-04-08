@@ -1,7 +1,5 @@
 import 'dart:ui';
-
 import 'package:stat_flow/features/charts/chart_state.dart';
-
 import '../../../core/dataset/dataset.dart';
 import '../chart_type.dart';
 
@@ -36,7 +34,7 @@ class FloatingChartData {
   final ChartState state;
 
   /// {@macro floating_chart_data}
-  FloatingChartData({
+  const FloatingChartData({
     required this.id,
     required this.type,
     required this.dataset,

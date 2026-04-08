@@ -20,7 +20,8 @@ class ScatterControls {
   /// - [dataset] — датасет с данными для анализа
   /// - [state] — текущее состояние диаграммы рассеяния
   /// - [onChanged] — колбэк для обновления состояния
-  ///
+  /// - [context] — контекст для доступа к теме и локализации
+  /// 
   /// Возвращает:
   /// - [List<Widget>] — список виджетов для размещения в панели управления
   static List<Widget> build({
@@ -29,7 +30,8 @@ class ScatterControls {
     required ValueChanged<ScatterState> onChanged,
     required BuildContext context,
   }) {
-    final columns = dataset.numericColumns;
+    final columns = dataset.numericColumns.map((c) => c.name).toList();
+    final yAxisItems = columns.where((name) => name != state.firstColumnName).toList();
 
     return [
       buildSection(
@@ -41,20 +43,20 @@ class ScatterControls {
             buildDropdown(
               label: "Ось X",
               initialValue: state.firstColumnName,
-              items: columns.map((c) => c.name).toList(),
+              items: columns,
               onChanged: (value) => onChanged(state.copyWith(firstColumnName: value)),
-              context: context
+              context: context,
             ),
             const SizedBox(height: 12),
             buildDropdown(
               label: "Ось Y",
               initialValue: state.secondColumnName,
-              items: columns.map((c) => c.name).where((name) => name != state.firstColumnName).toList(),
+              items: yAxisItems,
               onChanged: (value) => onChanged(state.copyWith(secondColumnName: value)),
-              context: context
+              context: context,
             ),
           ],
-        )
+        ),
       ),
     ];
   }

@@ -84,23 +84,11 @@ class FloatingChart extends StatefulWidget {
 class _FloatingChartState extends State<FloatingChart> {
   /// Ключ для получения рендер-объекта графика при экспорте в PNG
   final GlobalKey _chartKey = GlobalKey();
-
-  /// Отступ для зон изменения размера
-  static const _resizeMargin = 12.0;
-
-  /// Высота заголовка
-  static const _headerHeight = 36.0;
-
-  /// Минимальный размер окна
+  static const double _resizeMargin = 12.0;
+  static const double _headerHeight = 36.0;
   final Size _minSize = const Size(100, 200);
 
-  /// Максимальный размер окна (ограничение)
-  static const _maxSize = 4000.0;
-
-  /// Текущая позиция окна
   late Offset _position;
-
-  /// Текущий размер окна
   late Size _size;
 
   @override
@@ -128,16 +116,9 @@ class _FloatingChartState extends State<FloatingChart> {
 
   /// Перемещает окно с учетом границ области
   void _move(DragUpdateDetails d) {
-    double newX = _position.dx + d.delta.dx;
-    double newY = _position.dy + d.delta.dy;
-
-    newX = newX.clamp(0, _bounds.width - _size.width);
-    newY = newY.clamp(0, _bounds.height - _size.height);
-
-    setState(() {
-      _position = Offset(newX, newY);
-    });
-
+    double newX = (_position.dx + d.delta.dx).clamp(0, _bounds.width - _size.width);
+    double newY = (_position.dy + d.delta.dy).clamp(0, _bounds.height - _size.height);
+    setState(() => _position = Offset(newX, newY));
     widget.onPositionChanged(_position);
   }
 
@@ -152,13 +133,9 @@ class _FloatingChartState extends State<FloatingChart> {
   /// - Ограничивает размер границами области
   /// - Обновляет позицию при изменении размера от левого/верхнего края
   void _resize(_ResizeDirection dir, DragUpdateDetails d) {
-    double dx = d.delta.dx;
-    double dy = d.delta.dy;
-
-    double newWidth = _size.width;
-    double newHeight = _size.height;
-    double newX = _position.dx;
-    double newY = _position.dy;
+    double dx = d.delta.dx, dy = d.delta.dy;
+    double newWidth = _size.width, newHeight = _size.height;
+    double newX = _position.dx, newY = _position.dy;
 
     switch (dir) {
       case _ResizeDirection.right:
@@ -218,20 +195,10 @@ class _FloatingChartState extends State<FloatingChart> {
   Widget _resizeZone({
     required _ResizeDirection direction,
     required MouseCursor cursor,
-    double? left,
-    double? right,
-    double? top,
-    double? bottom,
-    double? width,
-    double? height,
+    double? left, double? right, double? top, double? bottom, double? width, double? height,
   }) {
     return Positioned(
-      left: left,
-      right: right,
-      top: top,
-      bottom: bottom,
-      width: width,
-      height: height,
+      left: left, right: right, top: top, bottom: bottom, width: width, height: height,
       child: MouseRegion(
         cursor: cursor,
         child: GestureDetector(
@@ -272,7 +239,6 @@ class _FloatingChartState extends State<FloatingChart> {
                       Expanded(
                         child: RepaintBoundary(
                           key: _chartKey,
-
                           child: widget.child,
                         ),
                       ),
@@ -283,70 +249,71 @@ class _FloatingChartState extends State<FloatingChart> {
 
               // Зоны изменения размера по сторонам
               _resizeZone(
-                direction: _ResizeDirection.left,
-                cursor: SystemMouseCursors.resizeLeftRight,
-                left: 0,
-                top: 0,
-                bottom: 0,
-                width: _resizeMargin,
+                direction: _ResizeDirection.left, 
+                cursor: SystemMouseCursors.resizeLeftRight, 
+                left: 0, 
+                top: 0, 
+                bottom: 0, 
+                width: _resizeMargin
               ),
               _resizeZone(
-                direction: _ResizeDirection.right,
-                cursor: SystemMouseCursors.resizeLeftRight,
-                right: 0,
-                top: 0,
-                bottom: 0,
-                width: _resizeMargin,
+                direction: _ResizeDirection.right, 
+                cursor: SystemMouseCursors.resizeLeftRight, 
+                right: 0, 
+                top: 0, 
+                bottom: 0, 
+                width: _resizeMargin
               ),
               _resizeZone(
-                direction: _ResizeDirection.top,
-                cursor: SystemMouseCursors.resizeUpDown,
-                top: 0,
-                left: 0,
-                right: 0,
-                height: _resizeMargin,
+                direction: 
+                _ResizeDirection.top, 
+                cursor: SystemMouseCursors.resizeUpDown, 
+                top: 0, 
+                left: 0, 
+                right: 0, 
+                height: _resizeMargin
               ),
               _resizeZone(
-                direction: _ResizeDirection.bottom,
-                cursor: SystemMouseCursors.resizeUpDown,
-                bottom: 0,
-                left: 0,
-                right: 0,
-                height: _resizeMargin,
+                direction: _ResizeDirection.bottom, 
+                cursor: SystemMouseCursors.resizeUpDown, 
+                bottom: 0, 
+                left: 0, 
+                right: 0, 
+                height: _resizeMargin
               ),
 
               // Зоны изменения размера по углам
               _resizeZone(
-                direction: _ResizeDirection.topLeft,
-                cursor: SystemMouseCursors.resizeUpLeftDownRight,
-                left: 0,
-                top: 0,
-                width: _resizeMargin,
-                height: _resizeMargin,
+                direction: _ResizeDirection.topLeft, 
+                cursor: SystemMouseCursors.resizeUpLeftDownRight, 
+                left: 0, 
+                top: 0, 
+                width: _resizeMargin, 
+                height: _resizeMargin
               ),
               _resizeZone(
-                direction: _ResizeDirection.topRight,
-                cursor: SystemMouseCursors.resizeUpRightDownLeft,
-                right: 0,
-                top: 0,
-                width: _resizeMargin,
-                height: _resizeMargin,
+                direction: _ResizeDirection.topRight, 
+                cursor: SystemMouseCursors.resizeUpRightDownLeft, 
+                right: 0, 
+                top: 0, 
+                width: _resizeMargin, 
+                height: _resizeMargin
               ),
               _resizeZone(
-                direction: _ResizeDirection.bottomLeft,
-                cursor: SystemMouseCursors.resizeUpRightDownLeft,
-                left: 0,
-                bottom: 0,
-                width: _resizeMargin,
-                height: _resizeMargin,
+                direction: _ResizeDirection.bottomLeft, 
+                cursor: SystemMouseCursors.resizeUpRightDownLeft, 
+                left: 0, 
+                bottom: 0, 
+                width: _resizeMargin, 
+                height: _resizeMargin
               ),
               _resizeZone(
-                direction: _ResizeDirection.bottomRight,
-                cursor: SystemMouseCursors.resizeUpLeftDownRight,
-                right: 0,
-                bottom: 0,
-                width: _resizeMargin,
-                height: _resizeMargin,
+                direction: _ResizeDirection.bottomRight, 
+                cursor: SystemMouseCursors.resizeUpLeftDownRight, 
+                right: 0, 
+                bottom: 0, 
+                width: _resizeMargin, 
+                height: _resizeMargin
               ),
             ],
           ),
@@ -368,9 +335,7 @@ class _FloatingChartState extends State<FloatingChart> {
             Expanded(
               child: Text(
                 widget.data.type.name,
-                style: TextStyle(
-                  color: widget.isSelected ? Colors.white : Colors.black87,
-                ),
+                style: TextStyle(color: widget.isSelected ? Colors.white : Colors.black87),
               ),
             ),
             IconButton(
@@ -400,58 +365,27 @@ class _FloatingChartState extends State<FloatingChart> {
   /// - Сохраняет файл в директории документов приложения
   /// - Имя файла включает тип графика и временную метку
   Future<void> _exportPng() async {
-    final boundary = _chartKey.currentContext!
-        .findRenderObject() as RenderRepaintBoundary;
+    if (_chartKey.currentContext == null) return;
+    final boundary = _chartKey.currentContext!.findRenderObject() as RenderRepaintBoundary?;
+    if (boundary == null) return;
 
     final image = await boundary.toImage(pixelRatio: 3);
-
-    final byteData =
-        await image.toByteData(format: ImageByteFormat.png);
-
-    final pngBytes = byteData!.buffer.asUint8List();
+    final byteData = await image.toByteData(format: ImageByteFormat.png);
+    if (byteData == null) return;
 
     final dir = await getApplicationDocumentsDirectory();
-
     final now = DateTime.now();
     final timestamp = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}-${now.minute.toString().padLeft(2, '0')}-${now.second.toString().padLeft(2, '0')}";
-    
     final fileName = "${widget.data.type.name}($timestamp).png";
     final file = File("${dir.path}/$fileName");
-    
-    await file.writeAsBytes(pngBytes);
+    await file.writeAsBytes(byteData.buffer.asUint8List());
 
     if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Сохранено: ${file.path}")),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Сохранено: ${file.path}")));
   }
 }
 
-
-/// Направления изменения размера окна
 enum _ResizeDirection {
-  /// Вверх
-  top,
-
-  /// Вниз
-  bottom,
-
-  /// Влево
-  left,
-
-  /// Вправо
-  right,
-
-  /// Вверх-влево (диагональ)
-  topLeft,
-
-  /// Вверх-вправо (диагональ)
-  topRight,
-
-  /// Вниз-влево (диагональ)
-  bottomLeft,
-
-  /// Вниз-вправо (диагональ)
-  bottomRight,
+  top, bottom, left, right,
+  topLeft, topRight, bottomLeft, bottomRight,
 }

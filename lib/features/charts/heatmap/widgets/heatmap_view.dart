@@ -1,4 +1,4 @@
-import 'dart:math' show min, max;
+import 'dart:math' show min;
 import 'dart:developer' show log;
 import 'package:flutter/material.dart';
 import 'package:stat_flow/features/charts/heatmap/widgets/heatmap_legend.dart';
@@ -66,11 +66,6 @@ class _HeatmapViewState extends State<HeatmapView>
   /// Данные, подготовленные для отображения (после кластеризации, сортировки, нормализации)
   late HeatmapData? _displayData;
 
-  /// Текущий минимум для цветовой шкалы
-  double? _currentMin;
-
-  /// Текущий максимум для цветовой шкалы
-  double? _currentMax;
 
   /// Кэш ключа данных для оптимизации повторных вычислений
   String? _currentDataKey;
