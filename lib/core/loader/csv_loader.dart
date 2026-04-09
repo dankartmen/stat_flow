@@ -3,6 +3,7 @@ import 'dart:developer';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../dataset/dataset.dart';
@@ -83,7 +84,9 @@ class CsvLoader {
     }
 
     final content = utf8.decode(buffer);
-    return _parseContent(content, file.name);
+  
+    final resultMap = await compute(_parseCsvInIsolate, (content, file.name, delimiter));
+    return _buildDatasetFromResult(resultMap, file.name);
   }
 
   /// Загружает датасет напрямую из файла по указанному пути
@@ -112,7 +115,8 @@ class CsvLoader {
       final content = await file.readAsString();
       final fileName = filePath.split('\\').last;
       
-      return _parseContent(content, fileName);
+      final resultMap = await compute(_parseCsvInIsolate, (content, fileName, delimiter));
+      return _buildDatasetFromResult(resultMap, fileName);
     } catch (e) {
       throw Exception('Ошибка при загрузке файла: $e');
     }
@@ -154,8 +158,11 @@ class CsvLoader {
     }
   }
 
-  /// Парсит содержимое CSV в структуру Dataset
-  Dataset _parseContent(String content, String fileName) {
+
+  /// Статическая функция для выполнения в isolate.
+  /// Принимает кортеж (content, fileName, delimiter), возвращает сериализуемую Map.
+  static Future<Map<String, dynamic>> _parseCsvInIsolate((String content, String fileName, String delimiter) args) async {
+    final (content, fileName, delimiter) = args;
     final lines = content
         .split('\n')
         .where((line) => line.trim().isNotEmpty)
@@ -169,45 +176,50 @@ class CsvLoader {
 
     final rows = lines
         .skip(1)
-        .map((line) => _parseLine(line))
+        .map((line) => _parseLineStatic(line, delimiter))
         .toList();
 
-    log('CSV rows: ${rows.length}');
-    log('CSV columns: ${headers.length}');
-
-    final List<DataColumn> columns = [];
-
+    // Собираем сырые значения по колонкам
+    final columnsData = <String, List<String?>>{};
     for (int colIndex = 0; colIndex < headers.length; colIndex++) {
-      final name = headers[colIndex];
-      final values = <String?>[];
-
+      final colValues = <String?>[];
       for (final row in rows) {
         if (colIndex < row.length) {
-          values.add(row[colIndex]);
+          colValues.add(row[colIndex]);
         } else {
-          values.add(null);
+          colValues.add(null);
         }
       }
-
-      columns.add(_buildColumn(name, values));
+      columnsData[headers[colIndex]] = colValues;
     }
 
-    return Dataset(
-      name: fileName,
-      columns: columns,
-    );
+    // Определяем тип каждой колонки и преобразуем значения
+    final columnsInfo = <Map<String, dynamic>>[];
+    for (final name in headers) {
+      final raw = columnsData[name]!;
+      final type = _detectColumnTypeStatic(raw);
+      final convertedValues = _convertValuesByType(raw, type);
+      columnsInfo.add({
+        'name': name,
+        'type': type,
+        'values': convertedValues,
+      });
+    }
+
+    return {
+      'name': fileName,
+      'columns': columnsInfo,
+    };
   }
 
-  /// Парсит одну строку CSV с учетом кавычек
-  List<String> _parseLine(String line) {
-    // Базовая обработка CSV с учетом кавычек
+  /// Парсит одну строку CSV с учетом кавычек (статическая версия)
+  static List<String> _parseLineStatic(String line, String delimiter) {
     final result = <String>[];
     String current = '';
     bool inQuotes = false;
     
     for (int i = 0; i < line.length; i++) {
       final char = line[i];
-      
       if (char == '"') {
         inQuotes = !inQuotes;
       } else if (char == delimiter && !inQuotes) {
@@ -217,74 +229,74 @@ class CsvLoader {
         current += char;
       }
     }
-    
     result.add(current.trim());
     return result;
   }
 
-  /// Создает колонку соответствующего типа на основе анализа сырых данных
-  DataColumn _buildColumn(String name, List<String?> rawValues) {
-    if (_isNumeric(rawValues)) {
-      final values = rawValues.map((v) {
-        if (v == null || v.isEmpty) return null;
-        return double.tryParse(v.replaceAll(',', '.'));
-      }).toList();
-
-      return NumericColumn(name, values);
-    }
-
-    if (_isDateTime(rawValues)) {
-      final values = rawValues.map((v) {
-        if (v == null || v.isEmpty) return null;
-        return DateTime.tryParse(v);
-      }).toList();
-
-      return DateTimeColumn(name, values);
-    }
-
-    if (_isCategorical(rawValues)) {
-      return CategoricalColumn(name, rawValues);
-    }
-
-    return TextColumn(name, rawValues);
-  }
-
-  /// Проверяет, можно ли интерпретировать значения как числа
-  bool _isNumeric(List<String?> values) {
+  /// Определяет тип колонки на основе сырых строк
+  static String _detectColumnTypeStatic(List<String?> values) {
     int nonNullCount = 0;
-    
+    bool allNumeric = true;
+    bool allDateTime = true;
+
     for (final v in values) {
       if (v == null || v.isEmpty) continue;
       nonNullCount++;
-      if (double.tryParse(v.replaceAll(',', '.')) == null) return false;
+      if (double.tryParse(v.replaceAll(',', '.')) == null) allNumeric = false;
+      if (DateTime.tryParse(v) == null) allDateTime = false;
     }
-    
-    return nonNullCount > 0;
+
+    if (nonNullCount == 0) return 'text';
+    if (allNumeric) return 'numeric';
+    if (allDateTime) return 'datetime';
+
+    // Категориальная эвристика: количество уникальных менее 20% от ненулевых
+    final unique = values.whereType<String>().toSet().length;
+    if (unique < nonNullCount * 0.2) return 'categorical';
+    return 'text';
   }
 
-  /// Проверяет, можно ли интерпретировать значения как даты
-  bool _isDateTime(List<String?> values) {
-    int nonNullCount = 0;
-    
-    for (final v in values) {
-      if (v == null || v.isEmpty) continue;
-      nonNullCount++;
-      if (DateTime.tryParse(v) == null) return false;
+  /// Преобразует сырые строки в типизированные значения в зависимости от типа
+  static List<dynamic> _convertValuesByType(List<String?> raw, String type) {
+    switch (type) {
+      case 'numeric':
+        return raw.map((v) {
+          if (v == null || v.isEmpty) return null;
+          return double.tryParse(v.replaceAll(',', '.'));
+        }).toList();
+      case 'datetime':
+        return raw.map((v) {
+          if (v == null || v.isEmpty) return null;
+          return DateTime.tryParse(v)?.toIso8601String();
+        }).toList();
+      case 'categorical':
+      case 'text':
+      default:
+        return raw.toList();
     }
-    
-    return nonNullCount > 0;
   }
 
-  /// Проверяет, являются ли значения категориальными
-  /// 
-  /// Критерий: количество уникальных значений менее 20% от общего числа
-  bool _isCategorical(List<String?> values) {
-    final nonNull = values.whereType<String>().toList();
-
-    if (nonNull.isEmpty) return false;
-
-    final unique = nonNull.toSet().length;
-
-    return unique < nonNull.length * 0.2;
+  /// Собирает объект Dataset из результата isolate
+  Dataset _buildDatasetFromResult(Map<String, dynamic> result, String fileName) {
+    final columnsData = result['columns'] as List;
+    final columns = columnsData.map<DataColumn>((colMap) {
+      final name = colMap['name'] as String;
+      final type = colMap['type'] as String;
+      final values = colMap['values'] as List;
+      switch (type) {
+        case 'numeric':
+          return NumericColumn(name, values.cast<double?>());
+        case 'datetime':
+          return DateTimeColumn(
+            name,
+            values.map((v) => v != null ? DateTime.parse(v as String) : null).toList(),
+          );
+        case 'categorical':
+          return CategoricalColumn(name, values.cast<String?>());
+        default:
+          return TextColumn(name, values.cast<String?>());
+      }
+    }).toList();
+    return Dataset(name: fileName, columns: columns);
   }
 }

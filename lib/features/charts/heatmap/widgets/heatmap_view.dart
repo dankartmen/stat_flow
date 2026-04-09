@@ -7,6 +7,7 @@ import '../../../../core/dataset/dataset.dart';
 import '../calculator/heatmap_data_builder.dart';
 import '../model/correlation_clusterer.dart';
 import '../color/heatmap_color_mapper.dart';
+import '../model/correlation_matrix.dart';
 import '../model/heatmap_data.dart';
 import '../model/heatmap_state.dart';
 import '../model/hover_range.dart';
@@ -139,7 +140,7 @@ class _HeatmapViewState extends State<HeatmapView>
   ///
   /// Если данные уже вычислены для текущего ключа, пропускает.
   /// В противном случае вычисляет синхронно (для корреляции) или асинхронно (для выбранных осей).
-  void _startComputation() {
+  void _startComputation() async{
     final key = _computeKey();
     if (_currentDataKey == key && _displayData != null) return;
     _currentDataKey = key;
@@ -152,22 +153,23 @@ class _HeatmapViewState extends State<HeatmapView>
 
     // Режим корреляции (обе оси не выбраны) – строим синхронно
     if (widget.state.useCorrelation) {
-      final matrix = widget.dataset.corr();
+      final matrix = await CorrelationMatrix.fromDatasetAsync(widget.dataset);
       var data = HeatmapData.fromCorrelation(matrix);
       data = _applyTransformations(data);
       _onDataReady(data);
-      setState(() => _displayData = data);
       return;
     }
 
     
 
     // Режим выбранных осей – асинхронно
-    _computeFuture = HeatmapDataBuilder.computeAsync(
+    _computeFuture = HeatmapDataBuilder(
       dataset: widget.dataset,
       state: widget.state,
-    );
-    _computeFuture!.then(_onDataReady).catchError((error) {
+    ).buildAsync();
+
+    _computeFuture!.then(_onDataReady).catchError((error, stack) {
+      log('Ошибка построения heatmap: $error', error: error, stackTrace: stack);
       if (mounted) {
         _onDataReady(HeatmapData(rowLabels: [], columnLabels: [], values: []));
       }
