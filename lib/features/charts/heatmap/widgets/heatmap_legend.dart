@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:stat_flow/features/charts/heatmap/model/hover_range.dart';
 import '../color/heatmap_color_mapper.dart';
+import '../utils/number_formatter.dart';
 
 /// {@template heatmap_legend}
 /// Компактная градиентная легенда для тепловой карты.
@@ -117,9 +118,9 @@ class _HeatmapLegendState extends State<HeatmapLegend> {
       final segmentIndex = ((_currentValue! - widget.min) / step).floor();
       final segmentMin = widget.min + step * segmentIndex;
       final segmentMax = widget.min + step * (segmentIndex + 1);
-      return '[${_formatNumber(segmentMin)} , ${_formatNumber(segmentMax)}]';
+      return '[${formatHeatmapNumber(segmentMin)} , ${formatHeatmapNumber(segmentMax)}]';
     } else {
-      return _formatNumber(_currentValue!);
+      return formatHeatmapNumber(_currentValue!);
     }
   }
 
@@ -174,26 +175,6 @@ class _HeatmapLegendState extends State<HeatmapLegend> {
     });
   }
 
-  /// Форматирует число для отображения в тултипе и подписях легенды
-  /// - Если значение близко к целому, отображает его без десятичных знаков
-  /// - Для значений до 1000 отображает с двумя десятичными знаками
-  /// - Для тысяч и миллионов использует суффиксы K и M соответственно
-  String _formatNumber(double value) {
-    // Если значение очень близко к целому
-    if ((value - value.round()).abs() < 0.001) {
-      return value.round().toString();
-    }
-    // Для значений в диапазоне до 1000 показываем 2 знака
-    if (value.abs() < 1000) {
-      return value.toStringAsFixed(2);
-    }
-    // Для тысяч
-    if (value.abs() < 1e6) {
-      return '${(value / 1000).toStringAsFixed(1)}K';
-    }
-    // Для миллионов
-    return '${(value / 1e6).toStringAsFixed(1)}M';
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -275,8 +256,8 @@ class _HeatmapLegendState extends State<HeatmapLegend> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(_formatNumber(widget.min), style: const TextStyle(fontSize: 11)),
-                  Text(_formatNumber(widget.max), style: const TextStyle(fontSize: 11)),
+                  Text(formatHeatmapNumber(widget.min), style: const TextStyle(fontSize: 11)),
+                  Text(formatHeatmapNumber(widget.max), style: const TextStyle(fontSize: 11)),
                 ],
               ),
             ],

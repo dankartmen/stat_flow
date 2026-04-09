@@ -19,10 +19,15 @@ class CorrelationMatrix {
   /// Кэш для доступа к столбцам (транспонированная матрица)
   List<List<double>>? _transposedCache;
 
+  /// Флаг, указывающий, была ли матрица усечена для производительности
+  final bool wasTrimmed;
+
   /// {@macro correlation_matrix}
   CorrelationMatrix(
     List<String> fieldNames,
-    List<List<double>> values,
+    List<List<double>> values,{
+    this.wasTrimmed = false,
+    }
   ) : fieldNames = List.unmodifiable(fieldNames),
     values = List<List<double>>.unmodifiable(
       values.map((row) => List<double>.unmodifiable(row)),
@@ -57,15 +62,43 @@ class CorrelationMatrix {
 
   /// Асинхронное построение матрицы в isolate (для больших датасетов)
   static Future<CorrelationMatrix> fromDatasetAsync(Dataset dataset) async {
-    final numericColumns = dataset.numericColumns;
-    if (numericColumns.length < 2) {
-      return CorrelationMatrix([], []);
+    var numericColumns = dataset.numericColumns;
+    const int maxColumns = 100;
+    bool wasTrimmed = false;
+
+    if (numericColumns.length > maxColumns) {
+      numericColumns = _selectTopColumnsByVariance(numericColumns, maxColumns);
+      wasTrimmed = true;
     }
+    
+    if (numericColumns.length < 2) {
+      return CorrelationMatrix([], [], wasTrimmed: wasTrimmed);
+    }
+
     final names = numericColumns.map((c) => c.name).toList();
     // Извлекаем сырые данные для передачи в isolate
     final columnsData = numericColumns.map((col) => col.data).toList();
     final matrix = await compute(_computeCorrelationMatrix, (names, columnsData));
-    return CorrelationMatrix(names, matrix);
+    return CorrelationMatrix(names, matrix, wasTrimmed: wasTrimmed);
+  }
+
+  /// Выбирает топ колонок по дисперсии для ограничения размера матрицы (для больших датасетов)
+  /// Используется в асинхронном методе построения матрицы корреляции для ограничения количества колонок до 100, чтобы избежать чрезмерной нагрузки на память и процессор при вычислении корреляций.
+  static List<NumericColumn> _selectTopColumnsByVariance(List<NumericColumn> columns, int maxCount) {
+    if (columns.length <= maxCount) return columns;
+    
+    final variances = columns.map((col) {
+      final values = col.data.whereType<double>().toList();
+      if (values.isEmpty) return 0.0;
+      final mean = values.reduce((a, b) => a + b) / values.length;
+      final variance = values.map((v) => pow(v - mean, 2)).reduce((a, b) => a + b) / values.length;
+      return variance;
+    }).toList();
+    
+    final indices = List.generate(columns.length, (i) => i);
+    indices.sort((a, b) => variances[b].compareTo(variances[a]));
+    final selected = indices.take(maxCount).map((i) => columns[i]).toList();
+    return selected;
   }
 
   /// Isolate-функция для вычисления корреляционной матрицы

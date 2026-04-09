@@ -28,6 +28,9 @@ class HeatmapData {
   /// Двумерная матрица значений для отображения
   final List<List<double>> values;
 
+  /// Флаг, указывающий, были ли данные усечены для оптимизации производительности
+  final bool wasTrimmed;
+
   /// Кэш для минимального и максимального значения
   double? _cachedMin;
   double? _cachedMax;
@@ -54,6 +57,7 @@ class HeatmapData {
     required this.rowLabels,
     required this.columnLabels,
     required this.values,
+    this.wasTrimmed = false,
   });
 
   /// Создает экземпляр [HeatmapData] из корреляционной матрицы
@@ -99,7 +103,9 @@ class HeatmapData {
         // Нормализация по строкам: каждая строка делится на сумму абсолютных значений
         for (int i = 0; i < newValues.length; i++) {
           double sum = 0;
-          for (var v in newValues[i]) sum += v.abs();
+          for (var v in newValues[i]) {
+            sum += v.abs();
+          }
           if (sum == 0) continue;
           for (int j = 0; j < newValues[i].length; j++) {
             newValues[i][j] /= sum;
@@ -109,7 +115,9 @@ class HeatmapData {
         // Нормализация по столбцам: каждый столбец делится на сумму абсолютных значений
         for (int j = 0; j < newValues[0].length; j++) {
           double sum = 0;
-          for (var row in newValues) sum += row[j].abs();
+          for (var row in newValues) {
+            sum += row[j].abs();
+          }
           if (sum == 0) continue;
           for (int i = 0; i < newValues.length; i++) {
             newValues[i][j] /= sum;
@@ -132,6 +140,7 @@ class HeatmapData {
       rowLabels: rowLabels,
       columnLabels: columnLabels,
       values: newValues,
+      wasTrimmed: wasTrimmed
     );
   }
 
@@ -171,6 +180,7 @@ class HeatmapData {
       rowLabels: indices.map((i) => rowLabels[i]).toList(),
       columnLabels: columnLabels,
       values: indices.map((i) => values[i]).toList(),
+      wasTrimmed: wasTrimmed
     );
   }
 
@@ -217,6 +227,7 @@ class HeatmapData {
       rowLabels: rowLabels,
       columnLabels: indices.map((i) => columnLabels[i]).toList(),
       values: values.map((row) => indices.map((i) => row[i]).toList()).toList(),
+      wasTrimmed: wasTrimmed
     );
   }
 
@@ -269,6 +280,7 @@ class HeatmapData {
       rowLabels: rowLabels,
       columnLabels: columnLabels,
       values: newValues,
+      wasTrimmed: wasTrimmed
     );
   }
 
@@ -289,6 +301,7 @@ class HeatmapData {
       rowLabels: result.rowLabels,
       columnLabels: result.columnLabels,
       values: result.values,
+      wasTrimmed: wasTrimmed
     );
   }
 
@@ -307,6 +320,7 @@ class HeatmapData {
       rowLabels: result.rowLabels,
       columnLabels: result.columnLabels,
       values: result.values,
+      wasTrimmed: wasTrimmed
     );
   }
 
@@ -325,6 +339,7 @@ class HeatmapData {
       rowLabels: result.rowLabels,
       columnLabels: result.columnLabels,
       values: result.values,
+      wasTrimmed: wasTrimmed
     );
   }
 
@@ -343,6 +358,7 @@ class HeatmapData {
       rowLabels: result.rowLabels,
       columnLabels: result.columnLabels,
       values: result.values,
+      wasTrimmed: wasTrimmed
     );
   }
 
@@ -432,7 +448,9 @@ class HeatmapData {
     } else {
       List<double> colSums = List.generate(cols.length, (j) {
         double s = 0;
-        for (var row in vals) s += row[j].abs();
+        for (var row in vals) {
+          s += row[j].abs();
+        }
         return s;
       });
       if (mode == SortMode.byValueAsc) {
@@ -469,7 +487,9 @@ class HeatmapData {
       final colsCount = newValues.isEmpty ? 0 : newValues[0].length;
       for (int j = 0; j < colsCount; j++) {
         double colSum = 0;
-        for (int i = 0; i < newValues.length; i++) colSum += newValues[i][j];
+        for (int i = 0; i < newValues.length; i++) {
+          colSum += newValues[i][j];
+        }
         if (colSum == 0) continue;
         for (int i = 0; i < newValues.length; i++) {
           newValues[i][j] = newValues[i][j] / colSum * 100;
@@ -477,7 +497,9 @@ class HeatmapData {
       }
     } else if (mode == PercentageMode.total) {
       double total = 0;
-      for (var row in newValues) total += row.fold(0.0, (a, b) => a + b);
+      for (var row in newValues) {
+        total += row.fold(0.0, (a, b) => a + b);
+      }
       if (total == 0) return _HeatmapDataResult(rowLabels: rows, columnLabels: cols, values: newValues);
       for (int i = 0; i < newValues.length; i++) {
         for (int j = 0; j < newValues[i].length; j++) {

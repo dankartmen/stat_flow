@@ -15,50 +15,49 @@ class DatasetDataSource extends DataGridSource {
   /// Датасет, который будет отображаться в таблице
   final Dataset dataset;
 
-  /// Внутреннее хранилище строк данных для DataGrid
-  late List<DataGridRow> _rows;
+  /// Список строк, построенных из датасета для отображения
+  final Map<int, DataGridRow> _rowCache = {};
 
   /// {@macro dataset_data_source}
-  DatasetDataSource(this.dataset) {
-    _buildRows();
+  DatasetDataSource(this.dataset);
+
+  /// Количество строк в датасете
+  int get rowsCount => dataset.rowCount;
+
+
+  /// Получает строку для отображения по индексу. Использует кэш для оптимизации производительности при повторных запросах.
+  /// Если строка не найдена в кэше, строит ее из датасета и сохраняет в кэше. Ограничивает размер кэша, чтобы предотвратить чрезмерное потребление памяти.
+  /// 
+  /// Параметры:
+  /// - [index]: индекс строки, которую нужно получить
+  /// Возвращает: DataGridRow, соответствующий строке датасета с данным индексом
+  
+  DataGridRow getRow(int index) {
+    if (_rowCache.containsKey(index)) {
+      return _rowCache[index]!;
+    }
+    
+    final row = DataGridRow(
+      cells: dataset.columns.map((column) {
+        return DataGridCell(
+          columnName: column.name,
+          value: column[index],
+        );
+      }).toList(),
+    );
+    
+    // Ограничим размер кэша, чтобы не разрастался слишком сильно (например, 500 строк)
+    if (_rowCache.length > 500) {
+      _rowCache.remove(_rowCache.keys.first);
+    }
+    _rowCache[index] = row;
+    return row;
   }
 
-  /// Строит строки данных из датасета
-  /// 
-  /// Особенности:
-  /// - Количество строк определяется по [dataset.rowCount]
-  /// - Для каждой строки создается [DataGridRow] с ячейками для всех колонок
-  void _buildRows() {
-    final rowCount = dataset.rowCount;
-
-    _rows = List.generate(rowCount, (index) {
-      return DataGridRow(
-        cells: dataset.columns.map((column) {
-          return DataGridCell(
-            columnName: column.name,
-            value: column[index],
-          );
-        }).toList(),
-      );
-    });
-  }
-
-  /// Возвращает список строк для отображения
-  @override
-  List<DataGridRow> get rows => _rows;
-
-  /// Строит визуальное представление строки
-  /// 
-  /// Принимает:
-  /// - [row] — строка данных для отображения
-  /// 
-  /// Возвращает:
-  /// - [DataGridRowAdapter] — адаптер с настроенными ячейками
-  /// 
-  /// Особенности:
-  /// - Каждая ячейка выравнивается по левому краю
-  /// - Устанавливается отступ в 8 пикселей
-  /// - Пустые значения отображаются как пустая строка
+  /// Построение виджета для отображения строки в таблице. Преобразует DataGridRow в DataGridRowAdapter с соответствующим форматированием ячеек.
+  /// Параметры:
+  /// - [row]: DataGridRow, который нужно отобразить
+  /// Возвращает: DataGridRowAdapter, содержащий виджеты для отображения ячеек строки
   @override
   DataGridRowAdapter buildRow(DataGridRow row) {
     return DataGridRowAdapter(
@@ -70,5 +69,11 @@ class DatasetDataSource extends DataGridSource {
         );
       }).toList(),
     );
+  }
+  
+  /// Обновляет источник данных, очищая кэш строк и уведомляя слушателей об изменении данных. Вызывается при изменении датасета.
+  void updateDataSource() {
+    _rowCache.clear();
+    notifyListeners();
   }
 }

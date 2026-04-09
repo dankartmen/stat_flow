@@ -20,7 +20,7 @@ class HeatmapDataBuilder {
   final HeatmapState state;
 
   /// Максимальное количество уникальных категорий для отображения
-  static const int maxUniqueCategories = 200;
+  static const int maxUniqueCategories = 50;
   HeatmapDataBuilder({
     required this.dataset,
     required this.state
@@ -174,8 +174,10 @@ class HeatmapDataBuilder {
   static HeatmapData _buildContingencyTableIsolate(_ContingencyParams params) {
     final xCategories = _uniqueCategories(params.xValues);
     final yCategories = _uniqueCategories(params.yValues);
-    final limitedXCats = _limitCategories(xCategories, params.xValues);
-    final limitedYCats = _limitCategories(yCategories, params.yValues);
+    final (limitedXCats, xTrimmed) = _limitCategories(xCategories, params.xValues);
+    final (limitedYCats, yTrimmed) = _limitCategories(yCategories, params.yValues);
+    final wasTrimmed = xTrimmed || yTrimmed;
+
     final matrix = List.generate(
       limitedXCats.length,
       (_) => List.filled(limitedYCats.length, 0.0),
@@ -194,13 +196,14 @@ class HeatmapDataBuilder {
       rowLabels: limitedXCats,
       columnLabels: limitedYCats,
       values: matrix,
+      wasTrimmed: wasTrimmed
     );
   }
 
   /// Isolate-функция для построения агрегированной таблицы для числовой + категориальной колонки
   static HeatmapData _buildAggregationTableIsolate(_AggregationParams params) {
     final categories = _uniqueCategories(params.catValues);
-    final limitedCategories = _limitCategories(categories, params.catValues);
+    final (limitedCategories, wasTrimmed) = _limitCategories(categories, params.catValues);
     final aggregated = _aggregateNumerical(
       catValues: params.catValues,
       numValues: params.numValues.map((e) => e?.toString()).toList(),
@@ -211,6 +214,7 @@ class HeatmapDataBuilder {
       rowLabels: limitedCategories,
       columnLabels: [params.aggType.name],
       values: aggregated.map((v) => [v]).toList(),
+      wasTrimmed: wasTrimmed
     );
   }
 
@@ -231,13 +235,15 @@ class HeatmapDataBuilder {
     return set.toList()..sort();
   }
 
-  static List<String> _limitCategories(List<String> all, List<String?> data) {
-    if (all.length <= maxUniqueCategories) return all;
+  static (List<String>, bool) _limitCategories(List<String> all, List<String?> data) {
+    if (all.length <= maxUniqueCategories) return (all, false);
     final freq = <String, int>{};
-    for (final v in data) if (v != null) freq[v] = (freq[v] ?? 0) + 1;
+    for (final v in data) {
+      if (v != null) freq[v] = (freq[v] ?? 0) + 1;
+    }
     final sorted = List<String>.from(all)
       ..sort((a, b) => (freq[b] ?? 0).compareTo(freq[a] ?? 0));
-    return sorted.take(maxUniqueCategories).toList();
+    return (sorted.take(maxUniqueCategories).toList(), true);
   }
 
   static List<double> _aggregateNumerical({

@@ -7,12 +7,15 @@ import 'package:stat_flow/features/charts/floating_chart/floating_chart_data.dar
 import '../../features/charts/bar_chart/bar_state.dart';
 import '../../features/charts/boxplot/boxplot_state.dart';
 import '../../features/charts/chart_state.dart';
+import '../../features/charts/heatmap/model/correlation_matrix.dart';
 import '../../features/charts/histogram/histogram_state.dart';
 import '../../features/charts/line_chart/line_state.dart';
 import '../../features/charts/scatterplot/scatter_state.dart';
 
 /// Тип текущего отображаемого экрана
 enum ScreenType { canvas, data }
+
+final _sampledCache = <Dataset, Dataset>{};
 
 /// Провайдер для хранения текущего загруженного датасета
 /// 
@@ -26,26 +29,23 @@ final sampledDatasetProvider = Provider<Dataset?>((ref) {
   final full = ref.watch(datasetProvider);
   if (full == null) return null;
 
+  if (_sampledCache.containsKey(full)) {
+    return _sampledCache[full]!;
+  }
+
   final sampledColumns = full.columns.map<DataColumn<dynamic>>((col) {
-    if (col is NumericColumn && col.length > 1000) {
-      final sampledData = col.data.sample(800); 
-      return NumericColumn(col.name, sampledData);
-    }
-    if (col is CategoricalColumn && col.length > 1000) {
+    if ((col is NumericColumn || col is CategoricalColumn || col is DateTimeColumn) && col.length > 1000) {
       final sampledData = col.data.sample(800);
-      return CategoricalColumn(col.name, sampledData);
-    }
-    if (col is DateTimeColumn && col.length > 1000) {
-      final sampledData = col.data.sample(800);
-      return DateTimeColumn(col.name, sampledData);
+      if (col is NumericColumn) return NumericColumn(col.name, sampledData.cast<double?>());
+      if (col is CategoricalColumn) return CategoricalColumn(col.name, sampledData.cast<String?>());
+      if (col is DateTimeColumn) return DateTimeColumn(col.name, sampledData.cast<DateTime?>());
     }
     return col;
   }).toList();
 
-  return Dataset(
-    name: full.name,
-    columns: sampledColumns,
-  );
+  final sampled = Dataset(name: full.name, columns: sampledColumns);
+  _sampledCache[full] = sampled;
+  return sampled;
 });
 
 /// Провайдер для доступа к полному датасету
@@ -73,6 +73,17 @@ final selectedChartIdProvider = StateProvider.autoDispose<int?>((ref) => null);
 /// При загрузке приложения по умолчанию установлен на `ScreenType.canvas`.
 final currentScreenProvider = StateProvider.autoDispose<ScreenType>((ref) => ScreenType.canvas);
 
+/// Провайдер для хранения матрицы корреляции
+///
+/// Вычисляет корреляционную матрицу для числовых колонок датасета.
+/// Используется в компоненте Heatmap для отображения корреляционной матрицы в виде тепловой карты.
+/// При загрузке нового датасета автоматически пересчитывает матрицу корреляции.
+final correlationMatrixProvider = FutureProvider<CorrelationMatrix?>((ref) async {
+  final dataset = ref.watch(datasetProvider);
+  if (dataset == null) return null;
+  // Используем асинхронный метод, который уже работает через isolate
+  return await CorrelationMatrix.fromDatasetAsync(dataset);
+});
 
 /// {@template charts_notifier}
 /// Управляет списком плавающих графиков на канвасе

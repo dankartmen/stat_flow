@@ -95,11 +95,6 @@ class _TableHeader extends StatelessWidget {
             'Таблица данных',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
-          const Spacer(),
-          IconButton(
-            icon: const Icon(Icons.close),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
         ],
       ),
     );

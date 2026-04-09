@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:stat_flow/features/charts/heatmap/model/heatmap_data.dart';
+import 'package:stat_flow/features/charts/heatmap/utils/number_formatter.dart';
 
 import '../color/heatmap_color_mapper.dart';
 import '../model/heatmap_state.dart';
@@ -232,13 +233,12 @@ class HeatmapPainter extends CustomPainter {
     final colName = data.columnLabels[col];
 
     String suffix = '';
-    double displayValue = value;
+    String displayValue = formatHeatmapNumber(value);
     if (percentageMode != PercentageMode.none) {
       suffix = '%';
-      displayValue = value;
     }
 
-    final text = "$rowName ↔ $colName\n${displayValue.toStringAsFixed(displayValue.abs() < 10 ? 2 : 1)} $suffix";
+    final text = "$rowName ↔ $colName\n$displayValue $suffix";
 
     if (_tooltipText != text) {
       _tooltipText = text;
@@ -352,13 +352,12 @@ class HeatmapPainter extends CustomPainter {
         // Отображение значений внутри ячеек
         if (showValues && min(cellWidth, cellHeight) > 25) { // Не показываем в слишком мелких ячейках
           String suffix = '';
-          double displayValue = value;
+          String displayValue = formatHeatmapNumber(value);
           if (percentageMode != PercentageMode.none) {
             suffix = '%';
-            displayValue = value;
           }
           final tp = _getTextPainter(
-            displayValue.toStringAsFixed(displayValue.abs() < 10 ? 2 : 1) + suffix,
+            displayValue + suffix,
             TextStyle(
               fontSize: min(cellWidth, cellHeight) * 0.3,
               // Контрастный цвет текста в зависимости от яркости фона

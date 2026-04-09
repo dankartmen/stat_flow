@@ -68,8 +68,11 @@ class _HeatmapViewState extends State<HeatmapView>
   late HeatmapData? _displayData;
 
 
-  /// Кэш ключа данных для оптимизации повторных вычислений
+  /// Кэш ключа данных
   String? _currentDataKey;
+
+  /// Кэш ключа стиля 
+  String? _currentStyleKey;
 
   /// Future для асинхронного вычисления данных  
   Future<HeatmapData>? _computeFuture;
@@ -91,21 +94,20 @@ class _HeatmapViewState extends State<HeatmapView>
   void didUpdateWidget(covariant HeatmapView oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    // Проверяем изменения, которые влияют на данные / цвета
-    if (widget.state != oldWidget.state ||
-        widget.dataset != oldWidget.dataset) {
+    final newDataKey = _computeDataKey();
+    final newStyleKey = _computeStyleKey();
+
+    // Если изменились данные – пересчитываем всё
+    if (_currentDataKey != newDataKey) {
+      _currentDataKey = newDataKey;
       _startComputation();
     }
-
-    // Проверяем, изменились ли параметры, влияющие на цветовую схему
-    if (oldWidget.state.palette != widget.state.palette ||
-        oldWidget.state.segments != widget.state.segments ||
-        oldWidget.state.colorMode != widget.state.colorMode) {
-      if (_displayData != null) {
-        _previousMapper = _currentMapper;
-        _currentMapper = _createMapper();
-        _controller.forward(from: 0);
-      }
+    // Если изменились только стили – обновляем цвета и запускаем анимацию
+    else if (_currentStyleKey != newStyleKey && _displayData != null) {
+      _currentStyleKey = newStyleKey;
+      _previousMapper = _currentMapper;
+      _currentMapper = _createMapper();
+      _controller.forward(from: 0);
     }
   }
 
@@ -125,15 +127,47 @@ class _HeatmapViewState extends State<HeatmapView>
     return _buildHeatmap();
   }
 
+  /// Генерирует ключ для кэширования данных на основе настроек, влияющих на значения ячеек
+  String _computeDataKey() {
+    return '${widget.state.useCorrelation}_'
+        '${widget.state.xColumn}_${widget.state.yColumn}_'
+        '${widget.state.aggregationType}_'
+        '${widget.state.clusterEnabled}_'
+        '${widget.state.sortX}_${widget.state.sortY}_'
+        '${widget.state.normalizeMode}_'
+        '${widget.state.percentageMode}';
+  }
+
+  /// Генерирует ключ для кэширования стилей на основе настроек, влияющих на отображение (цветовая схема, сегменты, режим цветов)
+  String _computeStyleKey() {
+    return '${widget.state.palette}_'
+        '${widget.state.segments}_'
+        '${widget.state.colorMode}';
+  }
+
+
   /// Обработчик готовности данных. Устанавливает [_displayData] и обновляет мапперы цветов.
-  void _onDataReady(HeatmapData data) {
-      if (!mounted) return;
+  HeatmapData _onDataReady(HeatmapData data) {
+      if (!mounted) return data;
       setState(() {
         _displayData = data;
         _currentMapper = _createMapper();
         _previousMapper = _currentMapper; // сброс анимации
         _controller.value = 0;
+        _currentStyleKey = _computeStyleKey();
       });
+
+      if (data.wasTrimmed) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Некоторые категории были скрыты из-за большого количества уникальных значений (показаны топ-50)'),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        });
+      }
+      return data;
     }
 
   /// Запускает вычисление данных тепловой карты.
@@ -141,43 +175,52 @@ class _HeatmapViewState extends State<HeatmapView>
   /// Если данные уже вычислены для текущего ключа, пропускает.
   /// В противном случае вычисляет синхронно (для корреляции) или асинхронно (для выбранных осей).
   void _startComputation() async{
-    final key = _computeKey();
-    if (_currentDataKey == key && _displayData != null) return;
-    _currentDataKey = key;
+    // Отменяем предыдущий расчёт, если он ещё идёт
+    _computeFuture?.ignore();
 
     // Сбрасываем текущие данные
     setState(() {
       _displayData = null;
-      _computeFuture = null;
     });
 
     // Режим корреляции (обе оси не выбраны) – строим синхронно
     if (widget.state.useCorrelation) {
-      final matrix = await CorrelationMatrix.fromDatasetAsync(widget.dataset);
-      var data = HeatmapData.fromCorrelation(matrix);
-      data = _applyTransformations(data);
-      _onDataReady(data);
-      return;
+      // Используем кэшированный провайдер корреляционной матрицы
+      _computeFuture = _loadCorrelationData().then(_onDataReady).catchError((e, stack) {
+        log('Ошибка построения heatmap: $e', error: e, stackTrace: stack);
+        if (mounted) _onDataReady(HeatmapData(rowLabels: [], columnLabels: [], values: []));
+      });
+    } else {
+      // Используем асинхронный билдер
+      final builder = HeatmapDataBuilder(dataset: widget.dataset, state: widget.state);
+      _computeFuture = builder.buildAsync().then(_onDataReady).catchError((e, stack) {
+        log('Ошибка построения heatmap: $e', error: e, stackTrace: stack);
+        if (mounted) _onDataReady(HeatmapData(rowLabels: [], columnLabels: [], values: []));
+      });
     }
-
     
-
-    // Режим выбранных осей – асинхронно
-    _computeFuture = HeatmapDataBuilder(
-      dataset: widget.dataset,
-      state: widget.state,
-    ).buildAsync();
-
-    _computeFuture!.then(_onDataReady).catchError((error, stack) {
-      log('Ошибка построения heatmap: $error', error: error, stackTrace: stack);
-      if (mounted) {
-        _onDataReady(HeatmapData(rowLabels: [], columnLabels: [], values: []));
-      }
-    });
   }
   
+
+  Future<HeatmapData> _loadCorrelationData() async {
+    final matrix = await CorrelationMatrix.fromDatasetAsync(widget.dataset);
+    if (matrix.wasTrimmed && mounted) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Было выбрано только 100 числовых колонок с наибольшей дисперсией для построения корреляционной матрицы'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+    });
+  }
+    var data = HeatmapData.fromCorrelation(matrix);
+    // Применяем трансформации (они уже асинхронные)
+    data = await _applyTransformations(data);
+    return data;
+  }
   /// Применяет к данным все трансформации: кластеризацию, сортировку, нормализацию, проценты.
-  HeatmapData _applyTransformations(HeatmapData data) {
+  Future<HeatmapData> _applyTransformations(HeatmapData data) async {
     // Кластеризация только для корреляционной матрицы
     if (widget.state.clusterEnabled &&
         widget.state.useCorrelation) {
@@ -203,14 +246,6 @@ class _HeatmapViewState extends State<HeatmapView>
     }
 
     return data;
-  }
-
-  /// Генерирует ключ для кэширования данных на основе настроек
-  String _computeKey() {
-    return '${widget.state.xColumn}_${widget.state.yColumn}_${widget.state.useCorrelation}_'
-        '${widget.state.aggregationType}_${widget.state.clusterEnabled}_'
-        '${widget.state.sortX}_${widget.state.sortY}_'
-        '${widget.state.normalizeMode}_${widget.state.percentageMode}';
   }
 
   /// Создание маппера цветов на основе текущих настроек.
