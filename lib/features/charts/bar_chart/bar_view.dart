@@ -1,12 +1,9 @@
 import 'dart:developer';
-
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
-
 import '../../../core/dataset/dataset.dart';
 import 'bar_state.dart';
 
-/// Максимальное количество точек для отображения (для производительности)
 const int _kMaxChartPoints = 5000;
 
 /// {@template bar_view}
@@ -59,13 +56,29 @@ class _BarViewState extends State<BarView> {
   @override
   void didUpdateWidget(covariant BarView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // Обновляем данные только если изменились параметры, влияющие на расчёт
     if (oldWidget.dataset != widget.dataset ||
-        oldWidget.state.columnName != widget.state.columnName) {
+        oldWidget.state.columnName != widget.state.columnName ||
+        oldWidget.state.binCount != widget.state.binCount ||
+        oldWidget.state.maxCategories != widget.state.maxCategories ||
+        oldWidget.state.sortDescending != widget.state.sortDescending) {
       _updateData();
     }
   }
 
   /// Обновляет данные на основе выбранной колонки
+  /// - Определяет тип колонки и обрабатывает данные соответствующим образом
+  /// - Для числовых данных выполняет группировку в интервалы (гистограмма
+  /// - Для категориальных и текстовых данных считает частоты
+  /// - Выполняет сэмплирование, если количество данных превышает порог для производительности
+  /// Принимает:
+  /// - [widget.state.columnName] — имя выбранной колонки для построения диаг
+  /// - [widget.dataset] — датасет с данными для анализа
+  /// - [widget.state.binCount] — количество интервалов для числовых данных
+  /// - [widget.state.maxCategories] — максимальное количество категорий для отображения
+  /// - [widget.state.sortDescending] — флаг сортировки категорий по убыванию
+  /// Возвращает:
+  /// - Подготовленные данные для отображения на столбчатой диаграмме
   void _updateData() {
     log("Обновление данных в BarView с состоянием: ${widget.state.toString()}", name: 'BarView');
     
@@ -105,7 +118,6 @@ class _BarViewState extends State<BarView> {
   /// Обрабатывает числовую колонку (строит гистограмму)
   void _processNumericColumn(NumericColumn column) {
     final allValues = column.data.whereType<double>().toList();
-    
     if (allValues.isEmpty) {
       _clearData();
       return;
@@ -119,7 +131,7 @@ class _BarViewState extends State<BarView> {
     // Создаем гистограмму для числовых данных
     final min = values.reduce((a, b) => a < b ? a : b);
     final max = values.reduce((a, b) => a > b ? a : b);
-    final binCount = 10; // можно сделать настраиваемым
+    final binCount = widget.state.binCount; // исправлено: используется настройка
     final binWidth = (max - min) / binCount;
     
     final bins = List.generate(binCount, (i) {
@@ -145,15 +157,16 @@ class _BarViewState extends State<BarView> {
         valueCounts[value] = (valueCounts[value] ?? 0) + 1;
       }
     }
-
-    // Сортируем по убыванию частоты и ограничиваем количество
-    final sortedEntries = valueCounts.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    
-    final topEntries = sortedEntries.take(20).toList(); // показываем топ-20 категорий
-
+    final entries = valueCounts.entries.toList();
+    if (widget.state.sortDescending) {
+      entries.sort((a, b) => b.value.compareTo(a.value));
+    } else {
+      entries.sort((a, b) => a.value.compareTo(b.value));
+    }
+    final maxCat = widget.state.maxCategories;
+    final topEntries = entries.take(maxCat).toList();
     setState(() {
-      _isSampled = sortedEntries.length > 20;
+      _isSampled = entries.length > maxCat;
       _barData = topEntries.map((e) => BarData(e.key, e.value.toDouble())).toList();
     });
   }
@@ -161,20 +174,21 @@ class _BarViewState extends State<BarView> {
   /// Обрабатывает текстовую колонку (считает частоты, аналогично categorical)
   void _processTextColumn(TextColumn column) {
     final valueCounts = <String, int>{};
-    
     for (final value in column.data) {
       if (value != null && value.isNotEmpty) {
         valueCounts[value] = (valueCounts[value] ?? 0) + 1;
       }
     }
-
-    final sortedEntries = valueCounts.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    
-    final topEntries = sortedEntries.take(20).toList();
-
+    final entries = valueCounts.entries.toList();
+    if (widget.state.sortDescending) {
+      entries.sort((a, b) => b.value.compareTo(a.value));
+    } else {
+      entries.sort((a, b) => a.value.compareTo(b.value));
+    }
+    final maxCat = widget.state.maxCategories;
+    final topEntries = entries.take(maxCat).toList();
     setState(() {
-      _isSampled = sortedEntries.length > 20;
+      _isSampled = entries.length > maxCat;
       _barData = topEntries.map((e) => BarData(e.key, e.value.toDouble())).toList();
     });
   }
@@ -186,6 +200,8 @@ class _BarViewState extends State<BarView> {
         child: Text("Нет данных для отображения"),
       );
     }
+    final theme = Theme.of(context);
+    final primaryColor = theme.colorScheme.primary;
 
     return Column(
       children: [
@@ -203,37 +219,32 @@ class _BarViewState extends State<BarView> {
               labelRotation: 45,
               labelIntersectAction: AxisLabelIntersectAction.multipleRows,
             ),
-            primaryYAxis: NumericAxis(),
-            series: _buildSeries(context),
+            primaryYAxis: const NumericAxis(),
+            series: [
+              BarSeries<BarData, String>(
+                dataSource: _barData,
+                xValueMapper: (data, _) => data.category,
+                yValueMapper: (data, _) => data.value,
+                width: widget.state.barWidth,
+                spacing: widget.state.spacing,
+                borderRadius: BorderRadius.circular(widget.state.borderRadius),
+                borderWidth: widget.state.borderWidth,
+                borderColor: primaryColor,
+                color: primaryColor.withValues(alpha: 0.85),
+                isTrackVisible: widget.state.showTrack,
+                trackColor: theme.colorScheme.surfaceContainerHighest,
+                dataLabelSettings: DataLabelSettings(
+                  isVisible: widget.state.showValues,
+                  alignment: _getBarAlignment(widget.state.alignment),
+                ),
+              ),
+            ],
           ),
         ),
       ],
     );
   }
 
-  List<BarSeries<BarData, String>> _buildSeries(BuildContext context) {
-    return [
-      BarSeries<BarData, String>(
-        dataSource: _barData,
-        xValueMapper: (data, _) => data.category,
-        yValueMapper: (data, _) => data.value,
-        width: widget.state.barWidth,
-        spacing: widget.state.spacing,
-        borderRadius: BorderRadius.circular(widget.state.borderRadius),
-        borderWidth: widget.state.borderWidth,
-        borderColor: Theme.of(context).colorScheme.primary,
-        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.85),
-        isTrackVisible: widget.state.showTrack,
-        trackColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-        dataLabelSettings: DataLabelSettings(
-          isVisible: widget.state.showValues,
-          alignment: _getBarAlignment(widget.state.alignment),
-        ),
-      ),
-    ];
-  }
-
-  /// Строит информацию о сэмплировании
   Widget _buildSamplingInfo() {
     return Padding(
       padding: const EdgeInsets.all(8.0),
@@ -244,34 +255,6 @@ class _BarViewState extends State<BarView> {
     );
   }
 
-  /// Строит поведение всплывающих подсказок
-  TooltipBehavior _buildTooltipBehavior() {
-    return TooltipBehavior(
-      enable: true,
-      duration: 2000,
-      header: widget.state.columnName ?? 'Столбчатая диаграмма',
-      activationMode: ActivationMode.singleTap,
-      format: 'Категория: point.x\nЗначение: point.y',
-    );
-  }
-
-  /// Строит ось X (категориальная)
-  CategoryAxis _buildXAxis() {
-    return CategoryAxis(
-      title: const AxisTitle(text: 'Категория'),
-      labelRotation: 45,
-      labelIntersectAction: AxisLabelIntersectAction.multipleRows,
-    );
-  }
-
-  /// Строит ось Y (числовая)
-  NumericAxis _buildYAxis() {
-    return NumericAxis(
-      title: AxisTitle(text: widget.state.columnName),
-    );
-  }
-  
-  /// Преобразование BarAlignment в ChartAlignment
   ChartAlignment _getBarAlignment(BarAlignment alignment) {
     switch (alignment) {
       case BarAlignment.far:

@@ -43,6 +43,9 @@ class _TablePreviewScreenState extends State<TablePreviewScreen> {
   /// Источник данных для таблицы
   PreviewDataSource? _dataSource;
 
+  /// Кэшированные колонки для SfDataGrid 
+  List<GridColumn> _gridColumns = [];
+
   /// Список распространенных разделителей для выбора
   final List<String> _commonDelimiters = [',', ';', '\t', '|'];
 
@@ -108,11 +111,25 @@ class _TablePreviewScreenState extends State<TablePreviewScreen> {
             .take(50)
             .map((line) => line.split(_delimiter).map((e) => e.trim()).toList())
             .toList();
-
+        final newColumns = headers.map((header) {
+          return GridColumn(
+            columnName: header,
+            label: Container(
+              padding: const EdgeInsets.all(8),
+              alignment: Alignment.centerLeft,
+              child: Text(
+                header,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          );
+        }).toList();
         setState(() {
           _headers = headers;
           _rows = rows;
           _dataSource = PreviewDataSource(headers, rows);
+          _gridColumns = newColumns;
           _isLoading = false;
         });
       } else {
@@ -200,22 +217,7 @@ class _TablePreviewScreenState extends State<TablePreviewScreen> {
                       ? const _EmptyTableState()
                       : SfDataGrid(
                           source: _dataSource!,
-                          columns: _headers.map((header) {
-                            return GridColumn(
-                              columnName: header,
-                              label: Container(
-                                padding: const EdgeInsets.all(8),
-                                alignment: Alignment.centerLeft,
-                                child: Text(
-                                  header,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            );
-                          }).toList(),
+                          columns: _gridColumns,
                           columnWidthMode: ColumnWidthMode.auto,
                           gridLinesVisibility: GridLinesVisibility.both,
                           headerGridLinesVisibility: GridLinesVisibility.both,

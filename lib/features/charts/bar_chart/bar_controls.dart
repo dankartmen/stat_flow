@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
-
 import '../../../core/dataset/dataset.dart';
 import '../../../core/theme/controls_style.dart';
 import 'bar_state.dart';
 
 /// {@template bar_controls}
 /// Фабрика для создания элементов управления столбчатой диаграммой
+/// Предоставляет статические методы для построения UI-компонентов,
+/// управляющих отображением столбчатой диаграммы:
+/// - Выбор колонки для анализа (числовая, категориальная или текстовая)
+/// - Настройка ширины столбцов
+/// - Включение отображения значений над столбцами
+/// - Настройка внешнего вида (закругление, отступы, трек)
+/// - Дополнительные настройки для числовых колонок (гистограмма)
+/// - Дополнительные настройки для категориальных/текстовых колонок (макс. категории, сортировка) 
 /// {@endtemplate}
 class BarControls {
   static List<Widget> build({
@@ -18,11 +25,11 @@ class BarControls {
         .where((c) => c is NumericColumn || c is CategoricalColumn || c is TextColumn)
         .map((c) => c.name)
         .toList();
+    final theme = Theme.of(context);
 
     return [
       const SizedBox(height: 8),
 
-      // Выбор колонки
       buildSection(
         context: context,
         title: 'Колонка',
@@ -36,7 +43,6 @@ class BarControls {
         ),
       ),
 
-      // Основные настройки
       buildSection(
         context: context,
         title: 'Основные настройки',
@@ -48,6 +54,7 @@ class BarControls {
               value: state.showValues,
               onChanged: (v) => onChanged(state.copyWith(showValues: v)),
               contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+              activeColor: theme.colorScheme.primary,
             ),
             const SizedBox(height: 12),
             Row(
@@ -68,14 +75,12 @@ class BarControls {
         ),
       ),
 
-      // Внешний вид
       buildSection(
         context: context,
         title: 'Внешний вид',
         icon: Icons.format_paint_rounded,
         child: Column(
           children: [
-            // Закругление
             Row(
               children: [
                 const Text('Закругление углов'),
@@ -90,19 +95,15 @@ class BarControls {
               divisions: 30,
               onChanged: (v) => onChanged(state.copyWith(borderRadius: v)),
             ),
-
             const SizedBox(height: 12),
-
-            // Трек (фон за столбцами)
             SwitchListTile(
               title: const Text('Показывать трек (фон)'),
               value: state.showTrack,
               onChanged: (v) => onChanged(state.copyWith(showTrack: v)),
               contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+              activeColor: theme.colorScheme.primary,
             ),
-
             const SizedBox(height: 12),
-            // Расстояние между столбцами
             const Text('Расстояние между столбцами', style: TextStyle(fontSize: 15)),
             Row(
               children: [
@@ -130,9 +131,7 @@ class BarControls {
         ),
       ),
 
-      // Для числовых данных
-      if (state.columnName != null &&
-          dataset.column(state.columnName!) is NumericColumn)
+      if (state.columnName != null && dataset.column(state.columnName!) is NumericColumn)
         buildSection(
           context: context,
           title: 'Гистограмма (числовые данные)',
@@ -157,7 +156,6 @@ class BarControls {
           ),
         ),
 
-      // Для категориальных
       if (state.columnName != null &&
           (dataset.column(state.columnName!) is CategoricalColumn ||
            dataset.column(state.columnName!) is TextColumn))
@@ -185,6 +183,7 @@ class BarControls {
                 title: const Text('Сортировка по убыванию'),
                 value: state.sortDescending,
                 onChanged: (v) => onChanged(state.copyWith(sortDescending: v)),
+                activeColor: theme.colorScheme.primary,
               ),
             ],
           ),
@@ -192,7 +191,6 @@ class BarControls {
 
       const SizedBox(height: 24),
 
-      // Кнопка сброса
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8),
         child: OutlinedButton.icon(

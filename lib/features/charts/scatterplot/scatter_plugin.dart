@@ -37,8 +37,10 @@ class ScatterPlugin extends ChartPlugin {
   ) {
     final state = data.state as ScatterState;
 
+    final sampledDataset = ref.watch(sampledDatasetProvider) ?? data.dataset;
+
     return ScatterControls.build(
-      dataset: data.dataset,
+      dataset: sampledDataset,
       state: state,
       context: ref.context,
       onChanged: (newState) {

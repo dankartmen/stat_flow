@@ -34,6 +34,7 @@ class BoxPlotControls {
     required ValueChanged<BoxPlotState> onChanged,
   }) {
     final numericColumns = dataset.numericColumns;
+    final theme = Theme.of(context);
 
     return [
       const SizedBox(height: 8),
@@ -64,18 +65,21 @@ class BoxPlotControls {
               value: state.showMean,
               onChanged: (v) => onChanged(state.copyWith(showMean: v)),
               contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+              activeColor: theme.primaryColor,
             ),
             SwitchListTile(
               title: const Text('Показывать выбросы'),
               value: state.showOutliers,
               onChanged: (v) => onChanged(state.copyWith(showOutliers: v)),
               contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+              activeColor: theme.primaryColor,
             ),
             SwitchListTile(
               title: const Text('Показывать все точки (джиттер)'),
               value: state.showAllPoints,
               onChanged: (v) => onChanged(state.copyWith(showAllPoints: v)),
               contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+              activeColor: theme.primaryColor,
             ),
           ],
         ),

@@ -18,7 +18,8 @@ class HistogramControls {
   /// - [dataset] — датасет с данными для анализа
   /// - [state] — текущее состояние гистограммы
   /// - [onChanged] — колбэк для обновления состояния
-  ///
+  /// - [context] — контекст для доступа к теме и локализации
+  /// 
   /// Возвращает:
   /// - [List<Widget>] — список виджетов для размещения в панели управления
   static List<Widget> build({
@@ -28,6 +29,8 @@ class HistogramControls {
     required BuildContext context,
   }) {
     final numericColumns = dataset.numericColumns;
+    final theme = Theme.of(context);
+    final activeColor = theme.colorScheme.primary;
 
     return [
       const SizedBox(height: 8),
@@ -100,14 +103,14 @@ class HistogramControls {
               value: state.showNormalDistributionCurve,
               onChanged: (v) => onChanged(state.copyWith(showNormalDistributionCurve: v)),
               contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-              activeColor: Theme.of(context).colorScheme.primary,
+              activeColor: activeColor,
             ),
             SwitchListTile(
               title: const Text('Подписи значений'),
               value: state.showDataLabels,
               onChanged: (v) => onChanged(state.copyWith(showDataLabels: v)),
               contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-              activeColor: Theme.of(context).colorScheme.primary,
+              activeColor: activeColor,
             ),
             const SizedBox(height: 8),
             Row(
@@ -144,7 +147,6 @@ class HistogramControls {
           ),
         ),
       ),
-
       const SizedBox(height: 32),
     ];
   }

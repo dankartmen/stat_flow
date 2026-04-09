@@ -116,7 +116,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
       size: initialSize,
     );
 
-    ref.read(chartsProvider.notifier).addChart(newChart);
+    ref.read(chartsProvider.notifier).addChart(newChart, ref);
     ref.read(selectedChartIdProvider.notifier).state = newChart.id;
   }
 
@@ -155,7 +155,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
       size: const Size(300, 200),
     );
 
-    ref.read(chartsProvider.notifier).addChart(newChart);
+    ref.read(chartsProvider.notifier).addChart(newChart, ref);
     ref.read(selectedChartIdProvider.notifier).state = newChart.id;
   }
 
