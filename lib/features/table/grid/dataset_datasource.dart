@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_datagrid/datagrid.dart';
 
@@ -19,11 +21,17 @@ class DatasetDataSource extends DataGridSource {
   final Map<int, DataGridRow> _rowCache = {};
 
   /// {@macro dataset_data_source}
-  DatasetDataSource(this.dataset);
+  DatasetDataSource(this.dataset){
+     WidgetsBinding.instance.addPostFrameCallback((_) => notifyListeners());
+  }
 
   /// Количество строк в датасете
   int get rowsCount => dataset.rowCount;
 
+  /// Получает строку для отображения по индексу. Использует кэш для оптимизации производительности при повторных запросах.
+  /// Если строка не найдена в кэше, строит ее из датасета и сохраняет в кэше. Ограничивает размер кэша, чтобы предотвратить чрезмерное потребление памяти.
+  @override
+  List<DataGridRow> get rows => List.generate(rowsCount, (i) => getRow(i));
 
   /// Получает строку для отображения по индексу. Использует кэш для оптимизации производительности при повторных запросах.
   /// Если строка не найдена в кэше, строит ее из датасета и сохраняет в кэше. Ограничивает размер кэша, чтобы предотвратить чрезмерное потребление памяти.
@@ -75,5 +83,9 @@ class DatasetDataSource extends DataGridSource {
   void updateDataSource() {
     _rowCache.clear();
     notifyListeners();
+  }
+
+  void dispose() {
+    _rowCache.clear();
   }
 }

@@ -1,7 +1,9 @@
 import 'dart:math' show min;
 import 'dart:developer' show log;
+import 'package:async/async.dart';
 import 'package:flutter/material.dart';
 import 'package:stat_flow/features/charts/heatmap/widgets/heatmap_legend.dart';
+import 'package:vector_math/vector_math_64.dart';
 
 import '../../../../core/dataset/dataset.dart';
 import '../calculator/heatmap_data_builder.dart';
@@ -64,6 +66,12 @@ class _HeatmapViewState extends State<HeatmapView>
   /// Контроллер трансформации для масштабирования
   final TransformationController _zoomController = TransformationController();
 
+  /// Матрица трансформации на последнем кадре для оптимизации вычисления видимой области
+  Matrix4? _lastMatrix;
+
+  /// Видимая область в координатах строк/столбцов для оптимизации отрисовки больших матриц
+  Rect? _visibleRect;
+
   /// Данные, подготовленные для отображения (после кластеризации, сортировки, нормализации)
   late HeatmapData? _displayData;
 
@@ -79,6 +87,12 @@ class _HeatmapViewState extends State<HeatmapView>
   /// Диапазон значений, соответствующий наведению на легенду.
   /// Используется для подсветки ячеек с близкими значениями.
   HoverRange? _hoverRange;
+  
+  /// Операция для отмены текущего вычисления данных, если параметры изменились до его завершения.
+  CancelableOperation<HeatmapData>? _currentOperation;
+
+  /// Флаг для отслеживания, был ли виджет уже удалён, чтобы избежать обновления состояния после dispose.
+  bool _disposed = false;
   
   @override
   void initState() {
@@ -113,8 +127,11 @@ class _HeatmapViewState extends State<HeatmapView>
 
   @override
   void dispose() {
+    _currentOperation?.cancel();
+    _currentOperation = null;
     _controller.dispose();
     _zoomController.dispose();
+    _disposed = true;
     super.dispose();
   }
 
@@ -122,7 +139,16 @@ class _HeatmapViewState extends State<HeatmapView>
   @override
   Widget build(BuildContext context) {
     if (_displayData == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Вычисление данных тепловой карты...'),
+          ],
+        ),
+      );
     }
     return _buildHeatmap();
   }
@@ -148,7 +174,7 @@ class _HeatmapViewState extends State<HeatmapView>
 
   /// Обработчик готовности данных. Устанавливает [_displayData] и обновляет мапперы цветов.
   HeatmapData _onDataReady(HeatmapData data) {
-      if (!mounted) return data;
+      if (_disposed || !mounted) return data;
       setState(() {
         _displayData = data;
         _currentMapper = _createMapper();
@@ -176,30 +202,37 @@ class _HeatmapViewState extends State<HeatmapView>
   /// В противном случае вычисляет синхронно (для корреляции) или асинхронно (для выбранных осей).
   void _startComputation() async{
     // Отменяем предыдущий расчёт, если он ещё идёт
-    _computeFuture?.ignore();
+    _currentOperation?.cancel();
 
     // Сбрасываем текущие данные
     setState(() {
       _displayData = null;
     });
 
-    // Режим корреляции (обе оси не выбраны) – строим синхронно
+    late final Future<HeatmapData> future;
     if (widget.state.useCorrelation) {
-      // Используем кэшированный провайдер корреляционной матрицы
-      _computeFuture = _loadCorrelationData().then(_onDataReady).catchError((e, stack) {
-        log('Ошибка построения heatmap: $e', error: e, stackTrace: stack);
-        if (mounted) _onDataReady(HeatmapData(rowLabels: [], columnLabels: [], values: []));
-      });
+      future = _loadCorrelationData();
     } else {
-      // Используем асинхронный билдер
-      final builder = HeatmapDataBuilder(dataset: widget.dataset, state: widget.state);
-      _computeFuture = builder.buildAsync().then(_onDataReady).catchError((e, stack) {
-        log('Ошибка построения heatmap: $e', error: e, stackTrace: stack);
-        if (mounted) _onDataReady(HeatmapData(rowLabels: [], columnLabels: [], values: []));
-      });
+      final builder = HeatmapDataBuilder(
+        dataset: widget.dataset,
+        state: widget.state
+      );
+      future = builder.buildAsync();
     }
-    
+
+    _currentOperation = CancelableOperation.fromFuture(
+      future,
+      onCancel: () => debugPrint('Heatmap computation cancelled'),
+    );
+    _currentOperation?.value.then(_onDataReady).catchError((e) {
+      log(e, name: "HeatmapView");
+      if (!_disposed && mounted) {
+        _onDataReady(HeatmapData(rowLabels: [], columnLabels: [], values: []));
+      }
+    });
   }
+    
+
   
 
   Future<HeatmapData> _loadCorrelationData() async {
@@ -248,6 +281,60 @@ class _HeatmapViewState extends State<HeatmapView>
     return data;
   }
 
+
+  /// Обновляет [_visibleRect] на основе текущей трансформации и размера виджета.
+  /// Вычисляет, какие строки и столбцы видимы в данный момент, чтобы оптимизировать отрисовку больших матриц.
+  /// Параметры:
+  /// - [axisOffset]: отступ для осевых меток
+  /// - [cellWidth]: ширина одной ячейки
+  /// - [cellHeight]: высота одной ячейки
+  /// - [colCount]: общее количество столбцов
+  /// - [rowCount]: общее количество строк
+  /// 
+  /// Логика:
+  /// 1. Получаем текущую матрицу трансформации от InteractiveViewer
+  /// 2. Инвертируем её, чтобы преобразовать координаты виджета в координаты тепловой карты
+  /// 3. Вычисляем координаты верхнего левого и нижнего правого углов видимой области
+  /// 4. Преобразуем эти координаты в индексы строк и столбцов, учитывая отступ для осевых меток
+  /// 5. Сохраняем видимую область в виде Rect, где left=столбец начала, top=строка начала, right=столбец конца, bottom=строка конца
+  void _updateVisibleRect({
+    required double axisOffset, 
+    required double cellWidth, 
+    required double cellHeight,
+    required int colCount,
+    required int rowCount
+  }) {
+    if (_displayData == null) return;
+    final matrix = _zoomController.value;
+    if (_lastMatrix == matrix) return;
+    _lastMatrix = matrix;
+
+    // Получаем размер холста (контейнера)
+    final size = context.size;
+    if (size == null) return;
+
+    // Вычисляем видимую область в координатах тепловой карты
+    final inverted = Matrix4.inverted(matrix);
+    final topLeft = Vector4(0, 0, 0, 1);
+    final bottomRight = Vector4(size.width, size.height, 0, 1);
+    final topLeftTransformed = inverted.transform(topLeft);
+    final bottomRightTransformed = inverted.transform(bottomRight);
+
+    double left = topLeftTransformed.x;
+    double top = topLeftTransformed.y;
+    double right = bottomRightTransformed.x;
+    double bottom = bottomRightTransformed.y;
+
+    // Преобразуем в индексы строк/столбцов с учётом axisOffset
+    final startCol = ((left - axisOffset) / cellWidth).floor().clamp(0, colCount - 1);
+    final endCol = ((right - axisOffset) / cellWidth).ceil().clamp(0, colCount - 1);
+    final startRow = ((top - axisOffset) / cellHeight).floor().clamp(0, rowCount - 1);
+    final endRow = ((bottom - axisOffset) / cellHeight).ceil().clamp(0, rowCount - 1);
+
+    setState(() {
+      _visibleRect = Rect.fromLTRB(startCol.toDouble(), startRow.toDouble(), endCol.toDouble(), endRow.toDouble());
+    });
+  }
   /// Создание маппера цветов на основе текущих настроек.
   ///
   /// Поддерживает два режима:
@@ -319,6 +406,13 @@ class _HeatmapViewState extends State<HeatmapView>
             Expanded(
               child: InteractiveViewer(
                 transformationController: _zoomController,
+                onInteractionUpdate: (details) => _updateVisibleRect(
+                  axisOffset: axisOffset,
+                  cellHeight: cellSizeByHeight,
+                  cellWidth: cellSizeByWidth,
+                  colCount: colCount,
+                  rowCount: rowCount
+                ),
                 constrained: false,
                 minScale: 0.5, // Минимальное увеличение
                 maxScale: 5.0, // Максимальное увеличение
@@ -380,6 +474,7 @@ class _HeatmapViewState extends State<HeatmapView>
                           hoverCol: hoverCol,
                           hoverRange: _hoverRange,
                           percentageMode: widget.state.percentageMode,
+                          visibleRect: _visibleRect,
                         ),
                       );
                     },

@@ -40,6 +40,12 @@ class _FullTableScreenState extends State<FullTableScreen> {
   }
 
   @override
+  void dispose() {
+    _gridData.source.dispose();
+    super.dispose();
+  }
+  
+  @override
   Widget build(BuildContext context) {
     return Container(
       color: Colors.white,

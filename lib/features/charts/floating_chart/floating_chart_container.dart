@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
 import 'floating_chart_data.dart';
 
@@ -381,7 +382,24 @@ class _FloatingChartState extends State<FloatingChart> {
     await file.writeAsBytes(byteData.buffer.asUint8List());
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Сохранено: ${file.path}")));
+    
+    final snackBar = SnackBar(
+      content: Text("Сохранено: ${file.path}"),
+      duration: const Duration(seconds: 5),
+      action: SnackBarAction(
+        label: 'Открыть',
+        onPressed: () async {
+          try {
+            await OpenFile.open(file.path);
+          } catch (e) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Не удалось открыть файл'), duration: Duration(seconds: 2)),
+            );
+          }
+        },
+      ),
+    );
+    ScaffoldMessenger.of(context).showSnackBar(snackBar);
   }
 }
 

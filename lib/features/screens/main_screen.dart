@@ -73,6 +73,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     );
 
     if (result != null && result is Dataset) {
+      ref.invalidate(correlationMatrixProvider); // Сбрасываем кэш корреляционной матрицы при загрузке нового датасета
       ref.read(datasetProvider.notifier).state = result;
       ref.read(rightPanelExpandedProvider.notifier).state = true;
     }
@@ -186,30 +187,6 @@ class _MainScreenState extends ConsumerState<MainScreen> {
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Строит состояние пустого канваса (нет графиков, но данные загружены)
-  Widget _buildEmptyState() {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.add_chart,
-            size: 64,
-            color: Colors.grey,
-          ),
-          SizedBox(height: 16),
-          Text(
-            'Добавьте график через боковое меню',
-            style: TextStyle(
-              color: Colors.grey,
-              fontSize: 16,
-            ),
           ),
         ],
       ),
@@ -353,10 +330,12 @@ class _CanvasArea extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final charts = ref.watch(chartsProvider);
+    final chartIds = ref.watch(chartIdsProvider);
     final selectedId = ref.watch(selectedChartIdProvider);
     final dataset = ref.watch(datasetProvider);
 
+    /// Обработчики событий для графиков на канвасе
+    
     void onSelectChart(int id) {
       ref.read(chartsProvider.notifier).selectChart(id);
       ref.read(selectedChartIdProvider.notifier).state = id;
@@ -373,14 +352,15 @@ class _CanvasArea extends ConsumerWidget {
     void onCloseChart(int id) {
       ref.read(chartsProvider.notifier).removeChart(id);
       if (selectedId == id) {
-        final newSelectedChart = charts.length > 1
-          ? charts.last.id
+        final newSelectedChart = chartIds.isNotEmpty
+          ? chartIds.last
           : null;
         ref.read(selectedChartIdProvider.notifier).state = newSelectedChart;
       }
     }
 
     void onFullscreen(int id){
+      final charts = ref.read(chartsProvider);
       final chart = charts.firstWhere((c) => c.id == id);
       Navigator.push(
         context,
@@ -394,26 +374,27 @@ class _CanvasArea extends ConsumerWidget {
       );
     }
 
-    if (charts.isEmpty && dataset != null){
+    if (chartIds.isEmpty && dataset != null){
       return const _EmptyCanvasState();
     }
 
+    final charts = ref.watch(chartsProvider);
+    final children = charts.map((chart) {
+      return FloatingChart(
+        key: ValueKey(chart.id),
+        data: chart,
+        isSelected: chart.id == selectedId,
+        onPositionChanged: (pos) => onPositionChanged(chart.id, pos),
+        onSizeChanged: (size) => onSizeChanged(chart.id, size),
+        onSelect: () => onSelectChart(chart.id),
+        onClose: () => onCloseChart(chart.id),
+        onFullscreen: () => onFullscreen(chart.id),
+        child: ChartRenderer.build(chart),
+      );
+    }).toList();
 
     return CanvasWorkspace(
-      children: [
-        for (final chart in charts)
-          FloatingChart(
-            key: ValueKey(chart.id),
-            data: chart, 
-            isSelected: chart.id == selectedId, 
-            onPositionChanged: (pos) => onPositionChanged(chart.id, pos), 
-            onSizeChanged: (size) => onSizeChanged(chart.id, size), 
-            onSelect: () => onSelectChart(chart.id),
-            onClose: () => onCloseChart(chart.id), 
-            onFullscreen: () => onFullscreen(chart.id), 
-            child: ChartRenderer.build(chart)
-          )
-      ]
+      children: children
     );
   }
 }

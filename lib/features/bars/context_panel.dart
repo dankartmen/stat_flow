@@ -81,45 +81,66 @@ class _ContextPanelState extends ConsumerState<ContextPanel> {
         }
       },
       child: _isExpanded && _showContent
-          ? _buildExpandedContent()
-          : _buildCollapsedContent(),
+          ? _ExpandedContent(
+              dataset: widget.dataset,
+              selectedChart: widget.selectedChart,
+              onAddChart: widget.onAddChart,
+              onUpdateChartState: widget.onUpdateChartState,
+              onTogglePanel: _togglePanel,
+            )
+          : _CollapsedContent(onToggle: _togglePanel),
     );
   }
+}
 
-  
-  Widget _buildCollapsedContent() {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          _CollapseIcon(),
-          SizedBox(height: 8),
-          _RotatedLabel(),
-        ],
-      ),
+/// {@template expanded_content}
+/// Контент для развернутого состояния панели
+/// {@endtemplate}
+class _ExpandedContent extends ConsumerWidget {
+  /// Датасет для отображения (может быть null)
+  final Dataset? dataset;
+  /// Выбранный график для отображения настроек (может быть null)
+  final FloatingChartData? selectedChart;
+  /// Коллбек для создания нового графика указанного типа
+  final void Function(ChartType) onAddChart;
+  /// Коллбек для обновления состояния графика (после изменения настроек)
+  final void Function(int, ChartState) onUpdateChartState;
+  /// Коллбек для сворачивания панели
+  final VoidCallback onTogglePanel;
+
+  /// {@macro expanded_content}
+  const _ExpandedContent({
+    required this.dataset,
+    required this.selectedChart,
+    required this.onAddChart,
+    required this.onUpdateChartState,
+    required this.onTogglePanel,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (dataset == null) {
+      return _NoDatasetContent();
+    }
+    if (selectedChart == null) {
+      return _NoChartContent(onAddChart: onAddChart);
+    }
+    return _ChartSettingsContent(
+      selectedChart: selectedChart!,
+      onUpdateChartState: onUpdateChartState,
+      onTogglePanel: onTogglePanel,
     );
   }
+}
 
-  
-  Widget _buildExpandedContent() {
-    if (widget.dataset == null) {
-      return _buildNoDatasetContent();
-    }
 
-    if (widget.selectedChart == null) {
-      return _buildNoChartContent();
-    }
-
-    // Есть выбранный график
-    final plugin = ChartRegistry.get(widget.selectedChart!.type);
-    final controls = plugin.buildControls(widget.selectedChart!, () {}, ref);
-
-    return SizedBox(
-      width: 300,
-      child: _buildChartSettingsContent(controls));
-  }
-
-  Widget _buildNoDatasetContent() {
+/// {@template no_dataset_content}
+/// Контент для состояния, когда датасет не загружен
+/// Показывает сообщение и кнопку для загрузки датасета
+/// {@endtemplate}
+class _NoDatasetContent extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Center(
@@ -129,7 +150,15 @@ class _ContextPanelState extends ConsumerState<ContextPanel> {
             const Text('Датасет не загружен', style: TextStyle(fontSize: 16)),
             const SizedBox(height: 16),
             ElevatedButton(
-              onPressed: _loadDataset,
+              onPressed: () async {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const TablePreviewScreen()),
+                );
+                if (result != null && result is Dataset && context.mounted) {
+                  ref.read(datasetProvider.notifier).state = result;
+                }
+              },
               child: const Text('Загрузить датасет'),
             ),
           ],
@@ -137,8 +166,66 @@ class _ContextPanelState extends ConsumerState<ContextPanel> {
       ),
     );
   }
+}
 
-  Widget _buildNoChartContent() {
+/// {@template no_chart_content}
+/// Контент для состояния, когда график не выбран
+/// Показывает сообщение и кнопку для создания нового графика
+/// {@endtemplate}
+class _NoChartContent extends StatelessWidget {
+  /// Коллбек для создания нового графика указанного типа
+  final void Function(ChartType) onAddChart;
+
+  const _NoChartContent({required this.onAddChart});
+
+  /// Показывает меню выбора типа графика при нажатии на кнопку "Создать график"
+  void _showChartMenu(BuildContext context) {
+    final RenderBox? button = context.findRenderObject() as RenderBox?;
+    if (button == null) return;
+    showMenu(
+      context: context,
+      position: RelativeRect.fromRect(
+        Rect.fromPoints(
+          button.localToGlobal(Offset.zero),
+          button.localToGlobal(button.size.bottomRight(Offset.zero)),
+        ),
+        Offset.zero & MediaQuery.sizeOf(context),
+      ),
+      items: ChartType.values.map((type) {
+        return PopupMenuItem(
+          onTap: () => onAddChart(type),
+          child: Row(
+            children: [
+              Icon(_iconForType(type), size: 20),
+              const SizedBox(width: 12),
+              Text(type.name),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  /// Возвращает иконку для данного типа графика
+  IconData _iconForType(ChartType type) {
+    switch (type) {
+      case ChartType.heatmap:
+        return Icons.heat_pump;
+      case ChartType.scatter:
+        return Icons.bubble_chart;
+      case ChartType.histogram:
+        return Icons.bar_chart;
+      case ChartType.boxplot:
+        return Icons.candlestick_chart;
+      case ChartType.linechart:
+        return Icons.line_axis;
+      case ChartType.barchart:
+        return Icons.insert_chart;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -154,8 +241,36 @@ class _ContextPanelState extends ConsumerState<ContextPanel> {
       ),
     );
   }
+}
 
-  Widget _buildChartSettingsContent(List<Widget> controls) {
+/// {@template chart_settings_content}
+/// Контент для отображения настроек выбранного графика
+/// Получает выбранный график и отображает соответствующие ему настройки через плагин ChartRegistry
+/// {@endtemplate}
+class _ChartSettingsContent extends ConsumerWidget {
+  /// Выбранный график для отображения настроек
+  final FloatingChartData selectedChart;
+  /// Коллбек для обновления состояния графика (после изменения настроек)
+  final void Function(int, ChartState) onUpdateChartState;
+  /// Коллбек для создания нового графика указанного типа
+  final VoidCallback onTogglePanel;
+
+  const _ChartSettingsContent({
+    required this.selectedChart,
+    required this.onUpdateChartState,
+    required this.onTogglePanel,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Подписываемся только на нужные части состояния
+    final chartState = selectedChart.state;
+    final plugin = ChartRegistry.get(selectedChart.type);
+    
+    // Используем Selector для обновления только при изменении состояния конкретного графика
+    // (состояние графика может меняться, но сам список графиков не обязательно)
+    final controls = plugin.buildControls(selectedChart, () {}, ref);
+
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 12, 12, 16),
       child: Column(
@@ -165,15 +280,15 @@ class _ContextPanelState extends ConsumerState<ContextPanel> {
             children: [
               Expanded(
                 child: Text(
-                  'Настройки: ${widget.selectedChart!.type.name}',
+                  'Настройки: ${selectedChart.type.name}',
                   style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                   overflow: TextOverflow.ellipsis,
                   maxLines: 1,
                 ),
               ),
-              SizedBox(width: 6),
+              const SizedBox(width: 6),
               IconButton(
-                onPressed: _togglePanel,
+                onPressed: onTogglePanel,
                 icon: Icon(Icons.chevron_left, color: Colors.grey[600]),
                 tooltip: 'Свернуть панель',
                 padding: EdgeInsets.zero,
@@ -187,95 +302,41 @@ class _ContextPanelState extends ConsumerState<ContextPanel> {
       ),
     );
   }
+}
 
-  /// Отображает всплывающее меню с доступными типами графиков
-  void _showChartMenu(BuildContext context) {
-    // Находим позицию кнопки, чтобы привязать меню к ней
-    final RenderBox? button = context.findRenderObject() as RenderBox?;
-    if (button == null) return;
 
-    showMenu(
-      context: context,
-      position: RelativeRect.fromRect(
-        Rect.fromPoints(
-          button.localToGlobal(Offset.zero),
-          button.localToGlobal(button.size.bottomRight(Offset.zero)),
-        ),
-        Offset.zero & MediaQuery.sizeOf(context),
-      ),
-      items: ChartType.values.map((type) {
-        return PopupMenuItem(
-          onTap: () => widget.onAddChart(type),
-          child: Row(
-            children: [
-              Icon(_iconForType(type), size: 20),
-              const SizedBox(width: 12),
-              Text(type.name),
-            ],
+/// {@template collapsed_content}
+/// Контент для свернутого состояния панели
+/// Показывает иконку и название для доступа к настройкам
+/// {@endtemplate}
+class _CollapsedContent extends StatelessWidget {
+  /// Коллбек для сворачивания панели
+  final VoidCallback onToggle;
+
+  const _CollapsedContent({required this.onToggle});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          IconButton(
+            onPressed: onToggle,
+            icon: const Icon(Icons.chevron_right, size: 28),
+            tooltip: 'Развернуть панель',
+            padding: const EdgeInsets.all(8),
+            style: IconButton.styleFrom(foregroundColor: Colors.grey),
           ),
-        );
-      }).toList(),
-    );
-  }
-
-
-  Future<void> _loadDataset() async {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const TablePreviewScreen()),
-    );
-    if (!mounted) return;
-    if (result != null && result is Dataset) {
-      ref.read(datasetProvider.notifier).state = result;
-    }
-  }
-
-  /// Возвращает иконку для указанного типа графика
-  IconData _iconForType(ChartType type) {
-    switch (type) {
-      case ChartType.heatmap:
-        return Icons.heat_pump;
-      case ChartType.scatter:
-        return Icons.bubble_chart;
-      case ChartType.histogram:
-        return Icons.bar_chart;
-      case ChartType.boxplot:
-        return Icons.candlestick_chart;
-      case ChartType.linechart:
-        return Icons.line_axis;
-      case ChartType.barchart:
-        return Icons.insert_chart; 
-    }
-  }
-}
-
-
-class _CollapseIcon extends StatelessWidget {
-  const _CollapseIcon();
-
-  @override
-  Widget build(BuildContext context) {
-    return IconButton(
-      onPressed: () => (context.findAncestorStateOfType<_ContextPanelState>())?._togglePanel(),
-      icon: const Icon(Icons.chevron_right, size: 28),
-      tooltip: 'Развернуть панель',
-      padding: const EdgeInsets.all(8),
-      style: IconButton.styleFrom(foregroundColor: Colors.grey),
-    );
-  }
-}
-
-
-class _RotatedLabel extends StatelessWidget {
-  const _RotatedLabel();
-
-  @override
-  Widget build(BuildContext context) {
-    return RotatedBox(
-      quarterTurns: 1,
-      child: Text(
-        'Настройки',
-        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.grey[600]),
+          const SizedBox(height: 8),
+          RotatedBox(
+            quarterTurns: 1,
+            child: Text(
+              'Настройки',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.grey[600]),
+            ),
+          ),
+        ],
       ),
     );
   }

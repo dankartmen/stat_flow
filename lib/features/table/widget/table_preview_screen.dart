@@ -1,7 +1,10 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:stat_flow/core/loader/csv_loader.dart';
 import 'package:syncfusion_flutter_datagrid/datagrid.dart';
+import '../../../core/dataset/dataset.dart';
 import '../grid/preview_data_source.dart';
 
 /// {@template table_preview_screen}
@@ -49,96 +52,87 @@ class _TablePreviewScreenState extends State<TablePreviewScreen> {
   /// Список распространенных разделителей для выбора
   final List<String> _commonDelimiters = [',', ';', '\t', '|'];
 
+  /// Прогресс полной загрузки датасета
+  double _fullLoadProgress = 0.0;
+
+  /// Флаг полной загрузки датасета
+  bool _isFullLoading = false;
+
+  /// Статус полной загрузки датасета для отображения пользователю
+  String _fullLoadStatus = '';
+
   @override
   void initState() {
     super.initState();
     _pickFile();
   }
 
-  
-  /// Открывает диалог выбора файла
+  /// Открывает диалог выбора файла и загружает предварительный просмотр при выборе
+  /// Если пользователь отменяет выбор, возвращается на предыдущий экран. При выборе файла начинается загрузка первых строк для предпросмотра.
+  /// Использует пакет file_picker для открытия системного диалога выбора файла и получения пути к выбранному файлу. После получения пути вызывается метод _loadPreview для загрузки данных.
   /// 
   /// Особенности:
-  /// - Поддерживаются только CSV-файлы
-  /// - При отмене выбора возвращает на предыдущий экран
+  /// - Поддерживает только файлы с расширением .csv
+  /// - Обрабатывает отмену выбора файла и возвращается на предыдущий экран без ошибок
+  /// - При выборе файла сразу начинает загрузку данных для предпросмотра
   Future<void> _pickFile() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['csv'],
     );
-
     if (!mounted) return;
     if (result == null) {
       Navigator.pop(context);
       return;
     }
-
-    setState(() {
-      _filePath = result.files.single.path;
-    });
-
+    _filePath = result.files.single.path;
     await _loadPreview();
   }
 
-  /// Загружает предварительный просмотр файла
-  /// 
+  /// Загружает первые строки CSV-файла для предварительного просмотра
+  /// Читает содержимое файла, разбивает его на строки и колонки, и формирует данные для отображения в таблице. Обновляет состояние с заголовками, строками и источником данных для таблицы.
+  ///
   /// Особенности:
-  /// - Загружает только первые 50 строк + заголовок
-  /// - Автоматически обновляет таблицу при смене разделителя
-  /// - Показывает ошибки при неудачной загрузке
+  /// - Читает только первые 50 строк после заголовков для быстрого отображения предпросмотра
+  /// - Поддерживает динамическое изменение разделителя и обновляет предпросмотр в реальном времени
+  /// - Обрабатывает ошибки при чтении файла и отображает сообщение пользователю
   Future<void> _loadPreview() async {
     if (_filePath == null) return;
-    if (_isLoading) return;
-
-    setState(() {
-      _isLoading = true;
-    });
-
+    setState(() => _isLoading = true);
     try {
       final loader = CsvLoader.withDelimiter(_delimiter);
+      // Читаем только первые строки (без полного парсинга)
       final content = await loader.readFileContent(_filePath!, _delimiter);
       if (!mounted) return;
-
+      
       final lines = content
           .split('\n')
-          .where((line) => line.trim().isNotEmpty)
+          .where((l) => l.trim().isNotEmpty)
           .toList();
-
-      if (lines.isNotEmpty) {
-        final headers = lines.first.split(_delimiter).map((e) => e.trim()).toList();
-        final rows = lines
-            .skip(1)
-            .take(50)
-            .map((line) => line.split(_delimiter).map((e) => e.trim()).toList())
-            .toList();
-        final newColumns = headers.map((header) {
-          return GridColumn(
-            columnName: header,
-            label: Container(
-              padding: const EdgeInsets.all(8),
-              alignment: Alignment.centerLeft,
-              child: Text(
-                header,
-                style: const TextStyle(fontWeight: FontWeight.bold),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          );
-        }).toList();
-        setState(() {
-          _headers = headers;
-          _rows = rows;
-          _dataSource = PreviewDataSource(headers, rows);
-          _gridColumns = newColumns;
-          _isLoading = false;
-        });
-      } else {
-        setState(() => _isLoading = false);
-        _showError('Файл не содержит данных');
-      }
+      if (lines.isEmpty) throw Exception('Файл пуст');
+      
+      final headers = lines.first.split(_delimiter).map((e) => e.trim()).toList();
+      final rows = lines.skip(1).take(50).map((line) {
+        return line.split(_delimiter).map((e) => e.trim()).toList();
+      }).toList();
+      
+      setState(() {
+        _headers = headers;
+        _rows = rows;
+        _dataSource = PreviewDataSource(headers, rows);
+        _gridColumns = headers.map((header) => GridColumn(
+          columnName: header,
+          label: Container(
+            padding: const EdgeInsets.all(8),
+            alignment: Alignment.centerLeft,
+            child: Text(header, style: const TextStyle(fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+          ),
+        )).toList();
+        _isLoading = false;
+      });
     } catch (e) {
       setState(() => _isLoading = false);
-      _showError('Ошибка загрузки файла: $e');
+      _showError('Ошибка загрузки предпросмотра: $e');
     }
   }
 
@@ -153,23 +147,40 @@ class _TablePreviewScreenState extends State<TablePreviewScreen> {
     );
   }
 
-  /// Загружает полный датасет
-  /// 
-  /// Возвращает:
-  /// - [Dataset] — полный загруженный датасет на предыдущий экран
+  /// Загружает полный датасет из CSV-файла и возвращает его на предыдущий экран
+  /// Читает весь файл, парсит его в формат Dataset и возвращает результат на предыдущий экран. Во время загрузки отображает прогресс и статус загрузки. Обрабатывает ошибки и отображает сообщение пользователю при неудачной загрузке.
+  /// Особенности:
+  /// - Загружает весь файл, а не только первые строки, для полноценного отображения в основной таблице
+  /// - Использует прогресс-бар для отображения статуса загрузки, особенно при обработке больших файлов
+  /// - Обрабатывает ошибки при чтении и парсинге файла, информируя пользователя о проблемах с загрузкой
   Future<void> _loadFullDataset() async {
-    setState(() => _isLoading = true);
+    if (_filePath == null) return;
+    setState(() {
+      _isFullLoading = true;
+      _fullLoadProgress = 0.0;
+      _fullLoadStatus = 'Начинаем загрузку...';
+    });
 
     try {
       final loader = CsvLoader.withDelimiter(_delimiter);
-      final dataset = await loader.loadFullDataset(_filePath!);
-
-      if (mounted) {
-        Navigator.pop(context, dataset);
-      }
+      final dataset = await loader.loadFullDataset(
+        _filePath!,
+        onProgress: (progress,status) {
+          if (mounted) {
+            setState((){
+              _fullLoadProgress = progress ?? 0.5;
+              _fullLoadStatus = status;
+            });
+          }
+        },
+      );
+      if (mounted) Navigator.pop(context, dataset);
     } catch (e) {
-      setState(() => _isLoading = false);
-      _showError('Ошибка полной загрузки: $e');
+      if (mounted) {
+        setState(() => _isFullLoading = false);
+        debugPrint('$e');
+        _showError('Ошибка полной загрузки: $e');
+      }
     }
   }
 
@@ -186,34 +197,20 @@ class _TablePreviewScreenState extends State<TablePreviewScreen> {
         ),
       ),
       body: _isLoading
-          ? const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('Загрузка данных...'),
-                ],
-              ),
-            )
+          ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
-                // Панель выбора разделителя
                 _DelimiterPanel(
                   delimiter: _delimiter,
                   commonDelimiters: _commonDelimiters,
                   rowsCount: _rows.length,
-                  onDelimiterChanged:  (newDelimiter) {
-                    setState(() {
-                      _delimiter = newDelimiter;
-                    });
+                  onDelimiterChanged: (newDelimiter) {
+                    setState(() => _delimiter = newDelimiter);
                     _loadPreview();
                   },
                 ),
-
-                // Таблица предпросмотра
                 Expanded(
-                  child: _headers.isEmpty || _dataSource == null
+                  child: _headers.isEmpty
                       ? const _EmptyTableState()
                       : SfDataGrid(
                           source: _dataSource!,
@@ -224,23 +221,37 @@ class _TablePreviewScreenState extends State<TablePreviewScreen> {
                           allowSorting: true,
                           allowFiltering: true,
                           isScrollbarAlwaysShown: true,
-                          frozenColumnsCount: 0,
                           rowHeight: 40,
                           headerRowHeight: 50,
                         ),
                 ),
-
-                // Кнопки действий
-                _ActionButtons(
-                  onCancel: () => Navigator.pop(context),
-                  onLoad: _headers.isNotEmpty ? _loadFullDataset : null,
-                ),
+                _isFullLoading
+                ? Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(_fullLoadStatus),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: 200,
+                        child: LinearProgressIndicator(
+                          value: _fullLoadProgress < 1.0 && _fullLoadStatus.contains('Обработка')
+                            ? null // indeterminate при обработке
+                            : _fullLoadProgress,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      if (_fullLoadProgress < 1.0 && !_fullLoadStatus.contains('Обработка'))
+                        Text('${(_fullLoadProgress * 100).toStringAsFixed(0)}%'),
+                    ],
+                  )
+                : _ActionButtons(
+                    onCancel: () => Navigator.pop(context),
+                    onLoad: _headers.isNotEmpty ? _loadFullDataset : null,
+                  ),
               ],
             ),
     );
   }
-
-
 }
 
 /// {@template empty_table_state}

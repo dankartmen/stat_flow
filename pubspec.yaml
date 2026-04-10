@@ -28,6 +28,7 @@ environment:
 # the latest version available on pub.dev. To see which dependencies have newer
 # versions available, run `flutter pub outdated`.
 dependencies:
+  async: ^2.13.1
   cupertino_icons: ^1.0.8
   draggable_overlay_window: ^1.0.0
   draggable_widget: ^2.0.0
@@ -41,6 +42,7 @@ dependencies:
   flutter_riverpod: ^3.3.1
   http: ^1.6.0
   intl: ^0.20.2
+  open_file: ^3.5.11
   path_provider: ^2.1.5
   pluto_grid: ^8.1.0
   riverpod: ^3.2.1

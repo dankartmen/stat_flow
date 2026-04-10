@@ -1,6 +1,6 @@
 import 'dart:convert';
-import 'dart:developer';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -93,35 +93,67 @@ class CsvLoader {
   /// 
   /// Принимает:
   /// - [filePath] — путь к CSV-файлу на диске
-  /// 
+  /// - [onProgress] — опциональный callback для отслеживания прогресса загрузки (0.0-1.0)
+  ///
   /// Возвращает:
-  /// - [Future<Dataset>] — датасет, созданный из файла
+  /// - [Future<Dataset>] — датасет, созданный из загруженного файла
   /// 
   /// Особенности:
-  /// - Загружает файл полностью в память
-  /// - Подходит для локальных файлов, к которым есть прямой доступ
+  /// - Чтение файла происходит по частям с поддержкой прогресса для больших файлов
+  /// - Первая строка интерпретируется как заголовки колонок
+  /// - Пустые строки игнорируются
+  /// - Тип каждой колонки определяется автоматически
   /// 
   /// Выбрасывает:
   /// - [Exception] — если файл не существует
-  /// - [Exception] — если произошла ошибка при загрузке
-  Future<Dataset> loadFullDataset(String filePath) async {
-    try {
-      final file = File(filePath);
-        
-      if (!await file.exists()) {
-        throw Exception('Файл не существует');
-      }
-      
-      final content = await file.readAsString();
-      final fileName = filePath.split('\\').last;
-      
-      final resultMap = await compute(_parseCsvInIsolate, (content, fileName, delimiter));
-      return _buildDatasetFromResult(resultMap, fileName);
-    } catch (e) {
-      throw Exception('Ошибка при загрузке файла: $e');
+  /// - [Exception] — если произошла ошибка при чтении файла
+  /// - [Exception] — если произошла ошибка при обработке данных
+  /// - [Exception] — если файл пустой или не содержит данных
+  /// - [Exception] — если произошла ошибка при определении типов данных
+  Future<Dataset> loadFullDataset(
+    String filePath, {
+    void Function(double? progress, String status)? onProgress,
+  }) async {
+    final file = File(filePath);
+    if (!await file.exists()) {
+      throw Exception('Файл не существует');
     }
+    final size = await file.length();
+    final raf = await file.open();
+    final buffer = <int>[];
+    int received = 0;
+    const chunkSize = 65536;
+    
+    while (received < size) {
+      final bytes = await raf.read(chunkSize);
+      if (bytes.isEmpty) break;
+      buffer.addAll(bytes);
+      received += bytes.length;
+      if (onProgress != null && size > 0) {
+        final readProgress = received / size * 0.5;
+        onProgress(readProgress, 'Чтение файла...');
+      }
+    }
+    await raf.close();
+
+    // После чтения файла, начинаем обработку данных (парсинг и определение типов)
+    if (onProgress != null) {
+      onProgress(null, 'Обработка данных...');
+    }
+
+    final content = utf8.decode(buffer);
+    final fileName = filePath.split(Platform.pathSeparator).last;
+    
+    final resultMap = await compute(_parseCsvInIsolate, (content, fileName, delimiter));
+
+    if (onProgress != null) {
+      onProgress(1.0, 'Загрузка завершена');
+    }
+
+    return _buildDatasetFromResult(resultMap, fileName);
   }
 
+  
   /// Читает содержимое файла для предпросмотра
   /// 
   /// Принимает:
@@ -159,60 +191,64 @@ class CsvLoader {
   }
 
 
-  /// Статическая функция для выполнения в isolate.
-  /// Принимает кортеж (content, fileName, delimiter), возвращает сериализуемую Map.
-  static Future<Map<String, dynamic>> _parseCsvInIsolate((String content, String fileName, String delimiter) args) async {
+  /// Статическая функция для парсинга CSV в isolate
+  /// Принимает:
+  /// - [content] — содержимое CSV-файла в виде строки
+  /// - [fileName] — имя файла для использования в названии датасета
+  /// - [delimiter] — разделитель колонок
+  /// Возвращает:
+  /// - [Map<String, dynamic>] — результат парсинга с информацией о колонках и типах данных 
+  /// Особенности:
+  /// - Парсинг выполняется в isolate для предотвращения блокировки UI при обработке больших файлов
+  /// - Поддерживает корректную обработку кавычек и пользовательского разделителя
+  /// - Определяет тип каждой колонки на основе первых 1000 строк данных для оптимизации производительности
+  static Map<String, dynamic> _parseCsvInIsolate((String content, String fileName, String delimiter) args) {
     final (content, fileName, delimiter) = args;
-    final lines = content
-        .split('\n')
-        .where((line) => line.trim().isNotEmpty)
-        .toList();
-
-    if (lines.isEmpty) {
-      throw Exception('Файл пуст');
-    }
-
+    final lines = content.split('\n');
+    if (lines.isEmpty) throw Exception('Файл пуст');
+    
     final headers = lines.first.split(delimiter).map((e) => e.trim()).toList();
-
-    final rows = lines
-        .skip(1)
-        .map((line) => _parseLineStatic(line, delimiter))
-        .toList();
-
-    // Собираем сырые значения по колонкам
+    final int totalLines = lines.length;
+    
+    // Инициализируем списки колонок заранее, чтобы заполнять их по мере чтения строк
     final columnsData = <String, List<String?>>{};
-    for (int colIndex = 0; colIndex < headers.length; colIndex++) {
-      final colValues = <String?>[];
-      for (final row in rows) {
-        if (colIndex < row.length) {
-          colValues.add(row[colIndex]);
-        } else {
-          colValues.add(null);
-        }
+    for (final header in headers) {
+      columnsData[header] = List.filled(totalLines - 1, null);
+    }
+    
+    // Заполняем данные
+    for (int i = 1; i < totalLines; i++) {
+      final line = lines[i].trim();
+      if (line.isEmpty) continue;
+      final row = _parseLineStatic(line, delimiter);
+      for (int j = 0; j < headers.length; j++) {
+        final value = j < row.length ? row[j] : null;
+        columnsData[headers[j]]![i - 1] = value;
       }
-      columnsData[headers[colIndex]] = colValues;
     }
-
-    // Определяем тип каждой колонки и преобразуем значения
+    
+    // Определяем типы только по первым 1000 строкам
+    const sampleSize = 1000;
+    final sampleLimit = min(sampleSize, totalLines - 1);
+    final types = <String, String>{};
+    for (final header in headers) {
+      final sample = columnsData[header]!.take(sampleLimit).toList();
+      types[header] = _detectColumnTypeStatic(sample);
+    }
+    
+    // Преобразуем значения в соответствии с типом
     final columnsInfo = <Map<String, dynamic>>[];
-    for (final name in headers) {
-      final raw = columnsData[name]!;
-      final type = _detectColumnTypeStatic(raw);
-      final convertedValues = _convertValuesByType(raw, type);
-      columnsInfo.add({
-        'name': name,
-        'type': type,
-        'values': convertedValues,
-      });
+    for (final header in headers) {
+      final raw = columnsData[header]!;
+      final type = types[header]!;
+      final converted = _convertValuesByType(raw, type);
+      columnsInfo.add({'name': header, 'type': type, 'values': converted});
     }
-
-    return {
-      'name': fileName,
-      'columns': columnsInfo,
-    };
+    
+    return {'name': fileName, 'columns': columnsInfo};
   }
 
-  /// Парсит одну строку CSV с учетом кавычек (статическая версия)
+  /// Парсит одну строку CSV с учетом кавычек
   static List<String> _parseLineStatic(String line, String delimiter) {
     final result = <String>[];
     String current = '';
@@ -257,6 +293,11 @@ class CsvLoader {
   }
 
   /// Преобразует сырые строки в типизированные значения в зависимости от типа
+  /// Принимает:
+  /// - [raw] — список строковых значений колонки
+  /// - [type] — определенный тип колонки ('numeric', 'datetime', 'categorical', 'text')
+  /// Возвращает:
+  /// - [List<dynamic>] — список значений в соответствующем типе
   static List<dynamic> _convertValuesByType(List<String?> raw, String type) {
     switch (type) {
       case 'numeric':

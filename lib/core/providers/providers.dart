@@ -24,10 +24,15 @@ final _sampledCache = <Dataset, Dataset>{};
 /// к данным и их визуализации.
 final datasetProvider = StateProvider<Dataset?>((ref) => null);
 
-
+/// Провайдер для доступа к "выборке" датасета
+/// Предоставляет оптимизированную версию датасета для быстрого отображения в графиках и таблицах.
 final sampledDatasetProvider = Provider<Dataset?>((ref) {
   final full = ref.watch(datasetProvider);
-  if (full == null) return null;
+  if (full == null) {
+    // Очищаем кэш при выгрузке датасета
+    _sampledCache.clear();
+    return null;
+  }
 
   if (_sampledCache.containsKey(full)) {
     return _sampledCache[full]!;
@@ -65,6 +70,18 @@ final rightPanelExpandedProvider = StateProvider<bool>((ref) => true);
 /// - Отображения контекстной панели управления (TopControlPanel)
 /// - Определения, какой график получает фокус при взаимодействии
 final selectedChartIdProvider = StateProvider.autoDispose<int?>((ref) => null);
+
+/// Провайдер для получения списка идентификаторов всех графиков
+/// Используется для:
+/// - Быстрой проверки наличия графиков на канвасе
+/// - Управления порядком отображения графиков (выбор/фокус)
+/// - Определения занятых полей в датасете (через usedFieldsProvider)
+/// При загрузке нового графика автоматически обновляется список идентификаторов.
+/// При удалении графика его идентификатор удаляется из списка.
+final chartIdsProvider = Provider<List<int>>((ref) {
+  final charts = ref.watch(chartsProvider);
+  return charts.map((c) => c.id).toList();
+});
 
 /// Провайдер текущего экрана
 /// 

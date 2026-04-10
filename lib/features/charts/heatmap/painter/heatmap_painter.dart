@@ -3,11 +3,10 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:stat_flow/features/charts/heatmap/model/heatmap_data.dart';
-import 'package:stat_flow/features/charts/heatmap/utils/number_formatter.dart';
-
 import '../color/heatmap_color_mapper.dart';
 import '../model/heatmap_state.dart';
 import '../model/hover_range.dart';
+import '../utils/number_formatter.dart';
 
 /// {@template heatmap_painter}
 /// Кастомный рисовальщик для отрисовки тепловой карты корреляции.
@@ -68,22 +67,27 @@ class HeatmapPainter extends CustomPainter {
   /// Информация о наведении на легенду для подсветки соответствующих ячеек
   final HoverRange? hoverRange;
 
+  /// Видимая область для оптимизации отрисовки больших матриц
+  final Rect? visibleRect;
+
+
   /// {@macro heatmap_painter}
   HeatmapPainter({
-    this.hoverRow,
-    this.hoverCol,
-    this.triangleMode = false,
-    this.showValues = true,
-    this.showAxisLabels = false,
-    this.percentageMode = PercentageMode.none,
     required this.data,
     required this.colorMapper,
     required this.previousMapper,
     required this.animationValue,
     required this.cellWidth,
     required this.cellHeight,
+    required this.showValues,
+    required this.showAxisLabels,
+    required this.hoverRow,
+    required this.hoverCol,
+    required this.triangleMode,
+    required this.percentageMode,
     required this.axisOffset,
     required this.hoverRange,
+    this.visibleRect,
   });
 
   /// Кэш статического слоя (сетка + подписи осей).
@@ -92,7 +96,7 @@ class HeatmapPainter extends CustomPainter {
 
   /// Ключ для идентификации текущего статического слоя.
   String? _cachedStaticLayerKey;
-  
+
   /// Кэш текстовых рисовальщиков для избежания повторного создания.
   /// Ключ: строка + стиль текста.
   final Map<String, TextPainter> _textCache = {};
@@ -106,7 +110,11 @@ class HeatmapPainter extends CustomPainter {
   /// Кэш для текста тултипа, чтобы обновлять только при изменении ячейки под курсором.
   String? _tooltipText;
 
-  /// Переиспользуемый Paint для подсветки ячейки под курсором.
+  // Кэш цветов для текущего кадра анимации
+  List<List<Color>>? _colorCache;
+  double _cachedAnimationValue = -1;
+
+  // Переиспользуемый Paint
   final Paint _highlightPaint = Paint()
     ..color = Colors.black
     ..style = PaintingStyle.stroke
@@ -150,11 +158,27 @@ class HeatmapPainter extends CustomPainter {
     return Color.lerp(oldColor, newColor, animationValue)!;
   }
 
+  /// Получает цвет для ячейки с кэшированием. Если кэш для текущего значения анимации
+  /// существует, возвращает его. Иначе пересчитывает цвета для всех ячеек и сохраняет в кэше.
+  Color _getCachedColor(int row, int col) {
+    if (_colorCache != null && _cachedAnimationValue == animationValue) {
+      return _colorCache![row][col];
+    }
+    _cachedAnimationValue = animationValue;
+    _colorCache = List.generate(data.rowLabels.length, (r) {
+      return List.generate(data.columnLabels.length, (c) {
+        final value = data.values[r][c];
+        return _getAnimatedColor(value);
+      });
+    });
+    return _colorCache![row][col];
+  }
+
   /// Создает статический слой с сеткой и подписями осей.
   ///
   /// Этот слой не изменяется при анимации и перерисовывается только
   /// при изменении матрицы или размера ячейки.
-  ui.Picture _buildStaticLayer(bool showLabels) {
+  ui.Picture _buildStaticLayer() {
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
 
@@ -185,7 +209,7 @@ class HeatmapPainter extends CustomPainter {
       final angle = _computeLabelAngle();
       final stepRows = _computeLabelStep(cellHeight);
       final stepCols = _computeLabelStep(cellWidth);
-    
+
       // Подписи строк (слева)
       for (int i = 0; i < rowCount; i += stepRows) {
         final label = _smartLabel(data.rowLabels[i], max: 6);
@@ -225,56 +249,6 @@ class HeatmapPainter extends CustomPainter {
     return recorder.endRecording();
   }
 
-  /// Рисует тултип с информацией о ячейке под курсором.
-  void _drawTooltip(Canvas canvas, int row, int col) {
-
-    final value = data.values[row][col];
-    final rowName = data.rowLabels[row];
-    final colName = data.columnLabels[col];
-
-    String suffix = '';
-    String displayValue = formatHeatmapNumber(value);
-    if (percentageMode != PercentageMode.none) {
-      suffix = '%';
-    }
-
-    final text = "$rowName ↔ $colName\n$displayValue $suffix";
-
-    if (_tooltipText != text) {
-      _tooltipText = text;
-
-      _tooltipPainter = TextPainter(
-        text: TextSpan(
-          text: text,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 12,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout(maxWidth: 220);
-    }
-
-    final tp = _tooltipPainter!;
-
-    final x = axisOffset + col * cellWidth + cellWidth + 6;
-    final y = axisOffset + row * cellHeight - tp.height / 2;
-
-    final rect = Rect.fromLTWH(
-      x - 6,
-      y - 4,
-      tp.width + 12,
-      tp.height + 8,
-    );
-
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(rect, const Radius.circular(6)),
-      Paint()..color = Colors.black,
-    );
-
-    tp.paint(canvas, Offset(x, y));
-  }
-
   /// Умное сокращение длинных названий полей.
   ///
   /// - Если длина превышает максимум, пытается сократить по символу подчеркивания
@@ -311,64 +285,111 @@ class HeatmapPainter extends CustomPainter {
     return 4;                             // Мелкие - каждую четвертую
   }
 
+  /// Отрисовка тултипа с кэшированием TextPainter
+  void _drawTooltip(Canvas canvas, int row, int col) {
+    final value = data.values[row][col];
+    final rowName = data.rowLabels[row];
+    final colName = data.columnLabels[col];
+
+    String suffix = '';
+    if (percentageMode != PercentageMode.none) suffix = '%';
+    final displayValue = value;
+    final text = "$rowName ↔ $colName\n${formatHeatmapNumber(displayValue)}$suffix";
+
+    if (_tooltipText != text) {
+      _tooltipText = text;
+
+      _tooltipPainter = TextPainter(
+        text: TextSpan(
+          text: text,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout(maxWidth: 220);
+    }
+
+    final tp = _tooltipPainter!;
+
+    final x = axisOffset + col * cellWidth + cellWidth + 6;
+    final y = axisOffset + row * cellHeight - tp.height / 2;
+
+    final rect = Rect.fromLTWH(
+      x - 6,
+      y - 4,
+      tp.width + 12,
+      tp.height + 8,
+    );
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect, const Radius.circular(6)),
+      Paint()..color = Colors.black,
+    );
+
+    tp.paint(canvas, Offset(x, y));
+  }
+
+
   @override
   void paint(Canvas canvas, Size size) {
     final rowCount = data.rowLabels.length;
     final colCount = data.columnLabels.length;
     if (rowCount == 0 || colCount == 0) return;
-    
+
     final isSquare = rowCount == colCount;
     final effectiveTriangleMode = triangleMode && isSquare;
 
     // Отрисовка статического слоя
-    if (_cachedStaticLayerKey != _staticLayerKey()) {
-      _staticLayer = null; // Сбрасываем кэш при изменении ключа
-      _cachedStaticLayerKey = _staticLayerKey();
+    final key = _staticLayerKey();
+    if (_cachedStaticLayerKey != key) {
+      _staticLayer = null;  // Сбрасываем кэш при изменении ключа
+      _cachedStaticLayerKey = key;
     }
-    _staticLayer ??= _buildStaticLayer(showAxisLabels);
+    _staticLayer ??= _buildStaticLayer();
     canvas.drawPicture(_staticLayer!);
 
-    // Отрисовка ячеек тепловой карты (динамический слой)
-    // Этот слой перерисовывается при каждом изменении из-за анимации
-    for (int row = 0; row < rowCount; row++) {
-      for (int col = 0; col < colCount; col++) {
-        // В режиме треугольника пропускаем нижнюю половину
+    // Определяем видимый диапазон ячеек
+    int startRow = 0, endRow = rowCount - 1;
+    int startCol = 0, endCol = colCount - 1;
+    if (visibleRect != null) {
+      startRow = visibleRect!.top.floor().clamp(0, rowCount - 1);
+      endRow = visibleRect!.bottom.floor().clamp(0, rowCount - 1);
+      startCol = visibleRect!.left.floor().clamp(0, colCount - 1);
+      endCol = visibleRect!.right.floor().clamp(0, colCount - 1);
+    }
+
+    // Отрисовка ячеек
+    for (int row = startRow; row <= endRow; row++) {
+      for (int col = startCol; col <= endCol; col++) {
         if (effectiveTriangleMode && col < row) continue;
-
-        final value = data.values[row][col];
-
-        // Устанавливаем цвет с учетом анимации
-        _paint.color = _getAnimatedColor(value);
-
+        _paint.color = _getCachedColor(row, col);
         final rect = Rect.fromLTWH(
           axisOffset + col * cellWidth,
           axisOffset + row * cellHeight,
           cellWidth,
           cellHeight,
         );
-
         canvas.drawRect(rect, _paint);
 
-        // Отображение значений внутри ячеек
-        if (showValues && min(cellWidth, cellHeight) > 25) { // Не показываем в слишком мелких ячейках
+        // Значения внутри ячеек
+        if (showValues && min(cellWidth, cellHeight) > 25) {
+          final value = data.values[row][col];
           String suffix = '';
-          String displayValue = formatHeatmapNumber(value);
-          if (percentageMode != PercentageMode.none) {
-            suffix = '%';
-          }
-          final tp = _getTextPainter(
-            displayValue + suffix,
-            TextStyle(
-              fontSize: min(cellWidth, cellHeight) * 0.3,
+          if (percentageMode != PercentageMode.none) suffix = '%';
+          final displayValue = value;
+          final text = formatHeatmapNumber(displayValue) + suffix;
+          final textStyle = TextStyle(
+            fontSize: min(cellWidth, cellHeight) * 0.3,
               // Контрастный цвет текста в зависимости от яркости фона
-              color: value.abs() > 0.5 ? Colors.white : Colors.black,
-              fontWeight: FontWeight.bold,
-              shadows: value.abs() > 0.6
-                  ? [const Shadow(blurRadius: 1.5, color: Colors.black87)]
-                  : null,
-            ),
+            color: value.abs() > 0.5 ? Colors.white : Colors.black,
+            fontWeight: FontWeight.bold,
+            shadows: value.abs() > 0.6
+                ? [const Shadow(blurRadius: 1.5, color: Colors.black87)]
+                : null,
           );
-
+          final tp = _getTextPainter(text, textStyle);
           tp.paint(
             canvas,
             Offset(
@@ -385,9 +406,8 @@ class HeatmapPainter extends CustomPainter {
         ..color = Colors.white
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2.0;
-
-      for (int row = 0; row < rowCount; row++) {
-        for (int col = 0; col < colCount; col++) {
+      for (int row = startRow; row <= endRow; row++) {
+        for (int col = startCol; col <= endCol; col++) {
           final value = data.values[row][col];
           bool match = false;
           if (hoverRange!.value != null) {
@@ -411,11 +431,12 @@ class HeatmapPainter extends CustomPainter {
       }
     }
 
-    // Подсветка ячейки под курсором и тултип
-    if (hoverRow != null && hoverCol != null) {
-      double left = axisOffset + hoverCol! * cellWidth;
-      double top = axisOffset + hoverRow! * cellHeight;
-
+    // Подсветка ячейки под курсором и тултип (только если ховер в видимой области)
+    if (hoverRow != null && hoverCol != null &&
+        hoverRow! >= startRow && hoverRow! <= endRow &&
+        hoverCol! >= startCol && hoverCol! <= endCol) {
+      final left = axisOffset + hoverCol! * cellWidth;
+      final top = axisOffset + hoverRow! * cellHeight;
       canvas.drawRect(
         Rect.fromLTWH(left, top, cellWidth, cellHeight),
         _highlightPaint,
@@ -427,8 +448,7 @@ class HeatmapPainter extends CustomPainter {
   // Определение необходимости перерисовки
   @override
   bool shouldRepaint(covariant HeatmapPainter old) {
-    // Перерисовываем только если изменились параметры
-    return old.data != data ||
+    final repaint = old.data != data ||
         old.colorMapper != colorMapper ||
         old.previousMapper != previousMapper ||
         old.animationValue != animationValue ||
@@ -439,6 +459,15 @@ class HeatmapPainter extends CustomPainter {
         old.hoverRow != hoverRow ||
         old.hoverCol != hoverCol ||
         old.axisOffset != axisOffset ||
-        old.percentageMode != percentageMode;
+        old.percentageMode != percentageMode ||
+        old.visibleRect != visibleRect ||
+        old.hoverRange != hoverRange;
+    if (repaint) {
+      _textCache.clear();
+      _colorCache = null;
+      _tooltipPainter = null;
+      _tooltipText = null;
+    }
+    return repaint;
   }
 }
