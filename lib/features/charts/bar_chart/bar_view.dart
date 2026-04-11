@@ -34,7 +34,7 @@ class BarView extends StatefulWidget {
   });
 
   @override
-  _BarViewState createState() => _BarViewState();
+  State<BarView> createState() => _BarViewState();
 }
 
 class _BarViewState extends State<BarView> {
@@ -246,11 +246,12 @@ class _BarViewState extends State<BarView> {
   }
 
   Widget _buildSamplingInfo() {
+    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.all(8.0),
       child: Text(
         "Показано ${_barData.length} из ${widget.dataset.rowCount} строк (выборка)",
-        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+        style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
       ),
     );
   }

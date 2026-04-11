@@ -20,9 +20,14 @@ class HistogramView extends StatefulWidget {
 
   /// Состояние гистограммы с настройками
   final HistogramState state;
-  const HistogramView({super.key, required this.dataset, required this.state});
 
   /// {@macro histogram_view}
+  const HistogramView({
+    super.key, 
+    required this.dataset, 
+    required this.state
+  });
+
   @override
   State<HistogramView> createState() => _HistogramViewState();
 }

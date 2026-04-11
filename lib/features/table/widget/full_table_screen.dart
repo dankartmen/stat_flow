@@ -47,8 +47,9 @@ class _FullTableScreenState extends State<FullTableScreen> {
   
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);  
     return Container(
-      color: Colors.white,
+      color: theme.colorScheme.surface,
       child: Column(
         children: [
           const _TableHeader(),
@@ -92,14 +93,15 @@ class _TableHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
     return Padding(
       padding: const EdgeInsets.all(8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Text(
+          Text(
             'Таблица данных',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
           ),
         ],
       ),

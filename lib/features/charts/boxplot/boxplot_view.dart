@@ -106,7 +106,7 @@ class _BoxPlotViewState extends State<BoxPlotView> {
             padding: const EdgeInsets.all(8.0),
             child: Text(
               'Показано ${_displayValues.length} из $_totalCount точек (сэмплирование)',
-              style: const TextStyle(fontSize: 12, color: Colors.black54),
+              style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
             ),
           ),
         Expanded(

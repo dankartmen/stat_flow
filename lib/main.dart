@@ -6,16 +6,20 @@ import 'package:stat_flow/features/screens/main_screen.dart';
 import 'package:syncfusion_localizations/syncfusion_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/providers/theme_provider.dart';
+
   void main() {
     registerCharts();
     runApp(const ProviderScope(child: MyApp()));
   }
 
-  class MyApp extends StatelessWidget {
+  class MyApp extends ConsumerWidget {
     const MyApp({super.key});
 
     @override
-    Widget build(BuildContext context) {
+    Widget build(BuildContext context, WidgetRef ref) {
+      final theme = ref.watch(currentThemeProvider);
+
       return MaterialApp(
         showPerformanceOverlay: kDebugMode,
         title: 'StatFlow',
@@ -29,21 +33,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
           Locale('ru', 'RU'),
         ],
         home: const MainScreen(),
-        theme: ThemeData(
-          useMaterial3: true,
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.blue,
-            brightness: Brightness.light,
-          ),
-        ),
-
-        darkTheme: ThemeData(
-          useMaterial3: true,
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.indigo,
-            brightness: Brightness.dark,
-          ),
-        ),
+        theme: theme,
       );
     }
   }

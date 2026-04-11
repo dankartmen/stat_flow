@@ -1,7 +1,10 @@
+import 'dart:developer';
+
 import 'package:flutter/material.dart' hide DataColumn;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:stat_flow/core/dataset/dataset.dart';
+import 'package:stat_flow/features/charts/chart_type.dart';
 import 'package:stat_flow/features/charts/floating_chart/floating_chart_data.dart';
 
 import '../../features/charts/bar_chart/bar_state.dart';
@@ -119,7 +122,16 @@ class ChartsNotifier extends StateNotifier<List<FloatingChartData>> {
   /// Добавляет новый график в список
   void addChart(FloatingChartData chart, WidgetRef ref) {
     final sampled = ref.read(sampledDatasetProvider);
-    final updatedChart = chart.copyWith(dataset: sampled ?? chart.dataset);
+
+    FloatingChartData updatedChart;
+    if (chart.type == ChartType.heatmap){
+      log("Передан полный датасет");
+      updatedChart = chart.copyWith(dataset: chart.dataset);
+    }
+    else{
+      log("Передан сэплированный датасет");
+      updatedChart = chart.copyWith(dataset: sampled ?? chart.dataset);
+    }
     state = [...state, updatedChart];
   }
 

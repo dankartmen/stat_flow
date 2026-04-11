@@ -106,6 +106,7 @@ class _ScatterViewState extends State<ScatterView> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     if (widget.state.firstColumnName == null || widget.state.secondColumnName == null) {
       return const Center(child: Text("Выберите колонки для осей X и Y"));
     }
@@ -121,7 +122,7 @@ class _ScatterViewState extends State<ScatterView> {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             child: Text(
               'Показано ${_displayPoints.length} из ${_allPoints.length} точек (сэмплирование)',
-              style: const TextStyle(fontSize: 12, color: Colors.black54),
+              style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
             ),
           ),
         Expanded(

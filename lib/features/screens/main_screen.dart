@@ -5,7 +5,6 @@ import 'package:stat_flow/features/canvas/canvas_workspace.dart';
 import 'package:stat_flow/features/charts/chart_renderer.dart';
 import '../../core/providers/providers.dart';
 import '../bars/context_panel.dart';
-import '../bars/right_dataset_panel.dart';
 import '../bars/top_nav_bar.dart';
 import '../charts/chart_registry.dart';
 import '../charts/chart_state.dart';
@@ -193,61 +192,6 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     );
   }
 
-  /// Строит правую панель с возможностью сворачивания
-  Widget _buildRightPanel(Dataset dataset, bool isExpanded) {
-    return Positioned(
-      right: 0,
-      top: 0,
-      bottom: 0,
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: () {
-              ref.read(rightPanelExpandedProvider.notifier).state = !isExpanded;
-            },
-            child: Container(
-              width: 16,
-              height: 60,
-              decoration: BoxDecoration(
-                color: Colors.grey[200],
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(4),
-                  bottomLeft: Radius.circular(4),
-                  topRight: Radius.circular(isExpanded ? 0 : 4),
-                  bottomRight: Radius.circular(isExpanded ? 0 : 4),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 2,
-                    offset: const Offset(-1, 0),
-                  ),
-                ],
-              ),
-              child: Center(
-                child: Icon(
-                  isExpanded ? Icons.chevron_right : Icons.chevron_left,
-                  color: Colors.grey[400],
-                  size: 14,
-                ),
-              ),
-            ),
-          ),
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeInOut,
-            width: isExpanded ? 280 : 0,
-            child: RightDatasetPanel(
-              dataset: dataset,
-              isExpanded: isExpanded,
-              onCreateChart: _createChartForField,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final datasetExists = ref.watch(datasetProvider) != null;
@@ -404,15 +348,16 @@ class _EmptyCanvasState extends StatelessWidget{
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    final theme = Theme.of(context);
+    return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.add_chart, size: 64, color: Colors.grey),
-          SizedBox(height: 16),
+          Icon(Icons.add_chart, size: 64, color: theme.colorScheme.onSurfaceVariant),
+          const SizedBox(height: 16),
           Text(
             'Добавьте график через боковое меню',
-            style: TextStyle(color: Colors.grey, fontSize: 16),
+            style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 16),
           ),
         ],
       )

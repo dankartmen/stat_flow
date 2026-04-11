@@ -25,6 +25,7 @@ class WelcomeDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Dialog(
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
@@ -37,40 +38,39 @@ class WelcomeDialog extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               // Логотип приложения
-              const Icon(
+              Icon(
                 Icons.analytics,
                 size: 64,
-                color: Colors.blue,
+                color: theme.colorScheme.primary,
               ),
           
               const SizedBox(height: 16),
           
               // Название приложения
-              const Text(
+              Text(
                 'Stat Flow',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  fontWeight: FontWeight.bold
                 ),
               ),
           
               const SizedBox(height: 8),
           
               // Описание приложения
-              const Text(
+              Text(
                 'Визуализация и анализ данных',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
           
               const SizedBox(height: 24),
           
               // Приглашение к действию
-              const Text(
+              Text(
                 'Загрузите CSV файл для начала работы',
                 textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium,
               ),
           
               const SizedBox(height: 24),

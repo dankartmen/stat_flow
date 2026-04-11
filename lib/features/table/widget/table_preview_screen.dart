@@ -141,7 +141,7 @@ class _TablePreviewScreenState extends State<TablePreviewScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: Colors.red,
+        backgroundColor: Theme.of(context).colorScheme.error,
         duration: const Duration(seconds: 3),
       ),
     );
@@ -186,11 +186,12 @@ class _TablePreviewScreenState extends State<TablePreviewScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Предварительный просмотр данных'),
-        backgroundColor: Colors.blue,
-        foregroundColor: Colors.white,
+        backgroundColor: theme.colorScheme.primary,
+        foregroundColor: theme.colorScheme.onPrimary,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
@@ -266,15 +267,17 @@ class _EmptyTableState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.table_rows, size: 64, color: Colors.grey[400]),
+          Icon(Icons.table_rows, size: 64, color: theme.colorScheme.onSurfaceVariant),
           const SizedBox(height: 16),
           Text(
             'Нет данных для отображения',
-            style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+            style: TextStyle(fontSize: 16, color: theme.colorScheme.onSurfaceVariant),
           ),
         ],
       ),
@@ -311,9 +314,11 @@ class _DelimiterPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Container(
       padding: const EdgeInsets.all(16),
-      color: Colors.grey[100],
+      color: theme.colorScheme.surfaceContainerHighest,
       child: Row(
         children: [
           const Text('Разделитель:', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -355,13 +360,14 @@ class _ActionButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.colorScheme.surface,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
+            color: theme.colorScheme.shadow.withValues(alpha: 0.1),
             blurRadius: 4,
             offset: const Offset(0, -2),
           ),
@@ -381,8 +387,8 @@ class _ActionButtons extends StatelessWidget {
           ElevatedButton(
             onPressed: onLoad,
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
-              foregroundColor: Colors.white,
+              backgroundColor: theme.colorScheme.primary,
+              foregroundColor: theme.colorScheme.onPrimary,
               padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
             ),
             child: const Text('Загрузить полный датасет'),

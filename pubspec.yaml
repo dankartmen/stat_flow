@@ -50,6 +50,7 @@ dependencies:
   syncfusion_flutter_charts: ^32.2.8
   syncfusion_flutter_datagrid: ^32.2.8
   syncfusion_localizations: ^32.2.8
+  shared_preferences: ^2.5.5
   trina_grid: ^2.2.1
   vector_math: ^2.2.0
 

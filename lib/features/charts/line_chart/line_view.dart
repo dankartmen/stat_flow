@@ -3,11 +3,29 @@ import 'package:syncfusion_flutter_charts/charts.dart';
 import '../../../core/dataset/dataset.dart';
 import 'line_state.dart';
 
+/// Максимальное количество точек, отображаемых на графике.
+/// При превышении выполняется сэмплирование.
 const int _kMaxChartPoints = 5000;
 
+/// {@template line_view}
+/// Виджет для отображения линейного графика (обычного или сглаженного).
+///
+/// Поддерживает:
+/// - Отображение числового ряда по индексу или по времени
+/// - Сглаженные кривые (Spline) или прямые линии
+/// - Маркеры, подписи данных, сетку, трекболл
+/// - Трендовую линию (линейную регрессию)
+/// - Анимацию появления
+/// - Сэмплирование для больших наборов данных (>5000 точек)
+/// {@endtemplate}
 class LineView extends StatefulWidget {
+  /// Датасет c данныvb.
   final Dataset dataset;
+
+  /// Состояние графика.
   final LineState state;
+
+  /// {@macro line_view}
   const LineView({super.key, required this.dataset, required this.state});
 
   @override
@@ -15,8 +33,13 @@ class LineView extends StatefulWidget {
 }
 
 class _LineViewState extends State<LineView> {
+  /// Все точки после загрузки (без сэмплирования).
   List<ChartPoint> _allPoints = [];
+
+  /// Точки, отображаемые в данный момент (с учётом сэмплирования).
   List<ChartPoint> _displayPoints = [];
+
+  /// Флаг, указывающий, что данные были сэмплированы.
   bool _isSampled = false;
 
   @override
@@ -34,6 +57,10 @@ class _LineViewState extends State<LineView> {
     }
   }
 
+  /// Подготавливает данные для отображения.
+  ///
+  /// Извлекает числовую колонку, создаёт точки с индексом в качестве X,
+  /// применяет сэмплирование при необходимости.
   void _prepareData() {
     final columnName = widget.state.columnName;
     if (columnName == null) {
@@ -57,6 +84,7 @@ class _LineViewState extends State<LineView> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     if (widget.state.columnName == null) {
       return const Center(child: Text("Выберите колонку для оси Y"));
     }
@@ -72,7 +100,7 @@ class _LineViewState extends State<LineView> {
             padding: const EdgeInsets.all(8.0),
             child: Text(
               'Показано ${_displayPoints.length} из ${_allPoints.length} точек (сэмплирование)',
-              style: const TextStyle(fontSize: 12, color: Colors.black54),
+              style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
             ),
           ),
         Expanded(
@@ -103,8 +131,10 @@ class _LineViewState extends State<LineView> {
     );
   }
 
+  /// Строит список серий для графика в зависимости от типа линии.
   List<CartesianSeries> _buildSeries(BuildContext context, List<ChartPoint> points) {
-    final color = Theme.of(context).colorScheme.primary;
+    final theme = Theme.of(context);
+    final color = theme.colorScheme.primary;
     final markerSettings = MarkerSettings(
       isVisible: widget.state.showMarkers,
       width: widget.state.markerSize,
@@ -113,7 +143,7 @@ class _LineViewState extends State<LineView> {
     );
     final dataLabelSettings = DataLabelSettings(isVisible: widget.state.showDataLabels);
     final trendlines = widget.state.showTrendline
-        ? [Trendline(type: TrendlineType.linear, color: Colors.orange)]
+        ? [Trendline(type: TrendlineType.linear, color: theme.colorScheme.secondary)]
         : null;
 
     if (widget.state.lineType == LineType.curved) {
@@ -152,8 +182,11 @@ class _LineViewState extends State<LineView> {
   }
 }
 
+
+/// Вспомогательный класс для хранения точки данных
 class ChartPoint {
   final double x;
   final double y;
+
   ChartPoint(this.x, this.y);
 }

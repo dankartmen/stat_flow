@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/providers/providers.dart';
+import '../settings/settings_screen.dart';
 
 /// {@template top_nav_bar}
 /// Верхняя навигационная панель приложения
@@ -36,15 +37,16 @@ class TopNavBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDatasetLoaded = ref.watch(datasetProvider) != null;
+    final theme = Theme.of(context);
 
     return Container(
       height: 56,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.colorScheme.surface,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
+            color: theme.colorScheme.shadow.withValues(alpha: 0.1),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -53,9 +55,9 @@ class TopNavBar extends ConsumerWidget {
       child: Row(
         children: [
           // Логотип или название
-          const Text(
+          Text(
             'Stat Flow',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(width: 32),
           // Переключатели экранов (доступны только если датасет загружен)
@@ -87,6 +89,16 @@ class TopNavBar extends ConsumerWidget {
             tooltip: 'О приложении',
             icon: const Icon(Icons.info_outline),
             onPressed: onShowInfo,
+          ),
+          IconButton(
+            tooltip: 'Настройки',
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SettingsScreen()),
+              );
+            },
           ),
         ],
       ),
@@ -126,13 +138,15 @@ class _ScreenToggleButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return TextButton.icon(
       onPressed: onTap,
       icon: Icon(icon, size: 18),
       label: Text(label),
       style: TextButton.styleFrom(
-        foregroundColor: isActive ? Colors.blue : Colors.grey,
-        backgroundColor: isActive ? Colors.blue.withValues(alpha: 0.1) : null,
+        foregroundColor: isActive ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
+        backgroundColor: isActive ? theme.colorScheme.primary.withValues(alpha: 0.1) : null,
       ),
     );
   }

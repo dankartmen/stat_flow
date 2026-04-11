@@ -67,13 +67,14 @@ class _ContextPanelState extends ConsumerState<ContextPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final panelWidth = _isExpanded ? 300.0 : 48.0;
     log('Building ContextPanel');
     return AnimatedContainer(
       duration: const Duration(milliseconds: 280),
       curve: Curves.easeInOut,
       width: panelWidth,
-      color: Colors.grey[100],
+      color: theme.colorScheme.surfaceContainerHighest,
       clipBehavior: Clip.hardEdge,
       onEnd: () {
         if (_isExpanded) {
@@ -263,6 +264,7 @@ class _ChartSettingsContent extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
     // Подписываемся только на нужные части состояния
     final chartState = selectedChart.state;
     final plugin = ChartRegistry.get(selectedChart.type);
@@ -289,7 +291,7 @@ class _ChartSettingsContent extends ConsumerWidget {
               const SizedBox(width: 6),
               IconButton(
                 onPressed: onTogglePanel,
-                icon: Icon(Icons.chevron_left, color: Colors.grey[600]),
+                icon: Icon(Icons.chevron_left, color: theme.colorScheme.onSurfaceVariant),
                 tooltip: 'Свернуть панель',
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
@@ -317,6 +319,7 @@ class _CollapsedContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -326,14 +329,18 @@ class _CollapsedContent extends StatelessWidget {
             icon: const Icon(Icons.chevron_right, size: 28),
             tooltip: 'Развернуть панель',
             padding: const EdgeInsets.all(8),
-            style: IconButton.styleFrom(foregroundColor: Colors.grey),
+            style: IconButton.styleFrom(foregroundColor: theme.colorScheme.onSurfaceVariant),
           ),
           const SizedBox(height: 8),
           RotatedBox(
             quarterTurns: 1,
             child: Text(
               'Настройки',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.grey[600]),
+              style: TextStyle(
+                fontSize: 12, 
+                fontWeight: FontWeight.w500, 
+                color: theme.colorScheme.onSurfaceVariant
+              ),
             ),
           ),
         ],

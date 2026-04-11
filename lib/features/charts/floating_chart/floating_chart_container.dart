@@ -212,6 +212,7 @@ class _FloatingChartState extends State<FloatingChart> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Positioned(
       left: _position.dx,
       top: _position.dy,
@@ -227,11 +228,11 @@ class _FloatingChartState extends State<FloatingChart> {
                 onTap: widget.onSelect,
                 child: Container(
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: theme.colorScheme.surface,
                     border: Border.all(
                       color: widget.isSelected
-                          ? Colors.blue
-                          : Colors.grey.shade300,
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.outlineVariant,
                     ),
                   ),
                   child: Column(
