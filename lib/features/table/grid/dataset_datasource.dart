@@ -1,5 +1,3 @@
-import 'dart:developer';
-
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_datagrid/datagrid.dart';
 
@@ -84,8 +82,10 @@ class DatasetDataSource extends DataGridSource {
     _rowCache.clear();
     notifyListeners();
   }
-
+  
+  @override
   void dispose() {
+    super.dispose();
     _rowCache.clear();
   }
 }

@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:heatmap_canvas/heatmap.dart';
 import 'package:stat_flow/core/dataset/dataset.dart';
 import '../../../../core/theme/controls_style.dart';
-import '../color/heatmap_color_mapper.dart';
-import '../color/heatmap_palette.dart';
 import '../model/heatmap_state.dart';
 
 /// {@template heatmap_controls}
@@ -29,7 +28,6 @@ class HeatmapControls {
     required BuildContext context,
   }) {
     final isCorrelationMode = state.useCorrelation;
-    final numericColumns = dataset.numericColumns;
 
     return [
       // Режим (корреляция / оси)

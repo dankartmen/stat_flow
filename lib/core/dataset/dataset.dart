@@ -1,5 +1,4 @@
-import '../../features/charts/heatmap/model/correlation_matrix.dart';
-import '../../features/statistics/statistic_result.dart';
+﻿import '../../features/statistics/statistic_result.dart';
 import '../../features/statistics/statistic_calculator.dart';
 
 part 'dataset_extensions.dart';

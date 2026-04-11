@@ -1,12 +1,7 @@
-import '../../chart_state.dart';
-import '../color/heatmap_color_mapper.dart';
-import '../color/heatmap_palette.dart';
-import 'hover_range.dart';
+import 'package:heatmap_canvas/heatmap.dart';
+import 'package:stat_flow/features/charts/chart_state.dart';
 
-enum NormalizeMode { none, row, column, total }
-enum SortMode { none, alphabetic, byValueAsc, byValueDesc }
-enum AggregationType { count, sum, avg, min, max, median }
-enum PercentageMode { none, row, column, total}
+
 /// {@template heatmap_state}
 /// Состояние тепловой карты для системы плагинов
 /// 
@@ -52,9 +47,6 @@ class HeatmapState extends ChartState {
 
   /// Режим сортировки столбцов
   SortMode sortY;
-
-  /// Режим масштабирования цветовой шкалы
-  ColorScaleType scaleType;
   
   /// Имя колонки для X оси (если null — режим корреляции всех числовых)
   String? xColumn;
@@ -67,9 +59,6 @@ class HeatmapState extends ChartState {
 
   /// Режим отображения значений в процентах
   PercentageMode percentageMode;
-
-  /// Информация о наведении на легенду для подсветки соответствующих ячеек
-  HoverRange? hoverRange;
   
   /// Использовать ли корреляцию всех числовых полей (вместо выбора осей)
   bool useCorrelation;
@@ -87,12 +76,10 @@ class HeatmapState extends ChartState {
     this.normalizeMode = NormalizeMode.none,
     this.sortX = SortMode.none,
     this.sortY = SortMode.none,
-    this.scaleType = ColorScaleType.linear,
     this.xColumn,
     this.yColumn,
     this.aggregationType = AggregationType.count,
     this.percentageMode = PercentageMode.none,
-    this.hoverRange,
   });
 
 
@@ -119,7 +106,6 @@ class HeatmapState extends ChartState {
     return HeatmapState(
       palette: palette ?? this.palette,
       segments: segments ?? this.segments,
-      hoverRange: hoverRange ?? this.hoverRange,
       showAxisLabels: showAxisLabels ?? this.showAxisLabels,
       showValues: showValues ?? this.showValues,
       triangleMode: triangleMode ?? this.triangleMode,
@@ -128,7 +114,6 @@ class HeatmapState extends ChartState {
       normalizeMode: normalizeMode ?? this.normalizeMode,
       sortX: sortX ?? this.sortX,
       sortY: sortY ?? this.sortY,
-      scaleType: scaleType ?? this.scaleType,
       xColumn: xColumn ?? this.xColumn,
       yColumn: yColumn ?? this.yColumn,
       aggregationType: aggregationType ?? this.aggregationType,

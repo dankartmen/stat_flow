@@ -1,9 +1,6 @@
 import 'dart:developer';
-
-import 'package:expandable/expandable.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import '../../core/dataset/dataset.dart';
 import '../../core/providers/providers.dart';
 import '../charts/chart_registry.dart';
@@ -265,8 +262,6 @@ class _ChartSettingsContent extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    // Подписываемся только на нужные части состояния
-    final chartState = selectedChart.state;
     final plugin = ChartRegistry.get(selectedChart.type);
     
     // Используем Selector для обновления только при изменении состояния конкретного графика

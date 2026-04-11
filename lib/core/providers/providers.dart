@@ -10,7 +10,6 @@ import 'package:stat_flow/features/charts/floating_chart/floating_chart_data.dar
 import '../../features/charts/bar_chart/bar_state.dart';
 import '../../features/charts/boxplot/boxplot_state.dart';
 import '../../features/charts/chart_state.dart';
-import '../../features/charts/heatmap/model/correlation_matrix.dart';
 import '../../features/charts/histogram/histogram_state.dart';
 import '../../features/charts/line_chart/line_state.dart';
 import '../../features/charts/scatterplot/scatter_state.dart';
@@ -93,17 +92,6 @@ final chartIdsProvider = Provider<List<int>>((ref) {
 /// При загрузке приложения по умолчанию установлен на `ScreenType.canvas`.
 final currentScreenProvider = StateProvider.autoDispose<ScreenType>((ref) => ScreenType.canvas);
 
-/// Провайдер для хранения матрицы корреляции
-///
-/// Вычисляет корреляционную матрицу для числовых колонок датасета.
-/// Используется в компоненте Heatmap для отображения корреляционной матрицы в виде тепловой карты.
-/// При загрузке нового датасета автоматически пересчитывает матрицу корреляции.
-final correlationMatrixProvider = FutureProvider<CorrelationMatrix?>((ref) async {
-  final dataset = ref.watch(datasetProvider);
-  if (dataset == null) return null;
-  // Используем асинхронный метод, который уже работает через isolate
-  return await CorrelationMatrix.fromDatasetAsync(dataset);
-});
 
 /// {@template charts_notifier}
 /// Управляет списком плавающих графиков на канвасе

@@ -1,38 +1,29 @@
-import 'dart:math' show min;
-import 'dart:developer' show log;
-import 'package:async/async.dart';
-import 'package:flutter/material.dart';
-import 'package:stat_flow/features/charts/heatmap/widgets/heatmap_legend.dart';
-import 'package:vector_math/vector_math_64.dart';
-
+import 'package:flutter/material.dart' hide DataColumn;
+import 'package:heatmap_canvas/heatmap.dart';
 import '../../../../core/dataset/dataset.dart';
-import '../calculator/heatmap_data_builder.dart';
-import '../model/correlation_clusterer.dart';
-import '../color/heatmap_color_mapper.dart';
-import '../model/correlation_matrix.dart';
-import '../model/heatmap_data.dart';
+import '../../chart_state.dart';
 import '../model/heatmap_state.dart';
-import '../model/hover_range.dart';
-import '../painter/heatmap_painter.dart';
-import '../color/heatmap_palette.dart';
+
+/// Максимальное количество уникальных категорий для отображения в таблице сопряжённости.
+const int _kMaxUniqueCategories = 50;
 
 /// {@template heatmap_view}
-/// Основной виджет для отображения интерактивной тепловой карты
-/// с поддержкой настройки цветов, кластеризации и анимации.
+/// Основной виджет для отображения интерактивной тепловой карты.
 ///
 /// Особенности:
-/// - Интерактивное масштабирование через InteractiveViewer
-/// - Подсветка ячейки при наведении мыши
-/// - Плавная анимация при смене цветовых схем
-/// - Кластеризация матрицы для выявления паттернов
-/// - Автоматическое обновление при изменении параметров
-/// - Компактная легенда под картой
+/// - Поддержка режима корреляции всех числовых полей
+/// - Поддержка ручного выбора осей (категориальная/числовая)
+/// - Автоматическое определение типа колонок
+/// - Построение таблиц сопряжённости для категориальных данных
+/// - Агрегация числовых данных по категориям
+/// - Асинхронная обработка больших объёмов данных
+/// - Кластеризация, сортировка, нормализация и преобразование в проценты
 /// {@endtemplate}
 class HeatmapView extends StatefulWidget {
-  /// Данные для отображения тепловой карты, включая значения и метки
+  /// Датасет, содержащий данные для построения тепловой карты.
   final Dataset dataset;
 
-  /// Состояние тепловой карты, содержащее настройки отображения
+  /// Состояние тепловой карты (настройки отображения, выбранные колонки).
   final HeatmapState state;
 
   /// {@macro heatmap_view}
@@ -46,453 +37,358 @@ class HeatmapView extends StatefulWidget {
   State<HeatmapView> createState() => _HeatmapViewState();
 }
 
-class _HeatmapViewState extends State<HeatmapView>
-    with SingleTickerProviderStateMixin {
-  /// Индекс строки под курсором мыши (для подсветки)
-  int? hoverRow;
+class _HeatmapViewState extends State<HeatmapView> {
+  /// Future, содержащий результат построения данных тепловой карты.
+  late Future<HeatmapData> _dataFuture;
 
-  /// Индекс колонки под курсором мыши (для подсветки)
-  int? hoverCol;
+  /// Контроллер для управления отображением тепловой карты.
+  final _controller = HeatmapController();
 
-  /// Текущий маппер цветов на основе настроек (палитра, сегменты, режим)
-  late HeatmapColorMapper _currentMapper;
-
-  /// Контроллер анимации для плавных переходов между цветовыми схемами
-  late AnimationController _controller;
-
-  /// Предыдущий маппер для интерполяции во время анимации
-  late HeatmapColorMapper _previousMapper;
-
-  /// Контроллер трансформации для масштабирования
-  final TransformationController _zoomController = TransformationController();
-
-  /// Матрица трансформации на последнем кадре для оптимизации вычисления видимой области
-  Matrix4? _lastMatrix;
-
-  /// Видимая область в координатах строк/столбцов для оптимизации отрисовки больших матриц
-  Rect? _visibleRect;
-
-  /// Данные, подготовленные для отображения (после кластеризации, сортировки, нормализации)
-  late HeatmapData? _displayData;
-
-
-  /// Кэш ключа данных
-  String? _currentDataKey;
-
-  /// Кэш ключа стиля 
-  String? _currentStyleKey;
-
-  /// Future для асинхронного вычисления данных  
-  Future<HeatmapData>? _computeFuture;
-  /// Диапазон значений, соответствующий наведению на легенду.
-  /// Используется для подсветки ячеек с близкими значениями.
-  HoverRange? _hoverRange;
-  
-  /// Операция для отмены текущего вычисления данных, если параметры изменились до его завершения.
-  CancelableOperation<HeatmapData>? _currentOperation;
-
-  /// Флаг для отслеживания, был ли виджет уже удалён, чтобы избежать обновления состояния после dispose.
-  bool _disposed = false;
-  
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 350),
-    );
-    _startComputation();
+    _dataFuture = _buildData();
   }
 
   @override
   void didUpdateWidget(covariant HeatmapView oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    final newDataKey = _computeDataKey();
-    final newStyleKey = _computeStyleKey();
-
-    // Если изменились данные – пересчитываем всё
-    if (_currentDataKey != newDataKey) {
-      _currentDataKey = newDataKey;
-      _startComputation();
-    }
-    // Если изменились только стили – обновляем цвета и запускаем анимацию
-    else if (_currentStyleKey != newStyleKey && _displayData != null) {
-      _currentStyleKey = newStyleKey;
-      _previousMapper = _currentMapper;
-      _currentMapper = _createMapper();
-      _controller.forward(from: 0);
+    // При изменении состояния или датасета перестраиваем данные
+    if (oldWidget.state != widget.state || oldWidget.dataset != widget.dataset) {
+      _dataFuture = _buildData();
     }
   }
 
   @override
   void dispose() {
-    _currentOperation?.cancel();
-    _currentOperation = null;
-    _controller.dispose();
-    _zoomController.dispose();
-    _disposed = true;
     super.dispose();
   }
 
-  
-  @override
-  Widget build(BuildContext context) {
-    if (_displayData == null) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Вычисление данных тепловой карты...'),
-          ],
-        ),
-      );
-    }
-    return _buildHeatmap();
-  }
-
-  /// Генерирует ключ для кэширования данных на основе настроек, влияющих на значения ячеек
-  String _computeDataKey() {
-    return '${widget.state.useCorrelation}_'
-        '${widget.state.xColumn}_${widget.state.yColumn}_'
-        '${widget.state.aggregationType}_'
-        '${widget.state.clusterEnabled}_'
-        '${widget.state.sortX}_${widget.state.sortY}_'
-        '${widget.state.normalizeMode}_'
-        '${widget.state.percentageMode}';
-  }
-
-  /// Генерирует ключ для кэширования стилей на основе настроек, влияющих на отображение (цветовая схема, сегменты, режим цветов)
-  String _computeStyleKey() {
-    return '${widget.state.palette}_'
-        '${widget.state.segments}_'
-        '${widget.state.colorMode}';
-  }
-
-
-  /// Обработчик готовности данных. Устанавливает [_displayData] и обновляет мапперы цветов.
-  HeatmapData _onDataReady(HeatmapData data) {
-      if (_disposed || !mounted) return data;
-      setState(() {
-        _displayData = data;
-        _currentMapper = _createMapper();
-        _previousMapper = _currentMapper; // сброс анимации
-        _controller.value = 0;
-        _currentStyleKey = _computeStyleKey();
-      });
-
-      if (data.wasTrimmed) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Некоторые категории были скрыты из-за большого количества уникальных значений (показаны топ-50)'),
-              duration: Duration(seconds: 3),
-            ),
-          );
-        });
-      }
-      return data;
-    }
-
-  /// Запускает вычисление данных тепловой карты.
+  /// Асинхронно строит данные для тепловой карты.
   ///
-  /// Если данные уже вычислены для текущего ключа, пропускает.
-  /// В противном случае вычисляет синхронно (для корреляции) или асинхронно (для выбранных осей).
-  void _startComputation() async{
-    // Отменяем предыдущий расчёт, если он ещё идёт
-    _currentOperation?.cancel();
+  /// Логика построения:
+  /// - Если включён режим корреляции (`state.useCorrelation == true`),
+  ///   вычисляет корреляционную матрицу для всех числовых колонок.
+  /// - Иначе проверяет выбранные оси и строит данные в зависимости от типов колонок:
+  ///   - Две категориальные → таблица сопряжённости
+  ///   - Категориальная + числовая → агрегация по категориям
+  ///   - Две числовые → не поддерживается (пустые данные)
+  Future<HeatmapData> _buildData() async {
+    final state = widget.state;
+    final dataset = widget.dataset;
 
-    // Сбрасываем текущие данные
-    setState(() {
-      _displayData = null;
-    });
-
-    late final Future<HeatmapData> future;
-    if (widget.state.useCorrelation) {
-      future = _loadCorrelationData();
-    } else {
-      final builder = HeatmapDataBuilder(
-        dataset: widget.dataset,
-        state: widget.state
-      );
-      future = builder.buildAsync();
-    }
-
-    _currentOperation = CancelableOperation.fromFuture(
-      future,
-      onCancel: () => debugPrint('Heatmap computation cancelled'),
-    );
-    _currentOperation?.value.then(_onDataReady).catchError((e) {
-      log(e, name: "HeatmapView");
-      if (!_disposed && mounted) {
-        _onDataReady(HeatmapData(rowLabels: [], columnLabels: [], values: []));
+    // 1. Режим корреляции (все числовые колонки)
+    if (state.useCorrelation) {
+      final numericColumns = dataset.numericColumns;
+      if (numericColumns.length < 2) {
+        return HeatmapData(rowLabels: [], columnLabels: [], values: []);
       }
-    });
-  }
-    
 
-  
+      // Извлекаем данные в формате List<List<double?>>
+      final columnsData = numericColumns.map((col) => col.data).toList();
+      final columnNames = numericColumns.map((col) => col.name).toList();
 
-  Future<HeatmapData> _loadCorrelationData() async {
-    final matrix = await CorrelationMatrix.fromDatasetAsync(widget.dataset);
-    if (matrix.wasTrimmed && mounted) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Было выбрано только 100 числовых колонок с наибольшей дисперсией для построения корреляционной матрицы'),
-          duration: Duration(seconds: 3),
-        ),
+      // Используем встроенный билдер корреляции (асинхронная версия для больших данных)
+      final data = await HeatmapDataBuilder.pearsonCorrelationAsync(
+        columnsData,
+        columnNames: columnNames,
       );
-    });
-  }
-    var data = HeatmapData.fromCorrelation(matrix);
-    // Применяем трансформации (они уже асинхронные)
-    data = await _applyTransformations(data);
-    return data;
-  }
-  /// Применяет к данным все трансформации: кластеризацию, сортировку, нормализацию, проценты.
-  Future<HeatmapData> _applyTransformations(HeatmapData data) async {
-    // Кластеризация только для корреляционной матрицы
-    if (widget.state.clusterEnabled &&
-        widget.state.useCorrelation) {
-      data = CorrelationClusterer.clusterHeatmapData(data);
+
+      // Применяем трансформации (нормализация, сортировка, проценты, кластеризация)
+      return await _applyTransformations(data);
     }
 
-    // Сортировка
-    if (widget.state.sortX != SortMode.none) {
-      data = data.sortRows(widget.state.sortX);
+    // 2. Ручной выбор осей
+    if (state.xColumn == null || state.yColumn == null) {
+      return HeatmapData(rowLabels: [], columnLabels: [], values: []);
     }
-    if (widget.state.sortY != SortMode.none) {
-      data = data.sortCols(widget.state.sortY);
+
+    final xCol = dataset.column(state.xColumn!);
+    final yCol = dataset.column(state.yColumn!);
+    if (xCol == null || yCol == null) {
+      return HeatmapData(rowLabels: [], columnLabels: [], values: []);
+    }
+
+    final xType = _getColumnType(xCol);
+    final yType = _getColumnType(yCol);
+
+    // Обе числовые — не поддерживаем
+    if (xType == ColumnType.numeric && yType == ColumnType.numeric) {
+      return HeatmapData(rowLabels: [], columnLabels: [], values: []);
+    }
+
+    HeatmapData data;
+
+    // X — категориальная (текстовая или категориальная)
+    if (xType == ColumnType.text || xType == ColumnType.categorical) {
+      final xCat = _toCategorical(xCol);
+      if (yType == ColumnType.text || yType == ColumnType.categorical) {
+        // Обе категориальные — таблица сопряжённости
+        final yCat = _toCategorical(yCol);
+        data = await _buildContingencyTable(xCat, yCat);
+      } else if (yType == ColumnType.numeric) {
+        // X категориальная, Y числовая — агрегация по X
+        final yNum = yCol as NumericColumn;
+        data = await _buildAggregationTable(xCat, yNum);
+      } else {
+        return HeatmapData(rowLabels: [], columnLabels: [], values: []);
+      }
+    }
+    // Y — категориальная, X — числовая (меняем ролями)
+    else if (yType == ColumnType.text || yType == ColumnType.categorical) {
+      final yCat = _toCategorical(yCol);
+      if (xType == ColumnType.numeric) {
+        final xNum = xCol as NumericColumn;
+        data = await _buildAggregationTable(yCat, xNum);
+      } else {
+        return HeatmapData(rowLabels: [], columnLabels: [], values: []);
+      }
+    } else {
+      return HeatmapData(rowLabels: [], columnLabels: [], values: []);
+    }
+
+    // Применяем трансформации (нормализация, сортировка, проценты)
+    return await _applyTransformations(data);
+  }
+
+  /// Определяет тип колонки.
+  ColumnType _getColumnType(DataColumn col) {
+    if (col is NumericColumn) return ColumnType.numeric;
+    if (col is DateTimeColumn) return ColumnType.dateTime;
+    if (col is CategoricalColumn) return ColumnType.categorical;
+    if (col is TextColumn) return ColumnType.text;
+    throw Exception('Неизвестный тип колонки: ${col.name}');
+  }
+
+  /// Преобразует колонку в категориальную.
+  CategoricalColumn _toCategorical(DataColumn col) {
+    if (col is CategoricalColumn) return col;
+    if (col is TextColumn) return CategoricalColumn(col.name, col.data);
+    throw Exception('Невозможно преобразовать колонку ${col.name} в категориальную');
+  }
+
+  /// Строит таблицу сопряжённости для двух категориальных колонок.
+  ///
+  /// Каждая ячейка содержит количество совместных появлений категорий.
+  /// Количество категорий ограничено константой `_kMaxUniqueCategories`.
+  Future<HeatmapData> _buildContingencyTable(CategoricalColumn x, CategoricalColumn y) async {
+    final xCategories = _uniqueCategories(x.data);
+    final yCategories = _uniqueCategories(y.data);
+
+    final limitedX = xCategories.length > _kMaxUniqueCategories
+        ? xCategories.sublist(0, _kMaxUniqueCategories)
+        : xCategories;
+    final limitedY = yCategories.length > _kMaxUniqueCategories
+        ? yCategories.sublist(0, _kMaxUniqueCategories)
+        : yCategories;
+
+    final matrix = List.generate(
+      limitedX.length,
+      (_) => List.filled(limitedY.length, 0.0),
+    );
+
+    for (int i = 0; i < x.data.length; i++) {
+      final xv = x.data[i];
+      final yv = y.data[i];
+      if (xv == null || yv == null) continue;
+      final xi = limitedX.indexOf(xv);
+      final yi = limitedY.indexOf(yv);
+      if (xi != -1 && yi != -1) {
+        matrix[xi][yi] += 1;
+      }
+    }
+
+    return HeatmapData(
+      rowLabels: limitedX,
+      columnLabels: limitedY,
+      values: matrix,
+    );
+  }
+
+  /// Строит агрегированную таблицу для пары "категориальная + числовая".
+  ///
+  /// Для каждой категории вычисляется значение в зависимости от
+  /// выбранного типа агрегации ([AggregationType]).
+  Future<HeatmapData> _buildAggregationTable(CategoricalColumn cat, NumericColumn num) async {
+    final categories = _uniqueCategories(cat.data);
+    final limitedCat = categories.length > _kMaxUniqueCategories
+        ? categories.sublist(0, _kMaxUniqueCategories)
+        : categories;
+
+    final aggregated = _aggregateNumerical(
+      catValues: cat.data,
+      numValues: num.data,
+      categories: limitedCat,
+      aggType: widget.state.aggregationType,
+    );
+
+    return HeatmapData(
+      rowLabels: limitedCat,
+      columnLabels: [widget.state.aggregationType.name],
+      values: aggregated.map((v) => [v]).toList(),
+    );
+  }
+
+  /// Возвращает отсортированный список уникальных значений.
+  List<String> _uniqueCategories(List<String?> data) {
+    final set = <String>{};
+    for (final v in data) {
+      if (v != null) set.add(v);
+    }
+    return set.toList()..sort();
+  }
+
+  /// Выполняет числовую агрегацию по категориям.
+  ///
+  /// Поддерживаемые типы:
+  /// - [AggregationType.count] — количество значений
+  /// - [AggregationType.sum] — сумма значений
+  /// - [AggregationType.avg] — среднее арифметическое
+  /// - [AggregationType.min] — минимальное значение
+  /// - [AggregationType.max] — максимальное значение
+  /// - [AggregationType.median] — медиана
+  List<double> _aggregateNumerical({
+    required List<String?> catValues,
+    required List<double?> numValues,
+    required List<String> categories,
+    required AggregationType aggType,
+  }) {
+    final counts = List.filled(categories.length, 0);
+    final sums = List.filled(categories.length, 0.0);
+    final mins = List.filled(categories.length, double.infinity);
+    final maxs = List.filled(categories.length, -double.infinity);
+    final medians = List.generate(categories.length, (_) => <double>[]);
+
+    for (int i = 0; i < catValues.length; i++) {
+      final c = catValues[i];
+      final n = numValues[i];
+      if (c == null || n == null) continue;
+      final idx = categories.indexOf(c);
+      if (idx == -1) continue;
+      counts[idx]++;
+      sums[idx] += n;
+      medians[idx].add(n);
+      if (n < mins[idx]) mins[idx] = n;
+      if (n > maxs[idx]) maxs[idx] = n;
+    }
+
+    final values = List.filled(categories.length, 0.0);
+    for (int i = 0; i < categories.length; i++) {
+      switch (aggType) {
+        case AggregationType.count:
+          values[i] = counts[i].toDouble();
+          break;
+        case AggregationType.sum:
+          values[i] = sums[i];
+          break;
+        case AggregationType.avg:
+          values[i] = counts[i] > 0 ? sums[i] / counts[i] : 0;
+          break;
+        case AggregationType.min:
+          values[i] = counts[i] > 0 ? mins[i] : 0;
+          break;
+        case AggregationType.max:
+          values[i] = counts[i] > 0 ? maxs[i] : 0;
+          break;
+        case AggregationType.median:
+          final list = medians[i];
+          if (list.isEmpty) {
+            values[i] = 0;
+          } else {
+            list.sort();
+            final mid = list.length ~/ 2;
+            values[i] = list.length.isOdd
+                ? list[mid]
+                : (list[mid - 1] + list[mid]) / 2;
+          }
+          break;
+      }
+    }
+    return values;
+  }
+
+  /// Применяет к данным все трансформации, указанные в состоянии.
+  ///
+  /// Включает:
+  /// - Кластеризацию (только для квадратных матриц)
+  /// - Сортировку строк и столбцов
+  /// - Нормализацию
+  /// - Преобразование в проценты
+  Future<HeatmapData> _applyTransformations(HeatmapData data) async {
+    final state = widget.state;
+
+    // Кластеризация (только для квадратных матриц, обычно для корреляции)
+    if (state.clusterEnabled &&
+        data.rowLabels.length == data.columnLabels.length) {
+      data = await HeatmapTransformer.clusterAsync(data);
+    }
+
+    // Сортировка строк и столбцов
+    if (state.sortX != SortMode.none) {
+      data = await HeatmapTransformer.sortRowsAsync(data, state.sortX);
+    }
+    if (state.sortY != SortMode.none) {
+      data = await HeatmapTransformer.sortColsAsync(data, state.sortY);
     }
 
     // Нормализация
-    if (widget.state.normalizeMode != NormalizeMode.none) {
-      data = data.normalize(widget.state.normalizeMode);
+    if (state.normalizeMode != NormalizeMode.none) {
+      data = await HeatmapTransformer.normalizeAsync(data, state.normalizeMode);
     }
 
-    // Проценты
-    if (widget.state.percentageMode != PercentageMode.none) {
-      data = data.toPercentages(widget.state.percentageMode);
+    // Преобразование в проценты
+    if (state.percentageMode != PercentageMode.none) {
+      data = await HeatmapTransformer.toPercentagesAsync(data, state.percentageMode);
     }
 
     return data;
   }
 
-
-  /// Обновляет [_visibleRect] на основе текущей трансформации и размера виджета.
-  /// Вычисляет, какие строки и столбцы видимы в данный момент, чтобы оптимизировать отрисовку больших матриц.
-  /// Параметры:
-  /// - [axisOffset]: отступ для осевых меток
-  /// - [cellWidth]: ширина одной ячейки
-  /// - [cellHeight]: высота одной ячейки
-  /// - [colCount]: общее количество столбцов
-  /// - [rowCount]: общее количество строк
-  /// 
-  /// Логика:
-  /// 1. Получаем текущую матрицу трансформации от InteractiveViewer
-  /// 2. Инвертируем её, чтобы преобразовать координаты виджета в координаты тепловой карты
-  /// 3. Вычисляем координаты верхнего левого и нижнего правого углов видимой области
-  /// 4. Преобразуем эти координаты в индексы строк и столбцов, учитывая отступ для осевых меток
-  /// 5. Сохраняем видимую область в виде Rect, где left=столбец начала, top=строка начала, right=столбец конца, bottom=строка конца
-  void _updateVisibleRect({
-    required double axisOffset, 
-    required double cellWidth, 
-    required double cellHeight,
-    required int colCount,
-    required int rowCount
-  }) {
-    if (_displayData == null) return;
-    final matrix = _zoomController.value;
-    if (_lastMatrix == matrix) return;
-    _lastMatrix = matrix;
-
-    // Получаем размер холста (контейнера)
-    final size = context.size;
-    if (size == null) return;
-
-    // Вычисляем видимую область в координатах тепловой карты
-    final inverted = Matrix4.inverted(matrix);
-    final topLeft = Vector4(0, 0, 0, 1);
-    final bottomRight = Vector4(size.width, size.height, 0, 1);
-    final topLeftTransformed = inverted.transform(topLeft);
-    final bottomRightTransformed = inverted.transform(bottomRight);
-
-    double left = topLeftTransformed.x;
-    double top = topLeftTransformed.y;
-    double right = bottomRightTransformed.x;
-    double bottom = bottomRightTransformed.y;
-
-    // Преобразуем в индексы строк/столбцов с учётом axisOffset
-    final startCol = ((left - axisOffset) / cellWidth).floor().clamp(0, colCount - 1);
-    final endCol = ((right - axisOffset) / cellWidth).ceil().clamp(0, colCount - 1);
-    final startRow = ((top - axisOffset) / cellHeight).floor().clamp(0, rowCount - 1);
-    final endRow = ((bottom - axisOffset) / cellHeight).ceil().clamp(0, rowCount - 1);
-
-    setState(() {
-      _visibleRect = Rect.fromLTRB(startCol.toDouble(), startRow.toDouble(), endCol.toDouble(), endRow.toDouble());
-    });
-  }
-  /// Создание маппера цветов на основе текущих настроек.
-  ///
-  /// Поддерживает два режима:
-  /// - [HeatmapColorMode.discrete]: равномерные сегменты с четкими границами
-  ///   (полезно для выявления точных значений)
-  /// - [HeatmapColorMode.gradient]: плавный переход между цветами
-  ///   (лучше для визуального восприятия общей структуры)
-  HeatmapColorMapper _createMapper() {
-    final paletteColors = HeatmapPaletteFactory.baseColors(widget.state.palette);
-    final min = _displayData?.min ?? -1.0;
-    final max = _displayData?.max ?? 1.0;
-    if (widget.state.colorMode == HeatmapColorMode.discrete) {      
-      return DiscreteColorMapper(
-        min: min,
-        max: max,
-        segments: widget.state.segments,
-        baseColors: paletteColors,
-      );
-    } else {
-      return GradientColorMapper(
-        paletteType: widget.state.palette,
-        min: min,
-        max: max,
-      );
-    }
-  }
-
-  /// Обработчик наведения на легенду. Обновляет [_hoverRange] для подсветки ячеек.
-  void _onLegendHover(HoverRange? range) {
-    setState(() => _hoverRange = range);
-  }
-
-  /// Построение виджета тепловой карты с поддержкой масштабирования.
-  ///
-  /// Использует [InteractiveViewer] для обеспечения:
-  /// - Панорамирования (перетаскивания) по большой матрице
-  /// - Масштабирования жестами или двойным щелчком
-  /// - Плавного скроллинга
-  ///
-  /// Также реализует интерактивную подсветку ячеек при наведении мыши
-  /// (для десктопных и веб-версий).
-  Widget _buildHeatmap() {
-    final rowCount = _displayData!.rowLabels.length;
-    final colCount = _displayData!.columnLabels.length;
-    if (rowCount == 0 || colCount == 0) {
-      return const Center(child: Text('Нет данных для отображения'));
-    }
-    final axisOffset = widget.state.showAxisLabels ? 40.0 : 0.0;
-
-    return LayoutBuilder(
-      builder: (context, constraints){
-        final availableWidth = constraints.maxWidth - axisOffset - 16; // Учитываем отступы и место для легенды
-        final availableHeight = constraints.maxHeight - axisOffset - 60; // Учитываем место для легенды
-      
-        double cellSizeByWidth = availableWidth / colCount;
-        double cellSizeByHeight = availableHeight / rowCount;
-
-        cellSizeByWidth = cellSizeByWidth.clamp(0.0, 200.0);
-        cellSizeByHeight = cellSizeByHeight.clamp(0.0, 200.0);
-
-        final showValues = min(cellSizeByWidth, cellSizeByHeight) > 35;
-
-        final totalWidth = colCount * cellSizeByWidth + axisOffset;
-        final totalHeight = rowCount * cellSizeByHeight + axisOffset;
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: InteractiveViewer(
-                transformationController: _zoomController,
-                onInteractionUpdate: (details) => _updateVisibleRect(
-                  axisOffset: axisOffset,
-                  cellHeight: cellSizeByHeight,
-                  cellWidth: cellSizeByWidth,
-                  colCount: colCount,
-                  rowCount: rowCount
-                ),
-                constrained: false,
-                minScale: 0.5, // Минимальное увеличение
-                maxScale: 5.0, // Максимальное увеличение
-                boundaryMargin: const EdgeInsets.all(8), // Отступы от границ для удобства
-          
-                child: MouseRegion(
-                  // Отслеживание мыши для интерактивной подсветки
-                  onHover: (event) {
-                    final localPos = event.localPosition;
-          
-                    // Вычисляем индекс ячейки под курсором.
-                    // Вычитаем cellSize для учета отступа под подписи осей,
-                    // который добавляется в HeatmapPainter.
-                    final row = ((localPos.dy - axisOffset) / cellSizeByHeight).floor();
-                    final col = ((localPos.dx - axisOffset) / cellSizeByWidth).floor();
-          
-                    // Проверяем, что курсор находится в пределах матрицы
-                    if (row >= 0 && row < rowCount && col >= 0 && col < colCount) {
-                      if (row != hoverRow || col != hoverCol) {
-                        setState(() {
-                          hoverRow = row;
-                          hoverCol = col;
-                        });
-                      }
-                    } else {
-                      if (hoverRow != null) {
-                        setState(() {
-                          hoverRow = null;
-                          hoverCol = null;
-                        });
-                      }
-                    }
-                  },
-                  // Сброс подсветки при уходе мыши с виджета
-                  onExit: (_) {
-                    setState(() {
-                      hoverRow = null;
-                      hoverCol = null;
-                    });
-                  },
-          
-                  child: AnimatedBuilder(
-                    animation: _controller,
-                    builder: (_, __) {
-                      return CustomPaint(
-                        size: Size(totalWidth, totalHeight),
-                        painter: HeatmapPainter(
-                          data: _displayData!,
-                          axisOffset: axisOffset,
-                          colorMapper: _currentMapper,
-                          previousMapper: _previousMapper,
-                          animationValue: _controller.value,
-                          cellWidth: cellSizeByWidth,
-                          cellHeight: cellSizeByHeight,
-                          showValues: showValues,
-                          showAxisLabels: false,
-                          triangleMode: widget.state.triangleMode,
-                          hoverRow: hoverRow,
-                          hoverCol: hoverCol,
-                          hoverRange: _hoverRange,
-                          percentageMode: widget.state.percentageMode,
-                          visibleRect: _visibleRect,
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-            ),
-            HeatmapLegend(
-              mapper: _currentMapper,
-              min: _displayData!.min,
-              max: _displayData!.max,
-              segments: widget.state.segments,
-              onHover: _onLegendHover,
-              colorMode: widget.state.colorMode,
-            ),
-          ],
+  /// Строит конфигурацию отображения тепловой карты.
+  HeatmapConfig _buildConfig() {
+    final state = widget.state;
+    return HeatmapConfig(
+      palette: state.palette,
+      colorMode: state.colorMode,
+      segments: state.segments,
+      showAxisLabels: state.showAxisLabels,
+      showValues: state.showValues,
+      triangleMode: state.triangleMode,
+      sortX: state.sortX,
+      sortY: state.sortY,
+      clusterEnabled: state.clusterEnabled,
+      tooltipBuilder: (context, cell) {
+        return Text(
+          '${cell.colLabel} x ${cell.rowLabel}\nЗначение: ${formatHeatmapNumber(cell.value)}',
+          style: Theme.of(context).textTheme.bodySmall,
         );
-      }
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<HeatmapData>(
+      future: _dataFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('Ошибка: ${snapshot.error}'));
+        }
+        final data = snapshot.data!;
+        if (data.rowLabels.isEmpty) {
+          return const Center(child: Text('Нет данных'));
+        }
+        return Heatmap(
+          data: data,
+          config: _buildConfig(),
+          controller: _controller,
+          loadingBuilder: (context) => const Center(child: CircularProgressIndicator()),
+        );
+      },
     );
   }
 }

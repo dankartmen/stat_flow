@@ -39,15 +39,7 @@ extension DatasetColumns on Dataset {
       columns.whereType<CategoricalColumn>().toList();
 }
 
-/// {@template dataset_correlation}
-/// Расширение для вычисления корреляционной матрицы датасета
-/// {@endtemplate}
-extension DatasetCorrelation on Dataset {
-  /// Вычисляет матрицу корреляции Пирсона для всех числовых колонок
-  CorrelationMatrix corr() {
-    return CorrelationMatrix.fromDataset(this);
-  }
-}
+
 
 /// {@template dataset_preview}
 /// Расширение для получения предварительного просмотра датасета

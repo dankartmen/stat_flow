@@ -72,7 +72,6 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     );
 
     if (result != null && result is Dataset) {
-      ref.invalidate(correlationMatrixProvider); // Сбрасываем кэш корреляционной матрицы при загрузке нового датасета
       ref.read(datasetProvider.notifier).state = result;
       ref.read(rightPanelExpandedProvider.notifier).state = true;
     }
@@ -114,45 +113,6 @@ class _MainScreenState extends ConsumerState<MainScreen> {
       state: plugin.createState(),
       position: Offset(50 + _nextChartId * 20.0, 50 + _nextChartId * 20.0),
       size: initialSize,
-    );
-
-    ref.read(chartsProvider.notifier).addChart(newChart, ref);
-    ref.read(selectedChartIdProvider.notifier).state = newChart.id;
-  }
-
-  /// Определяет тип колонки по её имени
-  ColumnType? _getColumnType(String columnName) {
-    final dataset = ref.read(datasetProvider);
-    if (dataset == null) return null;
-    final column = dataset.column(columnName);
-    if (column is NumericColumn) return ColumnType.numeric;
-    if (column is DateTimeColumn) return ColumnType.dateTime;
-    if (column is CategoricalColumn) return ColumnType.categorical;
-    if (column is TextColumn) return ColumnType.text;
-    return null;
-  }
-
-  /// Создает график для указанного поля датасета
-  /// 
-  /// Используется при создании графика через контекстное меню
-  /// правой панели. Автоматически настраивает состояние графика
-  /// с выбранным полем.
-  void _createChartForField(String fieldName, ChartType chartType) {
-    final dataset = ref.read(datasetProvider);
-    if (dataset == null) return;
-
-    final plugin = ChartRegistry.get(chartType);
-    final state = plugin.createState();
-    final columnType = _getColumnType(fieldName);
-    final newState = state.withField(fieldName, type: columnType);
-
-    final newChart = FloatingChartData(
-      id: _nextChartId++,
-      type: chartType,
-      dataset: dataset,
-      state: newState,
-      position: Offset(50 + _nextChartId * 20.0, 50 + _nextChartId * 20.0),
-      size: const Size(300, 200),
     );
 
     ref.read(chartsProvider.notifier).addChart(newChart, ref);
