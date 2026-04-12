@@ -67,7 +67,7 @@ class HeatmapState extends ChartState {
   HeatmapState({
     this.useCorrelation = true,
     this.showAxisLabels = false,
-    this.showValues = false,
+    this.showValues = true,
     this.palette = HeatmapPalette.redBlue,
     this.segments = 10,
     this.triangleMode = false,

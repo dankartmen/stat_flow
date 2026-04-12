@@ -37,9 +37,21 @@ class HeatmapView extends StatefulWidget {
   State<HeatmapView> createState() => _HeatmapViewState();
 }
 
+/// {@template heatmap_view_state}
+/// Состояние виджета [HeatmapView].
+///
+/// Управляет асинхронной загрузкой данных, кэшированием,
+/// перестроением при изменении параметров и отображением тепловой карты.
+/// {@endtemplate}
 class _HeatmapViewState extends State<HeatmapView> {
-  /// Future, содержащий результат построения данных тепловой карты.
-  late Future<HeatmapData> _dataFuture;
+  /// Кэшированные данные тепловой карты.
+  HeatmapData? _cachedData;
+
+  /// Ключ для идентификации текущих параметров данных.
+  String? _dataKey;
+
+  /// Флаг загрузки данных (показывает индикатор при первом запуске).
+  bool _isLoadingData = false;
 
   /// Контроллер для управления отображением тепловой карты.
   final _controller = HeatmapController();
@@ -47,22 +59,74 @@ class _HeatmapViewState extends State<HeatmapView> {
   @override
   void initState() {
     super.initState();
-    _dataFuture = _buildData();
+    _loadData();
   }
 
   @override
   void didUpdateWidget(covariant HeatmapView oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    // При изменении состояния или датасета перестраиваем данные
-    if (oldWidget.state != widget.state || oldWidget.dataset != widget.dataset) {
-      _dataFuture = _buildData();
+    final newDataKey = _computeDataKey(widget.state);
+    final oldDataKey = _computeDataKey(oldWidget.state);
+
+    if (newDataKey != oldDataKey) {
+      _loadData();
+    }
+
+    // Принудительное обновление при изменении любых параметров состояния
+    if (oldWidget.state != widget.state) {
+      setState(() {});
     }
   }
 
   @override
   void dispose() {
     super.dispose();
+  }
+
+  /// Вычисляет ключ, зависящий только от параметров, влияющих на значения ячеек.
+  ///
+  /// Используется для кэширования данных и определения необходимости перестроения.
+  String _computeDataKey(HeatmapState state) {
+    return '${state.useCorrelation}_'
+        '${state.xColumn}_${state.yColumn}_'
+        '${state.aggregationType}_'
+        '${state.clusterEnabled}_'
+        '${state.sortX}_${state.sortY}_'
+        '${state.normalizeMode}_'
+        '${state.percentageMode}';
+  }
+
+  /// Асинхронно загружает данные тепловой карты с кэшированием.
+  Future<void> _loadData() async {
+    final newKey = _computeDataKey(widget.state);
+
+    // Если ключ не изменился и данные уже есть — ничего не делаем
+    if (_dataKey == newKey && _cachedData != null) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingData = true;
+    });
+
+    try {
+      final data = await _buildData();
+
+      if (!mounted) return;
+
+      setState(() {
+        _cachedData = data;
+        _dataKey = newKey;
+        _isLoadingData = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _cachedData = HeatmapData(rowLabels: [], columnLabels: [], values: []);
+        _isLoadingData = false;
+      });
+    }
   }
 
   /// Асинхронно строит данные для тепловой карты.
@@ -348,6 +412,10 @@ class _HeatmapViewState extends State<HeatmapView> {
   /// Строит конфигурацию отображения тепловой карты.
   HeatmapConfig _buildConfig() {
     final state = widget.state;
+    // Безопасное получение min/max: если данных нет, используем 0 и 1
+    final min = _cachedData?.min ?? 0.0;
+    final max = _cachedData?.max ?? 1.0;
+
     return HeatmapConfig(
       palette: state.palette,
       colorMode: state.colorMode,
@@ -358,37 +426,202 @@ class _HeatmapViewState extends State<HeatmapView> {
       sortX: state.sortX,
       sortY: state.sortY,
       clusterEnabled: state.clusterEnabled,
-      tooltipBuilder: (context, cell) {
-        return Text(
-          '${cell.colLabel} x ${cell.rowLabel}\nЗначение: ${formatHeatmapNumber(cell.value)}',
-          style: Theme.of(context).textTheme.bodySmall,
-        );
-      },
+      cellTooltipBuilder: _createCellTooltip(min: min, max: max),
+      legendTooltipBuilder: _legendTooltip,
     );
+  }
+
+  /// Строитель тултипа для легенды.
+  Widget _legendTooltip(BuildContext context, LegendTooltipInfo? info) {
+    if (info == null) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).focusColor,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (info.isDiscrete) ...[
+            Text(
+              'Диапазон:',
+              style: TextStyle(color: Colors.grey.shade400, fontSize: 11),
+            ),
+            Text(
+              '[${info.segmentMin!.toStringAsFixed(3)} — ${info.segmentMax!.toStringAsFixed(3)}]',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Сегмент ${info.segmentIndex! + 1}',
+              style: TextStyle(color: Colors.grey.shade400, fontSize: 11),
+            ),
+          ] else ...[
+            Text(
+              'Значение:',
+              style: TextStyle(color: Colors.grey.shade400, fontSize: 11),
+            ),
+            Text(
+              info.value.toStringAsFixed(3),
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Создаёт универсальный тултип с прогресс-баром, нормализованным по диапазону данных.
+  ///
+  /// Принимает [min] и [max] через замыкание для использования в конфигурации.
+  Widget Function(BuildContext, HeatmapCell) _createCellTooltip({
+    required double min,
+    required double max,
+    _HeatmapTooltipStyle style = const _HeatmapTooltipStyle(),
+  }) {
+    return (context, cell) {
+      final value = cell.value;
+      final range = max - min;
+      final normalized = range == 0 ? 0.5 : (value - min) / range;
+      final percent = (normalized * 100).clamp(0, 100);
+      final color = value >= 0 ? style.positiveColor : style.negativeColor;
+
+      return Container(
+        width: style.width,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: style.backgroundColor,
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.15),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '${cell.rowLabel} ⟷ ${cell.colLabel}',
+              style: style.labelStyle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: normalized,
+                      backgroundColor: Colors.grey.shade200,
+                      valueColor: AlwaysStoppedAnimation<Color>(color),
+                      minHeight: 8,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  '${percent.toStringAsFixed(0)}%',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Значение: ${value.toStringAsFixed(2)}',
+                  style: style.valueStyle.copyWith(color: color),
+                ),
+                Text(
+                  '[${min.toStringAsFixed(2)} … ${max.toStringAsFixed(2)}]',
+                  style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    };
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<HeatmapData>(
-      future: _dataFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return Center(child: Text('Ошибка: ${snapshot.error}'));
-        }
-        final data = snapshot.data!;
-        if (data.rowLabels.isEmpty) {
-          return const Center(child: Text('Нет данных'));
-        }
-        return Heatmap(
-          data: data,
-          config: _buildConfig(),
-          controller: _controller,
-          loadingBuilder: (context) => const Center(child: CircularProgressIndicator()),
-        );
-      },
+    // Показываем индикатор загрузки только при первом получении данных
+    if (_isLoadingData && _cachedData == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    // Если данных нет вообще
+    if (_cachedData == null) {
+      return const Center(child: Text('Нет данных для отображения'));
+    }
+
+    // Если данные пустые
+    if (_cachedData!.rowLabels.isEmpty) {
+      return const Center(child: Text('Недостаточно данных для построения тепловой карты'));
+    }
+
+    return Heatmap(
+      data: _cachedData!,
+      config: _buildConfig(),
+      controller: _controller,
+      loadingBuilder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
     );
   }
+}
+
+/// {@template heatmap_tooltip_style}
+/// Стиль для кастомного тултипа с прогресс-баром.
+/// 
+/// Позволяет настроить цвета для положительных/отрицательных значений,
+/// фон, стили текста и ширину тултипа.
+/// {@endtemplate}
+class _HeatmapTooltipStyle {
+  /// Цвет для положительных значений (или значений ≥0).
+  final Color positiveColor;
+
+  /// Цвет для отрицательных значений.
+  final Color negativeColor;
+
+  /// Цвет фона тултипа.
+  final Color backgroundColor;
+
+  /// Стиль текста заголовка (названия строки и колонки).
+  final TextStyle labelStyle;
+
+  /// Стиль текста значения.
+  final TextStyle valueStyle;
+
+  /// Ширина тултипа в пикселях.
+  final double width;
+
+  /// {@macro heatmap_tooltip_style}
+  const _HeatmapTooltipStyle({
+    this.positiveColor = Colors.green,
+    this.negativeColor = Colors.red,
+    this.backgroundColor = Colors.white,
+    this.labelStyle = const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+    this.valueStyle = const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+    this.width = 240,
+  });
 }
