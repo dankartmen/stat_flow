@@ -93,6 +93,8 @@ class _HeatmapState extends State<Heatmap> with SingleTickerProviderStateMixin {
         _visibleRect = null;
         _lastMatrix = null;
       });
+      _previousMapper = _currentMapper;
+      _currentMapper = _createMapper(_effectiveConfig);
       _hideTooltip();
     }
 
