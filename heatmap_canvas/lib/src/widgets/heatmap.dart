@@ -313,8 +313,7 @@ class _HeatmapState extends State<Heatmap> with SingleTickerProviderStateMixin {
         cellHeight = cellHeight.clamp(0.0, 200.0);
 
         final effectiveShowValues =
-            _effectiveConfig.showValues &&
-                math.min(cellWidth, cellHeight) > 35;
+            _effectiveConfig.showValues ;
 
         final totalWidth = colCount * cellWidth + axisOffset;
         final totalHeight = rowCount * cellHeight + axisOffset;

@@ -1,6 +1,12 @@
 /// Форматирует число для отображения в ячейках тепловой карты, используя компактное представление для больших чисел и экспоненциальное представление для очень маленьких чисел.
 String formatHeatmapNumber(double value) {
   if (value == 0) return '0';
+
+  // Проверяем, является ли число практически целым
+  if ((value - value.roundToDouble()).abs() < 1e-10) {
+    return value.round().toString();
+  }
+  
   final abs = value.abs();
   if (abs < 0.001) return value.toStringAsExponential(2);
   if (abs < 1) return value.toStringAsFixed(2);

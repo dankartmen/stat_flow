@@ -161,15 +161,15 @@ class HeatmapPainter extends CustomPainter {
     final totalHeight = rowCount * cellHeight + axisOffset;
 
     // Горизонтальные линии
-    for (int i = 0; i <= rowCount; i++) {
-      final y = axisOffset + i * cellHeight;
-      canvas.drawLine(Offset(axisOffset, y), Offset(totalWidth, y), gridPaint);
-    }
-    // Вертикальные линии
-    for (int i = 0; i <= colCount; i++) {
-      final x = axisOffset + i * cellWidth;
-      canvas.drawLine(Offset(x, axisOffset), Offset(x, totalHeight), gridPaint);
-    }
+    // for (int i = 0; i <= rowCount; i++) {
+    //   final y = axisOffset + i * cellHeight;
+    //   canvas.drawLine(Offset(axisOffset, y), Offset(totalWidth, y), gridPaint);
+    // }
+    // // Вертикальные линии
+    // for (int i = 0; i <= colCount; i++) {
+    //   final x = axisOffset + i * cellWidth;
+    //   canvas.drawLine(Offset(x, axisOffset), Offset(x, totalHeight), gridPaint);
+    // }
 
     if (config.showAxisLabels) {
       final angle = _computeLabelAngle();
@@ -202,7 +202,7 @@ class HeatmapPainter extends CustomPainter {
         canvas.save();
         canvas.translate(
           axisOffset + i * cellWidth + cellWidth / 2,
-          axisOffset - 6,
+          totalHeight - axisOffset + 6,
         );
         canvas.rotate(angle);
         tp.paint(canvas, Offset(-tp.width / 2, -tp.height));
@@ -235,6 +235,29 @@ class HeatmapPainter extends CustomPainter {
     return 4;
   }
 
+  /// Вычисляет относительную яркость цвета (по стандарту WCAG)
+  double _luminance(Color color) {
+    final r = color.red / 255;
+    final g = color.green / 255;
+    final b = color.blue / 255;
+    
+    double linearize(double channel) {
+      return channel <= 0.03928 
+          ? channel / 12.92 
+          : math.pow((channel + 0.055) / 1.055, 2.4).toDouble();
+    }
+    
+    final R = linearize(r);
+    final G = linearize(g);
+    final B = linearize(b);
+    
+    return 0.2126 * R + 0.7152 * G + 0.0722 * B;
+  }
+
+  /// Возвращает контрастный цвет текста (чёрный или белый) для заданного фона.
+  Color _contrastColor(Color background) {
+    return _luminance(background) > 0.5 ? Colors.black87 : Colors.white;
+  }
 
   // Отрисовка
   @override
@@ -269,7 +292,7 @@ class HeatmapPainter extends CustomPainter {
     for (int row = startRow; row <= endRow; row++) {
       for (int col = startCol; col <= endCol; col++) {
         if (effectiveTriangleMode && col < row) continue;
-
+        if (data.values[row][col] == 0) continue;
         _paint.color = _getCachedColor(row, col);
         final rect = Rect.fromLTWH(
           axisOffset + col * cellWidth,
@@ -280,15 +303,19 @@ class HeatmapPainter extends CustomPainter {
         canvas.drawRect(rect, _paint);
 
         // Значения в ячейках
-        if (config.showValues && math.min(cellWidth, cellHeight) > 25) {
+        if (config.showValues) {
           final value = data.values[row][col];
           final formatted = config.cellValueFormatter?.call(value) ??
               formatHeatmapNumber(value);
+
+          final backgroundColor = _getCachedColor(row, col);
+          final textColor = _contrastColor(backgroundColor);
+
           final textStyle = TextStyle(
-            fontSize: math.min(cellWidth, cellHeight) * 0.3,
-            color: value.abs() > 0.5 ? Colors.white : Colors.black87,
+            fontSize: math.min(cellWidth, cellHeight) * 0.5,
+            color: textColor,
             fontWeight: FontWeight.w500,
-            shadows: value.abs() > 0.6
+            shadows: textColor == Colors.white
                 ? [const Shadow(blurRadius: 1.5, color: Colors.black54)]
                 : null,
           );

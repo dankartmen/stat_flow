@@ -15,6 +15,9 @@ enum AggregationType { count, sum, avg, min, max, median }
 /// Режим отображения в процентах
 enum PercentageMode { none, row, column, total }
 
+/// Расположение легенды
+enum LegendPosition { bottom, topRight }
+
 /// Конфигурация отображения тепловой карты (immutable)
 class HeatmapConfig {
   // --- Цвет ---
@@ -51,12 +54,14 @@ class HeatmapConfig {
   /// Если null — используется стандартный тултип.
   final Widget Function(BuildContext context, LegendTooltipInfo?)? legendTooltipBuilder;
 
-
   /// Стиль текста подписей осей
   final TextStyle? axisTextStyle;
 
   /// Угол поворота подписей столбцов в радианах (по умолчанию -0.6)
   final double axisLabelRotation;
+
+  /// Позиция легенды
+  final LegendPosition legendPosition;
 
   const HeatmapConfig({
     this.palette = HeatmapPalette.redBlue,
@@ -75,7 +80,8 @@ class HeatmapConfig {
     this.cellTooltipBuilder,
     this.legendTooltipBuilder,
     this.axisTextStyle,
-    this.axisLabelRotation = -0.6, // небольшой наклон по умолчанию
+    this.axisLabelRotation = 0,
+    this.legendPosition = LegendPosition.bottom,
   });
 
   HeatmapConfig copyWith({
@@ -95,6 +101,7 @@ class HeatmapConfig {
     Widget Function(BuildContext context, LegendTooltipInfo? value)? legendTooltipBuilder,
     TextStyle? axisTextStyle,
     double? axisLabelRotation,
+    LegendPosition? legendPosition,
   }) {
     return HeatmapConfig(
       palette: palette ?? this.palette,
@@ -113,6 +120,7 @@ class HeatmapConfig {
       legendTooltipBuilder: legendTooltipBuilder ?? this.legendTooltipBuilder,
       axisTextStyle: axisTextStyle ?? this.axisTextStyle,
       axisLabelRotation: axisLabelRotation ?? this.axisLabelRotation,
+      legendPosition: legendPosition ?? this.legendPosition,
     );
   }
 }
