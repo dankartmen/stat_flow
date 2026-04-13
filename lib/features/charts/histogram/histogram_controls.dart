@@ -30,7 +30,7 @@ class HistogramControls {
   }) {
     final numericColumns = dataset.numericColumns;
     final theme = Theme.of(context);
-    final activeColor = theme.colorScheme.primary;
+    final activeThumbColor = theme.colorScheme.primary;
 
     return [
       const SizedBox(height: 8),
@@ -103,14 +103,14 @@ class HistogramControls {
               value: state.showNormalDistributionCurve,
               onChanged: (v) => onChanged(state.copyWith(showNormalDistributionCurve: v)),
               contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-              activeColor: activeColor,
+              activeThumbColor: activeThumbColor,
             ),
             SwitchListTile(
               title: const Text('Подписи значений'),
               value: state.showDataLabels,
               onChanged: (v) => onChanged(state.copyWith(showDataLabels: v)),
               contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-              activeColor: activeColor,
+              activeThumbColor: activeThumbColor,
             ),
             const SizedBox(height: 8),
             Row(

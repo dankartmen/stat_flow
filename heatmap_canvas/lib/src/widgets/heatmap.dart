@@ -1,3 +1,4 @@
+import 'dart:developer';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -187,18 +188,14 @@ class _HeatmapState extends State<Heatmap> with SingleTickerProviderStateMixin {
     final right = bottomRightTransformed.x;
     final bottom = bottomRightTransformed.y;
 
-    final startCol = ((left - axisOffset) / cellWidth)
-        .floor()
-        .clamp(0, colCount - 1);
-    final endCol = ((right - axisOffset) / cellWidth)
-        .ceil()
-        .clamp(0, colCount - 1);
-    final startRow = ((top - axisOffset) / cellHeight)
-        .floor()
-        .clamp(0, rowCount - 1);
-    final endRow = ((bottom - axisOffset) / cellHeight)
-        .ceil()
-        .clamp(0, rowCount - 1);
+    final startCol =
+        ((left - axisOffset) / cellWidth).floor().clamp(0, colCount - 1);
+    final endCol =
+        ((right - axisOffset) / cellWidth).ceil().clamp(0, colCount - 1);
+    final startRow =
+        ((top - axisOffset) / cellHeight).floor().clamp(0, rowCount - 1);
+    final endRow =
+        ((bottom - axisOffset) / cellHeight).ceil().clamp(0, rowCount - 1);
 
     setState(() {
       _visibleRect = Rect.fromLTRB(
@@ -279,7 +276,42 @@ class _HeatmapState extends State<Heatmap> with SingleTickerProviderStateMixin {
     _tooltipEntry = null;
   }
 
-  double _getAxisOffset() => _effectiveConfig.showAxisLabels ? 40.0 : 0.0;
+  double _getAxisOffset() {
+    if (!_effectiveConfig.showAxisLabels) return 16.0;
+
+    final axisTextStyle = _effectiveConfig.axisTextStyle ??
+        const TextStyle(fontSize: 12, color: Colors.black87);
+    final rotation = _effectiveConfig.axisLabelRotation;
+
+    final maxRowLabelWidth = _displayData.rowLabels
+        .map((label) => _measureText(label, axisTextStyle).width)
+        .fold(0.0, math.max);
+
+    final maxColLabelHeight = _displayData.columnLabels
+        .map((label) => _rotatedTextSize(label, axisTextStyle, rotation).height)
+        .fold(0.0, math.max);
+
+    return math.max(maxRowLabelWidth + 16.0, maxColLabelHeight + 24.0);
+  }
+
+  Size _measureText(String text, TextStyle style) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: TextDirection.ltr,
+    )..layout(minWidth: 0, maxWidth: double.infinity);
+    return painter.size;
+  }
+
+  Size _rotatedTextSize(String text, TextStyle style, double rotation) {
+    final size = _measureText(text, style);
+    final angle = rotation.abs();
+    final cosA = math.cos(angle).abs();
+    final sinA = math.sin(angle).abs();
+    return Size(
+      size.width * cosA + size.height * sinA,
+      size.height * cosA + size.width * sinA,
+    );
+  }
 
   // Метод для сброса зума (вызывается через контроллер)
   void resetZoom() {
@@ -301,17 +333,22 @@ class _HeatmapState extends State<Heatmap> with SingleTickerProviderStateMixin {
     }
 
     final axisOffset = _getAxisOffset();
+    const outerPadding = 12.0;
+    final bottomReserve =
+        widget.config.legendPosition == LegendPosition.bottom ? 88.0 : 16.0;
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final availableWidth = constraints.maxWidth - axisOffset - 16;
-        final availableHeight = constraints.maxHeight - axisOffset - 60;
+        log('${constraints.toString()}', name: 'Heatmap');
+        final availableWidth = constraints.maxWidth - axisOffset - outerPadding;
+        final availableHeight =
+            constraints.maxHeight - axisOffset - bottomReserve;
 
         double cellWidth = availableWidth / colCount;
         double cellHeight = availableHeight / rowCount;
 
-        cellWidth = cellWidth.clamp(0.0, 200.0);
-        cellHeight = cellHeight.clamp(0.0, 200.0);
+        cellWidth = cellWidth.clamp(28.0, 200.0);
+        cellHeight = cellHeight.clamp(28.0, 200.0);
 
         final effectiveShowValues = _effectiveConfig.showValues;
 
@@ -464,18 +501,16 @@ class _HeatmapState extends State<Heatmap> with SingleTickerProviderStateMixin {
                 ),
               ),
               Positioned(
-                top: 16,
-                right: 16,
+                top: 12,
+                right: 12,
                 child: Container(
-                  width: 200,
+                  width: 220,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                    boxShadow: [
-                      BoxShadow(
-                          blurRadius: 8,
-                          color: Colors.black.withValues(alpha: 0.2))
-                    ],
+                    color: Colors.white.withValues(alpha:0.9),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.grey.shade300),
                   ),
                   child: HeatmapLegend(
                     mapper: _currentMapper,

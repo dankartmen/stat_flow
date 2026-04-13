@@ -69,8 +69,8 @@ class HeatmapPainter extends CustomPainter {
     this.visibleRect,
   });
 
-  //  Кэширование 
-  
+  //  Кэширование
+
   /// Кэш статического слоя (сетка + подписи осей).
   /// Перестраивается только при изменении матрицы или размера ячейки.
   ui.Picture? _staticLayer;
@@ -117,7 +117,7 @@ class HeatmapPainter extends CustomPainter {
     return tp;
   }
 
-  // Цвета 
+  // Цвета
 
   /// Возвращает анимированный цвет для заданного значения корреляции.
   ///
@@ -160,16 +160,28 @@ class HeatmapPainter extends CustomPainter {
     final totalWidth = colCount * cellWidth + axisOffset;
     final totalHeight = rowCount * cellHeight + axisOffset;
 
-    // Горизонтальные линии
-    // for (int i = 0; i <= rowCount; i++) {
-    //   final y = axisOffset + i * cellHeight;
-    //   canvas.drawLine(Offset(axisOffset, y), Offset(totalWidth, y), gridPaint);
-    // }
-    // // Вертикальные линии
-    // for (int i = 0; i <= colCount; i++) {
-    //   final x = axisOffset + i * cellWidth;
-    //   canvas.drawLine(Offset(x, axisOffset), Offset(x, totalHeight), gridPaint);
-    // }
+    final backgroundPaint = Paint()..color = Colors.white;
+    canvas.drawRect(
+        Rect.fromLTWH(0, 0, totalWidth, totalHeight), backgroundPaint);
+
+    final borderPaint = Paint()
+      ..color = Colors.grey.shade300
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    canvas.drawRect(
+      Rect.fromLTWH(
+          axisOffset, axisOffset, colCount * cellWidth, rowCount * cellHeight),
+      borderPaint,
+    );
+
+    for (int i = 0; i <= rowCount; i++) {
+      final y = axisOffset + i * cellHeight;
+      canvas.drawLine(Offset(axisOffset, y), Offset(totalWidth, y), gridPaint);
+    }
+    for (int i = 0; i <= colCount; i++) {
+      final x = axisOffset + i * cellWidth;
+      canvas.drawLine(Offset(x, axisOffset), Offset(x, totalHeight), gridPaint);
+    }
 
     if (config.showAxisLabels) {
       final angle = _computeLabelAngle();
@@ -237,26 +249,55 @@ class HeatmapPainter extends CustomPainter {
 
   /// Вычисляет относительную яркость цвета (по стандарту WCAG)
   double _luminance(Color color) {
-    final r = color.red / 255;
-    final g = color.green / 255;
-    final b = color.blue / 255;
-    
+    final r = color.r / 255;
+    final g = color.g / 255;
+    final b = color.b / 255;
+
     double linearize(double channel) {
-      return channel <= 0.03928 
-          ? channel / 12.92 
+      return channel <= 0.03928
+          ? channel / 12.92
           : math.pow((channel + 0.055) / 1.055, 2.4).toDouble();
     }
-    
+
     final R = linearize(r);
     final G = linearize(g);
     final B = linearize(b);
-    
+
     return 0.2126 * R + 0.7152 * G + 0.0722 * B;
   }
 
   /// Возвращает контрастный цвет текста (чёрный или белый) для заданного фона.
   Color _contrastColor(Color background) {
     return _luminance(background) > 0.5 ? Colors.black87 : Colors.white;
+  }
+
+  TextPainter _layoutCellText(
+    String text,
+    double maxWidth,
+    double maxHeight,
+    TextStyle style,
+  ) {
+    double fontSize = style.fontSize ?? 12;
+    fontSize = math.min(fontSize, math.min(maxWidth, maxHeight));
+    TextPainter tp;
+
+    while (fontSize >= 8) {
+      tp = TextPainter(
+        text: TextSpan(text: text, style: style.copyWith(fontSize: fontSize)),
+        textDirection: TextDirection.ltr,
+      )..layout(minWidth: 0, maxWidth: maxWidth);
+
+      if (tp.height <= maxHeight && tp.width <= maxWidth) {
+        return tp;
+      }
+      fontSize -= 1;
+    }
+
+    tp = TextPainter(
+      text: TextSpan(text: text, style: style.copyWith(fontSize: 8)),
+      textDirection: TextDirection.ltr,
+    )..layout(minWidth: 0, maxWidth: maxWidth);
+    return tp;
   }
 
   // Отрисовка
@@ -311,15 +352,19 @@ class HeatmapPainter extends CustomPainter {
           final backgroundColor = _getCachedColor(row, col);
           final textColor = _contrastColor(backgroundColor);
 
-          final textStyle = TextStyle(
-            fontSize: math.min(cellWidth, cellHeight) * 0.5,
-            color: textColor,
-            fontWeight: FontWeight.w500,
-            shadows: textColor == Colors.white
-                ? [const Shadow(blurRadius: 1.5, color: Colors.black54)]
-                : null,
+          final tp = _layoutCellText(
+            formatted,
+            cellWidth - 8,
+            cellHeight - 6,
+            TextStyle(
+              fontSize: math.min(cellWidth, cellHeight) * 0.35,
+              color: textColor,
+              fontWeight: FontWeight.w600,
+              shadows: textColor == Colors.white
+                  ? [const Shadow(blurRadius: 1.5, color: Colors.black54)]
+                  : null,
+            ),
           );
-          final tp = _getTextPainter(formatted, textStyle);
           tp.paint(
             canvas,
             Offset(
