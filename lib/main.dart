@@ -21,7 +21,7 @@ import 'core/providers/theme_provider.dart';
       final theme = ref.watch(currentThemeProvider);
 
       return MaterialApp(
-        showPerformanceOverlay: kDebugMode,
+        showPerformanceOverlay: false, //kDebugMode,
         title: 'StatFlow',
         localizationsDelegates: const [
           GlobalMaterialLocalizations.delegate,

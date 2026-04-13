@@ -81,7 +81,7 @@ class HeatmapConfig {
     this.legendTooltipBuilder,
     this.axisTextStyle,
     this.axisLabelRotation = 0,
-    this.legendPosition = LegendPosition.bottom,
+    this.legendPosition = LegendPosition.topRight,
   });
 
   HeatmapConfig copyWith({

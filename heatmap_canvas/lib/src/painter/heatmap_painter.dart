@@ -195,7 +195,7 @@ class HeatmapPainter extends CustomPainter {
         );
       }
 
-      // Подписи столбцов (сверху)
+      // Подписи столбцов (снизу)
       for (int i = 0; i < colCount; i += stepCols) {
         final label = _smartLabel(data.columnLabels[i]);
         final tp = _getTextPainter(label, labelStyle);

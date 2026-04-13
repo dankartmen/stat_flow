@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:vector_math/vector_math_64.dart' show Matrix4, Vector4;
 import '../color/heatmap_color_mapper.dart';
 import '../color/heatmap_palette.dart';
@@ -312,97 +313,190 @@ class _HeatmapState extends State<Heatmap> with SingleTickerProviderStateMixin {
         cellWidth = cellWidth.clamp(0.0, 200.0);
         cellHeight = cellHeight.clamp(0.0, 200.0);
 
-        final effectiveShowValues =
-            _effectiveConfig.showValues ;
+        final effectiveShowValues = _effectiveConfig.showValues;
 
         final totalWidth = colCount * cellWidth + axisOffset;
         final totalHeight = rowCount * cellHeight + axisOffset;
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: InteractiveViewer(
-                transformationController: _zoomController,
-                onInteractionUpdate: (_) => _updateVisibleRect(
-                  axisOffset: axisOffset,
-                  cellHeight: cellHeight,
-                  cellWidth: cellWidth,
-                  colCount: colCount,
-                  rowCount: rowCount,
-                ),
-                constrained: false,
-                minScale: _effectiveConfig.minScale,
-                maxScale: _effectiveConfig.maxScale,
-                boundaryMargin: const EdgeInsets.all(8),
-                child: MouseRegion(
-                  onHover: (event) {
-                    _handleHover(
-                      event.localPosition,
-                      axisOffset,
-                      cellWidth,
-                      cellHeight,
-                      rowCount,
-                      colCount,
-                    );
-                  },
-                  onExit: (_) {
-                    setState(() {
-                      _hoverRow = null;
-                      _hoverCol = null;
-                    });
-                    _hideTooltip();
-                  },
-                  child: Container(
-                    key: _heatmapKey,
-                    child: AnimatedBuilder(
-                      animation: _animController,
-                      builder: (_, __) {
-                        return CustomPaint(
-                          size: Size(totalWidth, totalHeight),
-                          painter: HeatmapPainter(
-                            data: _displayData,
-                            colorMapper: _currentMapper,
-                            previousMapper: _previousMapper,
-                            animationValue: _animController.value,
-                            cellWidth: cellWidth,
-                            cellHeight: cellHeight,
-                            config: _effectiveConfig.copyWith(
-                              showValues: effectiveShowValues,
+        if (widget.config.legendPosition == LegendPosition.bottom) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: InteractiveViewer(
+                  transformationController: _zoomController,
+                  onInteractionUpdate: (_) => _updateVisibleRect(
+                    axisOffset: axisOffset,
+                    cellHeight: cellHeight,
+                    cellWidth: cellWidth,
+                    colCount: colCount,
+                    rowCount: rowCount,
+                  ),
+                  constrained: false,
+                  minScale: _effectiveConfig.minScale,
+                  maxScale: _effectiveConfig.maxScale,
+                  boundaryMargin: const EdgeInsets.all(8),
+                  child: MouseRegion(
+                    onHover: (event) {
+                      _handleHover(
+                        event.localPosition,
+                        axisOffset,
+                        cellWidth,
+                        cellHeight,
+                        rowCount,
+                        colCount,
+                      );
+                    },
+                    onExit: (_) {
+                      setState(() {
+                        _hoverRow = null;
+                        _hoverCol = null;
+                      });
+                      _hideTooltip();
+                    },
+                    child: Container(
+                      key: _heatmapKey,
+                      child: AnimatedBuilder(
+                        animation: _animController,
+                        builder: (_, __) {
+                          return CustomPaint(
+                            size: Size(totalWidth, totalHeight),
+                            painter: HeatmapPainter(
+                              data: _displayData,
+                              colorMapper: _currentMapper,
+                              previousMapper: _previousMapper,
+                              animationValue: _animController.value,
+                              cellWidth: cellWidth,
+                              cellHeight: cellHeight,
+                              config: _effectiveConfig.copyWith(
+                                showValues: effectiveShowValues,
+                              ),
+                              axisOffset: axisOffset,
+                              hoverRow: _hoverRow,
+                              hoverCol: _hoverCol,
+                              hoverRange: _hoverRange,
+                              visibleRect: _visibleRect,
                             ),
-                            axisOffset: axisOffset,
-                            hoverRow: _hoverRow,
-                            hoverCol: _hoverCol,
-                            hoverRange: _hoverRange,
-                            visibleRect: _visibleRect,
-                          ),
-                        );
-                      },
+                          );
+                        },
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: HeatmapLegend(
-                mapper: _currentMapper,
-                colorMode: _effectiveConfig.colorMode,
-                min: _displayData.min,
-                max: _displayData.max,
-                segments: _effectiveConfig.segments,
-                onHover: _onLegendHover,
-                cellTooltipBuilder: _effectiveConfig.legendTooltipBuilder,
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: HeatmapLegend(
+                  mapper: _currentMapper,
+                  colorMode: _effectiveConfig.colorMode,
+                  min: _displayData.min,
+                  max: _displayData.max,
+                  segments: _effectiveConfig.segments,
+                  onHover: _onLegendHover,
+                  legendTooltipBuilder: _effectiveConfig.legendTooltipBuilder,
+                ),
               ),
-            ),
-          ],
-        );
+            ],
+          );
+        } else {
+          return Stack(
+            children: [
+              SizedBox.expand(
+                child: InteractiveViewer(
+                  transformationController: _zoomController,
+                  onInteractionUpdate: (_) => _updateVisibleRect(
+                    axisOffset: axisOffset,
+                    cellHeight: cellHeight,
+                    cellWidth: cellWidth,
+                    colCount: colCount,
+                    rowCount: rowCount,
+                  ),
+                  constrained: false,
+                  minScale: _effectiveConfig.minScale,
+                  maxScale: _effectiveConfig.maxScale,
+                  boundaryMargin: const EdgeInsets.all(8),
+                  child: MouseRegion(
+                    onHover: (event) {
+                      _handleHover(
+                        event.localPosition,
+                        axisOffset,
+                        cellWidth,
+                        cellHeight,
+                        rowCount,
+                        colCount,
+                      );
+                    },
+                    onExit: (_) {
+                      setState(() {
+                        _hoverRow = null;
+                        _hoverCol = null;
+                      });
+                      _hideTooltip();
+                    },
+                    child: Container(
+                      key: _heatmapKey,
+                      child: AnimatedBuilder(
+                        animation: _animController,
+                        builder: (_, __) {
+                          return CustomPaint(
+                            size: Size(totalWidth, totalHeight),
+                            painter: HeatmapPainter(
+                              data: _displayData,
+                              colorMapper: _currentMapper,
+                              previousMapper: _previousMapper,
+                              animationValue: _animController.value,
+                              cellWidth: cellWidth,
+                              cellHeight: cellHeight,
+                              config: _effectiveConfig.copyWith(
+                                showValues: effectiveShowValues,
+                              ),
+                              axisOffset: axisOffset,
+                              hoverRow: _hoverRow,
+                              hoverCol: _hoverCol,
+                              hoverRange: _hoverRange,
+                              visibleRect: _visibleRect,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 16,
+                right: 16,
+                child: Container(
+                  width: 200,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    boxShadow: [
+                      BoxShadow(
+                          blurRadius: 8,
+                          color: Colors.black.withValues(alpha: 0.2))
+                    ],
+                  ),
+                  child: HeatmapLegend(
+                    mapper: _currentMapper,
+                    colorMode: _effectiveConfig.colorMode,
+                    min: _displayData.min,
+                    max: _displayData.max,
+                    segments: _effectiveConfig.segments,
+                    onHover: _onLegendHover,
+                    legendTooltipBuilder: _effectiveConfig.legendTooltipBuilder,
+                  ),
+                ),
+              ),
+            ],
+          );
+        }
       },
     );
   }
 }
 
-class _TooltipPositioner extends StatelessWidget {
+class _TooltipPositioner extends StatefulWidget {
   final GlobalKey heatmapKey;
   final int row;
   final int col;
@@ -422,31 +516,141 @@ class _TooltipPositioner extends StatelessWidget {
   });
 
   @override
+  State<_TooltipPositioner> createState() => _TooltipPositionerState();
+}
+
+class _TooltipPositionerState extends State<_TooltipPositioner> {
+  Size? _tooltipSize;
+
+  void _updateTooltipSize(Size size) {
+    if (_tooltipSize != size) {
+      setState(() {
+        _tooltipSize = size;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final renderBox =
-        heatmapKey.currentContext?.findRenderObject() as RenderBox?;
+        widget.heatmapKey.currentContext?.findRenderObject() as RenderBox?;
     if (renderBox == null) return const SizedBox.shrink();
 
     final heatmapSize = renderBox.size;
     final heatmapOffset = renderBox.localToGlobal(Offset.zero);
 
-    final cellWidth = (heatmapSize.width - axisOffset) / colCount;
-    final cellHeight = (heatmapSize.height - axisOffset) / rowCount;
+    final cellWidth = (heatmapSize.width - widget.axisOffset) / widget.colCount;
+    final cellHeight =
+        (heatmapSize.height - widget.axisOffset) / widget.rowCount;
 
-    final cellLeft = heatmapOffset.dx + axisOffset + col * cellWidth;
-    final cellTop = heatmapOffset.dy + axisOffset + row * cellHeight;
+    final cellLeft =
+        heatmapOffset.dx + widget.axisOffset + widget.col * cellWidth;
+    final cellTop =
+        heatmapOffset.dy + widget.axisOffset + widget.row * cellHeight;
+    final cellCenter =
+        Offset(cellLeft + cellWidth / 2, cellTop + cellHeight / 2);
+
+    final heatmapRect = Rect.fromLTWH(
+      heatmapOffset.dx,
+      heatmapOffset.dy,
+      heatmapSize.width,
+      heatmapSize.height,
+    );
+    final margin = 8.0;
+    final tooltipSize = _tooltipSize ?? const Size(160, 64);
+
+    final cellRect = Rect.fromLTWH(cellLeft, cellTop, cellWidth, cellHeight);
+    final availableRight = heatmapRect.right - cellRect.right - margin;
+    final availableLeft = cellRect.left - heatmapRect.left - margin;
+    final availableBelow = heatmapRect.bottom - cellRect.bottom - margin;
+    final availableAbove = cellRect.top - heatmapRect.top - margin;
+
+    Offset target;
+    if (availableRight >= tooltipSize.width) {
+      target = Offset(
+          cellRect.right + margin, cellCenter.dy - tooltipSize.height / 2);
+    } else if (availableLeft >= tooltipSize.width) {
+      target = Offset(cellRect.left - tooltipSize.width - margin,
+          cellCenter.dy - tooltipSize.height / 2);
+    } else if (availableBelow >= tooltipSize.height) {
+      target = Offset(
+          cellCenter.dx - tooltipSize.width / 2, cellRect.bottom + margin);
+    } else if (availableAbove >= tooltipSize.height) {
+      target = Offset(cellCenter.dx - tooltipSize.width / 2,
+          cellRect.top - tooltipSize.height - margin);
+    } else {
+      final fallbackLeft = (cellCenter.dx - tooltipSize.width / 2).clamp(
+          heatmapRect.left + margin,
+          heatmapRect.right - tooltipSize.width - margin);
+      final fallbackTop = (cellCenter.dy - tooltipSize.height / 2).clamp(
+          heatmapRect.top + margin,
+          heatmapRect.bottom - tooltipSize.height - margin);
+      target = Offset(fallbackLeft, fallbackTop);
+    }
+
+    final left = target.dx.clamp(
+      heatmapRect.left + margin,
+      heatmapRect.right - tooltipSize.width - margin,
+    );
+    final top = target.dy.clamp(
+      heatmapRect.top + margin,
+      heatmapRect.bottom - tooltipSize.height - margin,
+    );
 
     return Positioned(
-      left: cellLeft + cellWidth + 8,
-      top: cellTop + cellHeight / 2,
-      child: FractionalTranslation(
-        translation: const Offset(0, -0.5),
-        child: Material(
-          color: Colors.transparent,
-          child: child,
+      left: left,
+      top: top,
+      child: IgnorePointer(
+        ignoring: true,
+        child: _MeasureSize(
+          onChange: _updateTooltipSize,
+          child: Material(
+            color: Colors.transparent,
+            child: widget.child,
+          ),
         ),
       ),
     );
+  }
+}
+
+class _MeasureSize extends SingleChildRenderObjectWidget {
+  final ValueChanged<Size> onChange;
+
+  const _MeasureSize({
+    required Widget child,
+    required this.onChange,
+  }) : super(child: child);
+
+  @override
+  RenderObject createRenderObject(BuildContext context) {
+    return _MeasureSizeRenderObject(onChange);
+  }
+
+  @override
+  void updateRenderObject(
+      BuildContext context, covariant _MeasureSizeRenderObject renderObject) {
+    renderObject.onChange = onChange;
+  }
+}
+
+class _MeasureSizeRenderObject extends RenderProxyBox {
+  _MeasureSizeRenderObject(this.onChange);
+
+  ValueChanged<Size> onChange;
+  Size? _lastSize;
+
+  @override
+  void performLayout() {
+    super.performLayout();
+    final size = child?.size ?? Size.zero;
+    if (_lastSize != size) {
+      _lastSize = size;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (size != _lastSize) return;
+        onChange(size);
+      });
+    }
   }
 }
 

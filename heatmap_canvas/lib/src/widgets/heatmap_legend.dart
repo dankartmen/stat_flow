@@ -36,13 +36,13 @@ class HeatmapLegend extends StatefulWidget {
   /// Колбек для передачи информации о наведении на легенду
   final ValueChanged<HoverRange?> onHover;
 
-  final Widget Function(BuildContext context, LegendTooltipInfo? value)? cellTooltipBuilder;
+  final Widget Function(BuildContext context, LegendTooltipInfo? value)? legendTooltipBuilder;
   
   /// {@macro heatmap_legend}
   const HeatmapLegend({
     super.key,
     this.segments = 20,
-    this.cellTooltipBuilder,
+    this.legendTooltipBuilder,
     required this.mapper,
     required this.min,
     required this.max,    
@@ -94,14 +94,14 @@ class _HeatmapLegendState extends State<HeatmapLegend> {
   /// Позиция тултипа рассчитывается так, чтобы он не выходил за пределы экрана
   /// Тултип автоматически обновляется при перемещении мыши по легенде
   void _createTooltipEntry() {
-    if (widget.cellTooltipBuilder != null) {
+    if (widget.legendTooltipBuilder != null) {
       _tooltipEntry = OverlayEntry(
         builder: (context) => Positioned(
           left: _tooltipX,
           top: _tooltipY,
           child: Material(
             color: Colors.transparent,
-            child: widget.cellTooltipBuilder!(context, _currentInfo),
+            child: widget.legendTooltipBuilder!(context, _currentInfo),
           ),
         ),
       );
