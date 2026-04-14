@@ -33,11 +33,12 @@ class HeatmapLegend extends StatefulWidget {
   /// Количество сегментов для построения градиента
   final int segments;
 
-  /// Колбек для передачи информации о наведении на легенду
+  /// Колбек, вызываемый при наведении на шкалу. Передаёт [HoverRange] или null.
   final ValueChanged<HoverRange?> onHover;
 
+  /// Пользовательский билдер тултипа. Если не задан, используется стандартный.
   final Widget Function(BuildContext context, LegendTooltipInfo? value)? legendTooltipBuilder;
-  
+
   /// {@macro heatmap_legend}
   const HeatmapLegend({
     super.key,
@@ -45,7 +46,7 @@ class HeatmapLegend extends StatefulWidget {
     this.legendTooltipBuilder,
     required this.mapper,
     required this.min,
-    required this.max,    
+    required this.max,
     required this.onHover,
     required this.colorMode,
   });
@@ -78,30 +79,27 @@ class _HeatmapLegendState extends State<HeatmapLegend> {
   bool _showMarker = false;
 
   @override
-  void initState() {
-    super.initState();
-  }
-
-  @override
   void dispose() {
     _tooltipEntry?.remove();
     super.dispose();
   }
 
-
-  /// Создаёт оверлей для отображения тултипа при наведении на легенду
-  /// Тултип показывает диапазон значений для дискретного режима или точное значение для градиентного режима
-  /// Позиция тултипа рассчитывается так, чтобы он не выходил за пределы экрана
-  /// Тултип автоматически обновляется при перемещении мыши по легенде
+  /// Создаёт оверлейный тултип, используя либо кастомный билдер, либо стандартный.
   void _createTooltipEntry() {
+    _tooltipEntry?.remove();
+    _tooltipEntry = null;
+
     if (widget.legendTooltipBuilder != null) {
       _tooltipEntry = OverlayEntry(
         builder: (context) => Positioned(
           left: _tooltipX,
           top: _tooltipY,
-          child: Material(
-            color: Colors.transparent,
-            child: widget.legendTooltipBuilder!(context, _currentInfo),
+          child: IgnorePointer(
+            ignoring: true,
+            child: Material(
+              color: Colors.transparent,
+              child: widget.legendTooltipBuilder!(context, _currentInfo),
+            ),
           ),
         ),
       );
@@ -111,17 +109,20 @@ class _HeatmapLegendState extends State<HeatmapLegend> {
         builder: (context) => Positioned(
           left: _tooltipX,
           top: _tooltipY,
-          child: Material(
-            color: Colors.transparent,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.black87,
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                _tooltipText(),
-                style: const TextStyle(color: Colors.white, fontSize: 12),
+          child: IgnorePointer(
+            ignoring: true,
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black87,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  _tooltipText(),
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                ),
               ),
             ),
           ),
@@ -130,7 +131,7 @@ class _HeatmapLegendState extends State<HeatmapLegend> {
     }
   }
 
-  /// Генерирует текст для тултипа в зависимости от текущего значения и режима раскраски
+  /// Возвращает текст для стандартного тултипа в зависимости от режима.
   String _tooltipText() {
     if (_currentValue == null) return '';
     if (widget.colorMode == HeatmapColorMode.discrete) {
@@ -144,7 +145,7 @@ class _HeatmapLegendState extends State<HeatmapLegend> {
     }
   }
 
-  /// Обновляет позицию и содержимое тултипа при перемещении мыши по легенде
+  /// Обновляет позицию тултипа и содержимое при движении мыши.
   void _updateTooltip(Offset position, RenderBox renderBox) {
     // Преобразуем глобальную позицию мыши в локальную относительно легенды
     final local = renderBox.globalToLocal(position);
@@ -182,7 +183,7 @@ class _HeatmapLegendState extends State<HeatmapLegend> {
       segmentIndex: segIndex,
       colorMode: widget.colorMode,
     );
-    
+
     // Рассчитываем позицию тултипа так, чтобы он не выходил за пределы экрана
     const barHeight = 16.0;
     const spacing = 0.0;
@@ -202,10 +203,8 @@ class _HeatmapLegendState extends State<HeatmapLegend> {
     _tooltipX = tooltipLeft;
     _tooltipY = tooltipTop;
     _tooltipEntry?.markNeedsBuild();
-    setState(() {
-    });
+    setState(() {});
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -240,8 +239,7 @@ class _HeatmapLegendState extends State<HeatmapLegend> {
                   _tooltipEntry = null;
                   _showMarker = false;
                   widget.onHover(null);
-                  setState(() {
-                  });
+                  setState(() {});
                 },
                 child: Stack(
                   clipBehavior: Clip.none,
@@ -261,7 +259,7 @@ class _HeatmapLegendState extends State<HeatmapLegend> {
                     ),
                     if (_showMarker)
                       Positioned(
-                        left: _markerX - 6, // центрируем маркер
+                        left: _markerX - 6,
                         top: 2,
                         child: Container(
                           width: 12,
@@ -280,7 +278,7 @@ class _HeatmapLegendState extends State<HeatmapLegend> {
                           ),
                         ),
                       ),
-                  ]
+                  ],
                 ),
               ),
               const SizedBox(height: 6),

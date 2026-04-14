@@ -42,6 +42,9 @@ class HeatmapPainter extends CustomPainter {
   /// Смещение от края для подписей осей (вычисляется снаружи)
   final double axisOffset;
 
+  /// Дополнительное пространство снизу для подписи столбцов
+  final double bottomLabelOffset;
+
   /// Индекс строки под курсором (для подсветки)
   final int? hoverRow;
 
@@ -63,6 +66,7 @@ class HeatmapPainter extends CustomPainter {
     required this.cellHeight,
     required this.config,
     required this.axisOffset,
+    required this.bottomLabelOffset,
     this.hoverRow,
     this.hoverCol,
     this.hoverRange,
@@ -98,7 +102,7 @@ class HeatmapPainter extends CustomPainter {
   /// Генерирует ключ для кэша статического слоя.
   String _staticLayerKey() =>
       '${data.rowLabels.length}_${data.columnLabels.length}_'
-      '${cellWidth}_${cellHeight}_${axisOffset}_'
+      '${cellWidth}_${cellHeight}_${axisOffset}_${bottomLabelOffset}_'
       '${config.showAxisLabels}_${config.axisTextStyle}_${config.axisLabelRotation}';
 
   /// Получает или создает TextPainter для заданного текста и стиля.
@@ -158,7 +162,7 @@ class HeatmapPainter extends CustomPainter {
       ..style = PaintingStyle.stroke;
 
     final totalWidth = colCount * cellWidth + axisOffset;
-    final totalHeight = rowCount * cellHeight + axisOffset;
+    final totalHeight = rowCount * cellHeight + axisOffset + bottomLabelOffset;
 
     final backgroundPaint = Paint()..color = Colors.white;
     canvas.drawRect(
@@ -190,18 +194,22 @@ class HeatmapPainter extends CustomPainter {
 
       final labelStyle = config.axisTextStyle ??
           TextStyle(
-            fontSize: math.min(cellHeight, cellWidth) * 0.25,
+            fontSize: math.min(14.0, math.max(10.0, math.min(cellHeight, cellWidth) * 0.25)),
             color: Colors.black87,
           );
 
       // Подписи строк (слева)
       for (int i = 0; i < rowCount; i += stepRows) {
-        final label = _smartLabel(data.rowLabels[i]);
-        final tp = _getTextPainter(label, labelStyle);
+        final rowLabel = _truncateText(
+        data.rowLabels[i],
+        labelStyle,
+        axisOffset - 12,
+      );
+      final tp = _getTextPainter(rowLabel, labelStyle);
         tp.paint(
           canvas,
           Offset(
-            axisOffset - tp.width - 4,
+            axisOffset - tp.width - 8,
             axisOffset + i * cellHeight + cellHeight / 2 - tp.height / 2,
           ),
         );
@@ -209,20 +217,51 @@ class HeatmapPainter extends CustomPainter {
 
       // Подписи столбцов (снизу)
       for (int i = 0; i < colCount; i += stepCols) {
-        final label = _smartLabel(data.columnLabels[i]);
+        final label = _truncateText(
+          data.columnLabels[i],
+          labelStyle,
+          cellWidth * 0.9,
+        );
         final tp = _getTextPainter(label, labelStyle);
         canvas.save();
         canvas.translate(
           axisOffset + i * cellWidth + cellWidth / 2,
-          totalHeight - axisOffset + 6,
+          axisOffset + rowCount * cellHeight + 8,
         );
         canvas.rotate(angle);
-        tp.paint(canvas, Offset(-tp.width / 2, -tp.height));
+        tp.paint(canvas, Offset(-tp.width / 2, 0));
         canvas.restore();
       }
     }
 
     return recorder.endRecording();
+  }
+
+  String _truncateText(String text, TextStyle style, double maxWidth) {
+    final fullWidth = _measureText(text, style).width;
+    if (fullWidth <= maxWidth) return text;
+
+    var low = 0;
+    var high = text.length;
+    while (low < high) {
+      final mid = ((low + high + 1) / 2).floor();
+      final candidate = '${text.substring(0, mid)}…';
+      if (_measureText(candidate, style).width <= maxWidth) {
+        low = mid;
+      } else {
+        high = mid - 1;
+      }
+    }
+    if (low <= 0) return '…';
+    return '${text.substring(0, low)}…';
+  }
+
+  Size _measureText(String text, TextStyle style) {
+    final tp = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: TextDirection.ltr,
+    )..layout(minWidth: 0, maxWidth: double.infinity);
+    return tp.size;
   }
 
   // Умное сокращение длинных названий

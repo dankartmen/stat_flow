@@ -12,6 +12,17 @@ import '../model/hover_range.dart';
 import '../painter/heatmap_painter.dart';
 import 'heatmap_legend.dart';
 
+/// {@template heatmap_canvas._axis_metrics}
+/// Вспомогательная структура для хранения рассчитанных отступов осей.
+/// {@endtemplate}
+class _AxisMetrics {
+  final double offset;
+  final double bottomSpace;
+
+  const _AxisMetrics({required this.offset, required this.bottomSpace});
+}
+
+/// {@template heatmap_canvas.heatmap}
 /// Интерактивная тепловая карта с поддержкой масштабирования, анимации и кастомизации.
 ///
 /// Принимает подготовленные данные [data] и конфигурацию [config].
@@ -20,6 +31,9 @@ import 'heatmap_legend.dart';
 /// - Подсветку ячеек при наведении мыши
 /// - Плавную анимацию при изменении цветовой схемы
 /// - Легенду под картой
+/// - Автоматическое усечение подписей осей
+/// - Умное позиционирование тултипов
+/// {@endtemplate}
 class Heatmap extends StatefulWidget {
   /// Данные для отображения (обязательно).
   final HeatmapData data;
@@ -36,6 +50,7 @@ class Heatmap extends StatefulWidget {
   /// Виджет, отображаемый при ошибке.
   final WidgetBuilder? errorBuilder;
 
+  /// {@macro heatmap_canvas.heatmap}
   const Heatmap({
     super.key,
     required this.data,
@@ -49,6 +64,7 @@ class Heatmap extends StatefulWidget {
   State<Heatmap> createState() => _HeatmapState();
 }
 
+/// Состояние виджета [Heatmap].
 class _HeatmapState extends State<Heatmap> with SingleTickerProviderStateMixin {
   late HeatmapData _displayData;
   late HeatmapConfig _effectiveConfig;
@@ -59,6 +75,7 @@ class _HeatmapState extends State<Heatmap> with SingleTickerProviderStateMixin {
   final TransformationController _zoomController = TransformationController();
   Matrix4? _lastMatrix;
   Rect? _visibleRect;
+  double? _lastAxisOffset;
 
   int? _hoverRow;
   int? _hoverCol;
@@ -142,6 +159,7 @@ class _HeatmapState extends State<Heatmap> with SingleTickerProviderStateMixin {
     super.dispose();
   }
 
+  /// Создаёт маппер цветов на основе текущей конфигурации и диапазона данных.
   HeatmapColorMapper _createMapper(HeatmapConfig cfg) {
     final paletteColors = HeatmapPaletteFactory.baseColors(cfg.palette);
     final min = _displayData.min;
@@ -163,6 +181,7 @@ class _HeatmapState extends State<Heatmap> with SingleTickerProviderStateMixin {
     }
   }
 
+  /// Обновляет видимую область матрицы на основе текущей трансформации InteractiveViewer.
   void _updateVisibleRect({
     required double axisOffset,
     required double cellWidth,
@@ -207,6 +226,7 @@ class _HeatmapState extends State<Heatmap> with SingleTickerProviderStateMixin {
     });
   }
 
+  /// Обрабатывает наведение мыши на сетку тепловой карты.
   void _handleHover(
     Offset localPosition,
     double axisOffset,
@@ -223,6 +243,7 @@ class _HeatmapState extends State<Heatmap> with SingleTickerProviderStateMixin {
         setState(() {
           _hoverRow = row;
           _hoverCol = col;
+          _lastAxisOffset = axisOffset;
         });
         _showTooltip();
       }
@@ -244,6 +265,7 @@ class _HeatmapState extends State<Heatmap> with SingleTickerProviderStateMixin {
   void _showTooltip() {
     if (_effectiveConfig.cellTooltipBuilder == null) return;
     if (_hoverRow == null || _hoverCol == null) return;
+    if (_lastAxisOffset == null) return;
 
     _hideTooltip();
 
@@ -262,7 +284,7 @@ class _HeatmapState extends State<Heatmap> with SingleTickerProviderStateMixin {
           col: _hoverCol!,
           rowCount: _displayData.rowLabels.length,
           colCount: _displayData.columnLabels.length,
-          axisOffset: _getAxisOffset(),
+          axisOffset: _lastAxisOffset!,
           child: _effectiveConfig.cellTooltipBuilder!(context, cell),
         );
       },
@@ -276,22 +298,107 @@ class _HeatmapState extends State<Heatmap> with SingleTickerProviderStateMixin {
     _tooltipEntry = null;
   }
 
-  double _getAxisOffset() {
-    if (!_effectiveConfig.showAxisLabels) return 16.0;
+  TextStyle _axisTextStyle(double cellWidth, double cellHeight) {
+    if (_effectiveConfig.axisTextStyle != null) {
+      return _effectiveConfig.axisTextStyle!;
+    }
 
-    final axisTextStyle = _effectiveConfig.axisTextStyle ??
-        const TextStyle(fontSize: 12, color: Colors.black87);
-    final rotation = _effectiveConfig.axisLabelRotation;
+    final baseSize = math.min(cellWidth, cellHeight) * 0.25;
+    return TextStyle(
+      fontSize: math.min(14.0, math.max(10.0, baseSize)),
+      color: Colors.black87,
+    );
+  }
 
-    final maxRowLabelWidth = _displayData.rowLabels
-        .map((label) => _measureText(label, axisTextStyle).width)
-        .fold(0.0, math.max);
+  /// Вычисляет оптимальные отступы для подписей осей с учётом максимальной длины меток.
+  _AxisMetrics _computeAxisMetrics(
+    BoxConstraints constraints,
+    int rowCount,
+    int colCount,
+  ) {
+    if (!_effectiveConfig.showAxisLabels) {
+      return const _AxisMetrics(offset: 16.0, bottomSpace: 0.0);
+    }
 
-    final maxColLabelHeight = _displayData.columnLabels
-        .map((label) => _rotatedTextSize(label, axisTextStyle, rotation).height)
-        .fold(0.0, math.max);
+    const outerPadding = 12.0;
+    final bottomReserve = widget.config.legendPosition == LegendPosition.bottom
+        ? 88.0
+        : 16.0;
 
-    return math.max(maxRowLabelWidth + 16.0, maxColLabelHeight + 24.0);
+    double axisOffset = 48.0;
+    double bottomSpace = 24.0;
+    for (int i = 0; i < 4; i++) {
+      final availableWidth =
+          (constraints.maxWidth - axisOffset - outerPadding).clamp(0.0, double.infinity);
+      final availableHeight =
+          (constraints.maxHeight - axisOffset - bottomReserve - bottomSpace)
+              .clamp(0.0, double.infinity);
+
+      final cellWidth = colCount > 0
+          ? (availableWidth / colCount).clamp(28.0, 200.0)
+          : 28.0;
+      final cellHeight = rowCount > 0
+          ? (availableHeight / rowCount).clamp(28.0, 200.0)
+          : 28.0;
+
+      final textStyle = _axisTextStyle(cellWidth, cellHeight);
+      final maxRowLabelWidth = _displayData.rowLabels
+          .map((label) => _measureText(_shortenRowLabel(label), textStyle).width)
+          .fold(0.0, math.max);
+      final maxColLabelHeight = _displayData.columnLabels
+          .map((label) => _rotatedTextSize(
+                _shortenColumnLabel(label, textStyle, cellWidth),
+                textStyle,
+                _effectiveConfig.axisLabelRotation,
+              ).height)
+          .fold(0.0, math.max);
+
+      final newOffset = math.max(48.0, maxRowLabelWidth + 16.0);
+      final newBottomSpace = math.max(24.0, maxColLabelHeight + 12.0);
+
+      if ((axisOffset - newOffset).abs() < 1.0 &&
+          (bottomSpace - newBottomSpace).abs() < 1.0) {
+        axisOffset = newOffset;
+        bottomSpace = newBottomSpace;
+        break;
+      }
+      axisOffset = newOffset;
+      bottomSpace = newBottomSpace;
+    }
+    return _AxisMetrics(offset: axisOffset, bottomSpace: bottomSpace);
+  }
+
+  String _shortenRowLabel(String label) {
+    if (label.length <= 20) return label;
+    return '${label.substring(0, 17)}…';
+  }
+
+  String _truncateText(String text, TextStyle style, double maxWidth) {
+    final fullWidth = _measureText(text, style).width;
+    if (fullWidth <= maxWidth) return text;
+
+    var low = 0;
+    var high = text.length;
+    while (low < high) {
+      final mid = ((low + high + 1) / 2).floor();
+      final candidate = '${text.substring(0, mid)}…';
+      if (_measureText(candidate, style).width <= maxWidth) {
+        low = mid;
+      } else {
+        high = mid - 1;
+      }
+    }
+    if (low <= 0) return '…';
+    return '${text.substring(0, low)}…';
+  }
+
+  String _shortenColumnLabel(
+    String label,
+    TextStyle style,
+    double cellWidth,
+  ) {
+    if (label.length <= 20) return _truncateText(label, style, cellWidth * 0.9);
+    return _truncateText(label, style, cellWidth * 0.9);
   }
 
   Size _measureText(String text, TextStyle style) {
@@ -332,28 +439,28 @@ class _HeatmapState extends State<Heatmap> with SingleTickerProviderStateMixin {
       );
     }
 
-    final axisOffset = _getAxisOffset();
     const outerPadding = 12.0;
     final bottomReserve =
         widget.config.legendPosition == LegendPosition.bottom ? 88.0 : 16.0;
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        log('${constraints.toString()}', name: 'Heatmap');
-        final availableWidth = constraints.maxWidth - axisOffset - outerPadding;
+        final axisMetrics = _computeAxisMetrics(constraints, rowCount, colCount);
+        final axisOffset = axisMetrics.offset;
+        final bottomLabelSpace = axisMetrics.bottomSpace;
+        final availableWidth =
+            (constraints.maxWidth - axisOffset - outerPadding).clamp(0.0, double.infinity);
         final availableHeight =
-            constraints.maxHeight - axisOffset - bottomReserve;
+            (constraints.maxHeight - axisOffset - bottomReserve - bottomLabelSpace)
+                .clamp(0.0, double.infinity);
 
-        double cellWidth = availableWidth / colCount;
-        double cellHeight = availableHeight / rowCount;
-
-        cellWidth = cellWidth.clamp(28.0, 200.0);
-        cellHeight = cellHeight.clamp(28.0, 200.0);
+        double cellWidth = colCount > 0 ? (availableWidth / colCount).clamp(28.0, 200.0) : 28.0;
+        double cellHeight = rowCount > 0 ? (availableHeight / rowCount).clamp(28.0, 200.0) : 28.0;
 
         final effectiveShowValues = _effectiveConfig.showValues;
 
         final totalWidth = colCount * cellWidth + axisOffset;
-        final totalHeight = rowCount * cellHeight + axisOffset;
+        final totalHeight = rowCount * cellHeight + axisOffset + bottomLabelSpace;
 
         if (widget.config.legendPosition == LegendPosition.bottom) {
           return Column(
@@ -409,6 +516,7 @@ class _HeatmapState extends State<Heatmap> with SingleTickerProviderStateMixin {
                                 showValues: effectiveShowValues,
                               ),
                               axisOffset: axisOffset,
+                              bottomLabelOffset: bottomLabelSpace,
                               hoverRow: _hoverRow,
                               hoverCol: _hoverCol,
                               hoverRange: _hoverRange,
@@ -488,6 +596,7 @@ class _HeatmapState extends State<Heatmap> with SingleTickerProviderStateMixin {
                                 showValues: effectiveShowValues,
                               ),
                               axisOffset: axisOffset,
+                              bottomLabelOffset: bottomLabelSpace,
                               hoverRow: _hoverRow,
                               hoverCol: _hoverCol,
                               hoverRange: _hoverRange,
@@ -503,15 +612,8 @@ class _HeatmapState extends State<Heatmap> with SingleTickerProviderStateMixin {
               Positioned(
                 top: 12,
                 right: 12,
-                child: Container(
+                child: SizedBox(
                   width: 220,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha:0.9),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.grey.shade300),
-                  ),
                   child: HeatmapLegend(
                     mapper: _currentMapper,
                     colorMode: _effectiveConfig.colorMode,
@@ -531,6 +633,7 @@ class _HeatmapState extends State<Heatmap> with SingleTickerProviderStateMixin {
   }
 }
 
+/// Виджет для умного позиционирования тултипа относительно ячейки.
 class _TooltipPositioner extends StatefulWidget {
   final GlobalKey heatmapKey;
   final int row;
@@ -649,6 +752,7 @@ class _TooltipPositionerState extends State<_TooltipPositioner> {
   }
 }
 
+/// Виджет, измеряющий размер своего потомка и сообщающий об изменениях.
 class _MeasureSize extends SingleChildRenderObjectWidget {
   final ValueChanged<Size> onChange;
 
@@ -689,7 +793,11 @@ class _MeasureSizeRenderObject extends RenderProxyBox {
   }
 }
 
+/// {@template heatmap_canvas.heatmap_controller}
 /// Контроллер для внешнего управления тепловой картой.
+/// 
+/// Позволяет программно сбрасывать масштаб и панорамирование.
+/// {@endtemplate}
 class HeatmapController {
   _HeatmapState? _state;
 
