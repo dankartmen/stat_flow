@@ -145,22 +145,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.7.12"
-  draggable_overlay_window:
-    dependency: "direct main"
-    description:
-      name: draggable_overlay_window
-      sha256: e8b1934e736e54e5c5a3bcce1af722ae7eaff3755f6a28b8a28946d2bd36b036
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.0"
-  draggable_widget:
-    dependency: "direct main"
-    description:
-      name: draggable_widget
-      sha256: d7f6b1eb9cb79b724b02dc2ac699f82d1ab20b99920b8b1f25812054d72ca803
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.0.0"
   dropdown_button2:
     dependency: "direct main"
     description:
@@ -169,6 +153,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.0.0"
+  equatable:
+    dependency: "direct main"
+    description:
+      name: equatable
+      sha256: "3e0141505477fd8ad55d6eb4e7776d3fe8430be8e497ccb1521370c3f21a3e2b"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.0.8"
   expandable:
     dependency: "direct main"
     description:
@@ -215,13 +207,13 @@ packages:
     source: sdk
     version: "0.0.0"
   flutter_lints:
-    dependency: "direct dev"
+    dependency: "direct main"
     description:
       name: flutter_lints
-      sha256: "5398f14efa795ffb7a33e9b6a08798b26a180edac4ad7db3f231e40f82ce11e1"
+      sha256: "3105dc8492f6183fb076ccf1f351ac3d60564bff92e20bfc4af9cc1651f4e7e1"
       url: "https://pub.dev"
     source: hosted
-    version: "5.0.0"
+    version: "6.0.0"
   flutter_localizations:
     dependency: "direct main"
     description: flutter
@@ -360,10 +352,10 @@ packages:
     dependency: transitive
     description:
       name: lints
-      sha256: c35bb79562d980e9a453fc715854e1ed39e24e7d0297a880ef54e17f9874a9d7
+      sha256: "12f842a479589fea194fe5c5a3095abc7be0c1f2ddfa9a0e76aed1dbd26a87df"
       url: "https://pub.dev"
     source: hosted
-    version: "5.1.1"
+    version: "6.1.0"
   logging:
     dependency: transitive
     description:

@@ -4,9 +4,12 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import '../color/heatmap_color_mapper.dart';
+import '../color/heatmap_palette.dart';
 import '../model/heatmap_config.dart';
 import '../model/heatmap_data.dart';
 import '../model/hover_range.dart';
+import '../model/paint_holder.dart';
+import '../model/touch_data.dart';
 import '../utils/number_formatter.dart';
 
 /// Кастомный рисовальщик для отрисовки тепловой карты.
@@ -18,17 +21,7 @@ import '../utils/number_formatter.dart';
 /// - Подсветку ячейки при наведении и показ тултипа
 /// - Кэширование статического слоя (сетка и подписи) для оптимизации
 class HeatmapPainter extends CustomPainter {
-  /// Данные для отображения
-  final HeatmapData data;
-
-  /// Текущий маппер цветов
-  final HeatmapColorMapper colorMapper;
-
-  /// Предыдущий маппер (для анимации перехода)
-  final HeatmapColorMapper? previousMapper;
-
-  /// Значение анимации перехода (0..1)
-  final double animationValue;
+  final HeatmapPaintHolder holder;
 
   /// Ширина ячейки в пикселях
   final double cellWidth;
@@ -36,8 +29,6 @@ class HeatmapPainter extends CustomPainter {
   /// Высота ячейки в пикселях
   final double cellHeight;
 
-  /// Конфигурация отображения
-  final HeatmapConfig config;
 
   /// Смещение от края для подписей осей (вычисляется снаружи)
   final double axisOffset;
@@ -54,33 +45,33 @@ class HeatmapPainter extends CustomPainter {
   /// Информация о наведении на легенду
   final HoverRange? hoverRange;
 
-  /// Видимая область для оптимизации отрисовки больших матриц
-  final Rect? visibleRect;
+
+  late HeatmapColorMapper _currentMapper;
+  late HeatmapColorMapper _targetMapper;
 
   HeatmapPainter({
-    required this.data,
-    required this.colorMapper,
-    required this.previousMapper,
-    required this.animationValue,
+    required this.holder,
     required this.cellWidth,
     required this.cellHeight,
-    required this.config,
     required this.axisOffset,
     required this.bottomLabelOffset,
     this.hoverRow,
     this.hoverCol,
     this.hoverRange,
-    this.visibleRect,
-  });
+  }){
+    _currentMapper = _createMapper(holder.data, holder.config);
+    _targetMapper = _createMapper(holder.targetData, holder.config);
+  }
 
   //  Кэширование
 
-  /// Кэш статического слоя (сетка + подписи осей).
-  /// Перестраивается только при изменении матрицы или размера ячейки.
-  ui.Picture? _staticLayer;
-
-  /// Ключ для идентификации текущего статического слоя.
-  String? _cachedStaticLayerKey;
+  ui.Picture? _gridPicture;
+  ui.Picture? _rowLabelsPicture;
+  ui.Picture? _colLabelsPicture;
+  
+  String? _cachedGridKey;
+  String? _cachedRowLabelsKey;
+  String? _cachedColLabelsKey;
 
   /// Кэш текстовых рисовальщиков для избежания повторного создания.
   /// Ключ: строка + стиль текста.
@@ -89,21 +80,16 @@ class HeatmapPainter extends CustomPainter {
   /// Переиспользуемый Paint для минимизации создания объектов.
   final Paint _paint = Paint();
 
-  // Кэш цветов для текущего кадра анимации
-  List<List<Color>>? _colorCache;
-  double _cachedAnimationValue = -1;
-
   // Переиспользуемый Paint
   final Paint _highlightPaint = Paint()
     ..color = Colors.black
     ..style = PaintingStyle.stroke
     ..strokeWidth = 1;
 
-  /// Генерирует ключ для кэша статического слоя.
-  String _staticLayerKey() =>
-      '${data.rowLabels.length}_${data.columnLabels.length}_'
-      '${cellWidth}_${cellHeight}_${axisOffset}_${bottomLabelOffset}_'
-      '${config.showAxisLabels}_${config.axisTextStyle}_${config.axisLabelRotation}';
+  // Генерация ключей для кэша
+  String _gridKey() => '${holder.data.rowLabels.length}_${holder.data.columnLabels.length}_${cellWidth}_${cellHeight}_${axisOffset}_${bottomLabelOffset}_${holder.config.axis.showLabels}';
+  String _rowLabelsKey() => '${holder.data.rowLabels.join()}_${holder.config.axis.textStyle}_${axisOffset}';
+  String _colLabelsKey() => '${holder.data.columnLabels.join()}_${holder.config.axis.textStyle}_${holder.config.axis.labelRotation}_${cellWidth}';
 
   /// Получает или создает TextPainter для заданного текста и стиля.
   ///
@@ -116,6 +102,7 @@ class HeatmapPainter extends CustomPainter {
     final tp = TextPainter(
       text: TextSpan(text: text, style: style),
       textDirection: TextDirection.ltr,
+      textScaler: holder.textScaler,
     )..layout();
     _textCache[key] = tp;
     return tp;
@@ -123,119 +110,143 @@ class HeatmapPainter extends CustomPainter {
 
   // Цвета
 
+  HeatmapColorMapper _createMapper(HeatmapData d, HeatmapConfig cfg) {
+    final paletteColors = HeatmapPaletteFactory.baseColors(
+      cfg.palette,
+      customColors: cfg.customPaletteColors,
+    );
+
+    final min = d.min;
+    final max = d.max;
+    if (cfg.colorMode == HeatmapColorMode.discrete) {
+      return DiscreteColorMapper(min: min, max: max, segments: cfg.segments, baseColors: paletteColors);
+    } else {
+      return GradientColorMapper(paletteType: cfg.palette, min: min, max: max);
+    }
+  }
+  
   /// Возвращает анимированный цвет для заданного значения корреляции.
   ///
   /// Если есть предыдущий маппер и идет анимация, выполняет интерполяцию
   /// между старым и новым цветом.
-  Color _getAnimatedColor(double value) {
-    if (previousMapper == null) return colorMapper.map(value);
-    final oldColor = previousMapper!.map(value);
-    final newColor = colorMapper.map(value);
-    return Color.lerp(oldColor, newColor, animationValue)!;
+  Color _getAnimatedColor(double value, double targetValue) {
+    final color1 = _currentMapper.map(value);
+    final color2 = _targetMapper.map(targetValue);
+    return Color.lerp(color1, color2, holder.animationValue)!;
   }
 
-  /// Получает цвет для ячейки с кэшированием. Если кэш для текущего значения анимации
-  /// существует, возвращает его. Иначе пересчитывает цвета для всех ячеек и сохраняет в кэше.
-  Color _getCachedColor(int row, int col) {
-    if (_colorCache != null && _cachedAnimationValue == animationValue) {
-      return _colorCache![row][col];
-    }
-    _cachedAnimationValue = animationValue;
-    _colorCache = List.generate(data.rowLabels.length, (r) {
-      return List.generate(data.columnLabels.length, (c) {
-        return _getAnimatedColor(data.values[r][c]);
-      });
-    });
-    return _colorCache![row][col];
-  }
-
-  //  Статический слой (сетка + оси)
-  ui.Picture _buildStaticLayer() {
+  // Метод отрисовки сетки и фона
+  ui.Picture _buildGridPicture(Size totalSize) {
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
-
-    final rowCount = data.rowLabels.length;
-    final colCount = data.columnLabels.length;
+    
+    final rowCount = holder.data.rowLabels.length;
+    final colCount = holder.data.columnLabels.length;
     final gridPaint = Paint()
       ..color = Colors.grey.shade300
       ..strokeWidth = 0.5
       ..style = PaintingStyle.stroke;
-
-    final totalWidth = colCount * cellWidth + axisOffset;
-    final totalHeight = rowCount * cellHeight + axisOffset + bottomLabelOffset;
-
-    final backgroundPaint = Paint()..color = Colors.white;
+    
+    // Фон
+    canvas.drawRect(Rect.fromLTWH(0, 0, totalSize.width, totalSize.height), Paint()..color = Colors.white);
+    // Рамка вокруг ячеек
     canvas.drawRect(
-        Rect.fromLTWH(0, 0, totalWidth, totalHeight), backgroundPaint);
-
-    final borderPaint = Paint()
-      ..color = Colors.grey.shade300
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
-    canvas.drawRect(
-      Rect.fromLTWH(
-          axisOffset, axisOffset, colCount * cellWidth, rowCount * cellHeight),
-      borderPaint,
+      Rect.fromLTWH(axisOffset, axisOffset, colCount * cellWidth, rowCount * cellHeight),
+      Paint()..color = Colors.grey.shade300..style = PaintingStyle.stroke..strokeWidth = 1,
     );
-
+    
+    // Горизонтальные линии
     for (int i = 0; i <= rowCount; i++) {
       final y = axisOffset + i * cellHeight;
-      canvas.drawLine(Offset(axisOffset, y), Offset(totalWidth, y), gridPaint);
+      canvas.drawLine(Offset(axisOffset, y), Offset(totalSize.width, y), gridPaint);
     }
+    // Вертикальные линии
     for (int i = 0; i <= colCount; i++) {
       final x = axisOffset + i * cellWidth;
-      canvas.drawLine(Offset(x, axisOffset), Offset(x, totalHeight), gridPaint);
+      canvas.drawLine(Offset(x, axisOffset), Offset(x, totalSize.height), gridPaint);
     }
-
-    if (config.showAxisLabels) {
-      final angle = _computeLabelAngle();
-      final stepRows = _computeLabelStep(cellHeight);
-      final stepCols = _computeLabelStep(cellWidth);
-
-      final labelStyle = config.axisTextStyle ??
-          TextStyle(
-            fontSize: math.min(14.0, math.max(10.0, math.min(cellHeight, cellWidth) * 0.25)),
-            color: Colors.black87,
-          );
-
-      // Подписи строк (слева)
-      for (int i = 0; i < rowCount; i += stepRows) {
-        final rowLabel = _truncateText(
-        data.rowLabels[i],
-        labelStyle,
-        axisOffset - 12,
-      );
-      final tp = _getTextPainter(rowLabel, labelStyle);
-        tp.paint(
-          canvas,
-          Offset(
-            axisOffset - tp.width - 8,
-            axisOffset + i * cellHeight + cellHeight / 2 - tp.height / 2,
-          ),
-        );
-      }
-
-      // Подписи столбцов (снизу)
-      for (int i = 0; i < colCount; i += stepCols) {
-        final label = _truncateText(
-          data.columnLabels[i],
-          labelStyle,
-          cellWidth * 0.9,
-        );
-        final tp = _getTextPainter(label, labelStyle);
-        canvas.save();
-        canvas.translate(
-          axisOffset + i * cellWidth + cellWidth / 2,
-          axisOffset + rowCount * cellHeight + 8,
-        );
-        canvas.rotate(angle);
-        tp.paint(canvas, Offset(-tp.width / 2, 0));
-        canvas.restore();
-      }
-    }
-
+    
     return recorder.endRecording();
   }
+
+  // Метод отрисовки подписей строк
+  ui.Picture _buildRowLabelsPicture(Size totalSize) {
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    
+    if (!holder.config.axis.showLabels) return recorder.endRecording();
+    
+    final rowCount = holder.data.rowLabels.length;
+    final stepRows = _computeLabelStep(cellHeight);
+
+    final defaultStyle = TextStyle(
+      fontSize: math.min(14.0, math.max(10.0, math.min(cellHeight, cellWidth) * 0.25)),
+      color: Colors.black87,
+    );
+
+    final labelStyle = holder.config.axis.textStyle ?? defaultStyle;
+    
+    for (int i = 0; i < rowCount; i += stepRows) {
+      String label = holder.data.rowLabels[i];
+
+      if (holder.config.axis.labelFormatter != null) {
+        label = holder.config.axis.labelFormatter!(label);
+      }
+
+      if (holder.config.checkToShowAxisLabel != null &&
+          !holder.config.checkToShowAxisLabel!(label, Axis.vertical)) continue;
+      
+      final truncated = _truncateText(label, labelStyle, axisOffset - 12);
+      final tp = _getTextPainter(truncated, labelStyle);
+      tp.paint(canvas, Offset(
+        axisOffset - tp.width - 8,
+        axisOffset + i * cellHeight + cellHeight / 2 - tp.height / 2,
+      ));
+    }
+    return recorder.endRecording();
+  }
+
+  // Метод отрисовки подписей столбцов
+  ui.Picture _buildColLabelsPicture(Size totalSize) {
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    
+    if (!holder.config.axis.showLabels) return recorder.endRecording();
+    
+    final colCount = holder.data.columnLabels.length;
+    final stepCols = _computeLabelStep(cellWidth);
+
+    final defaultStyle = TextStyle(
+      fontSize: math.min(14.0, math.max(10.0, math.min(cellHeight, cellWidth) * 0.25)),
+      color: Colors.black87,
+    );
+    final labelStyle = holder.config.axis.textStyle ?? defaultStyle;
+    final angle = holder.config.axis.labelRotation;
+    final rowCount = holder.data.rowLabels.length;
+    
+    for (int i = 0; i < colCount; i += stepCols) {
+      String label = holder.data.columnLabels[i];
+
+      if (holder.config.axis.labelFormatter != null) {
+        label = holder.config.axis.labelFormatter!(label);
+      }
+      if (holder.config.checkToShowAxisLabel != null &&
+          !holder.config.checkToShowAxisLabel!(label, Axis.horizontal)) continue;
+      
+      final truncated = _truncateText(label, labelStyle, cellWidth * 0.9);
+      final tp = _getTextPainter(truncated, labelStyle);
+      canvas.save();
+      canvas.translate(
+        axisOffset + i * cellWidth + cellWidth / 2,
+        axisOffset + rowCount * cellHeight + 8,
+      );
+      canvas.rotate(angle);
+      tp.paint(canvas, Offset(-tp.width / 2, 0));
+      canvas.restore();
+    }
+    return recorder.endRecording();
+  }
+  
 
   String _truncateText(String text, TextStyle style, double maxWidth) {
     final fullWidth = _measureText(text, style).width;
@@ -260,24 +271,11 @@ class HeatmapPainter extends CustomPainter {
     final tp = TextPainter(
       text: TextSpan(text: text, style: style),
       textDirection: TextDirection.ltr,
+      textScaler: holder.textScaler,
     )..layout(minWidth: 0, maxWidth: double.infinity);
     return tp.size;
   }
 
-  // Умное сокращение длинных названий
-  String _smartLabel(String text, {int max = 16}) {
-    if (text.length <= max) return text;
-    final parts = text.split('_');
-    if (parts.length > 1) {
-      return parts.map((e) => e.characters.first).join();
-    }
-    return '${text.substring(0, max)}…';
-  }
-
-  double _computeLabelAngle() {
-    // Используем угол из конфига, если задан явно
-    return config.axisLabelRotation;
-  }
 
   /// Вычисляет шаг отображения подписей для перегруженных матриц.
   int _computeLabelStep(double cellDim) {
@@ -339,78 +337,131 @@ class HeatmapPainter extends CustomPainter {
     return tp;
   }
 
+  
+
   // Отрисовка
   @override
   void paint(Canvas canvas, Size size) {
+    final data = holder.data;
+    final targetData = holder.targetData;
+    final config = holder.config;
     final rowCount = data.rowLabels.length;
     final colCount = data.columnLabels.length;
     if (rowCount == 0 || colCount == 0) return;
 
-    final isSquare = rowCount == colCount;
-    final effectiveTriangleMode = config.triangleMode && isSquare;
+    final totalWidth = colCount * cellWidth + axisOffset;
+    final totalHeight = rowCount * cellHeight + axisOffset + bottomLabelOffset;
+    final totalSize = Size(totalWidth, totalHeight);
 
-    // Отрисовка статического слоя
-    final key = _staticLayerKey();
-    if (_cachedStaticLayerKey != key) {
-      _staticLayer = null;
-      _cachedStaticLayerKey = key;
+    // Инвалидация и перестроение кэшей при необходимости
+    final gridKey = _gridKey();
+    if (_cachedGridKey != gridKey) {
+      _gridPicture = _buildGridPicture(totalSize);
+      _cachedGridKey = gridKey;
     }
-    _staticLayer ??= _buildStaticLayer();
-    canvas.drawPicture(_staticLayer!);
+    
+    final rowKey = _rowLabelsKey();
+    if (_cachedRowLabelsKey != rowKey) {
+      _rowLabelsPicture = _buildRowLabelsPicture(totalSize);
+      _cachedRowLabelsKey = rowKey;
+    }
+    
+    final colKey = _colLabelsKey();
+    if (_cachedColLabelsKey != colKey) {
+      _colLabelsPicture = _buildColLabelsPicture(totalSize);
+      _cachedColLabelsKey = colKey;
+    }
+    
+    // Отрисовка статических слоёв
+    canvas.drawPicture(_gridPicture!);
+    canvas.drawPicture(_rowLabelsPicture!);
+    canvas.drawPicture(_colLabelsPicture!);
 
-    // Видимый диапазон
     int startRow = 0, endRow = rowCount - 1;
     int startCol = 0, endCol = colCount - 1;
-    if (visibleRect != null) {
-      startRow = visibleRect!.top.floor().clamp(0, rowCount - 1);
-      endRow = visibleRect!.bottom.floor().clamp(0, rowCount - 1);
-      startCol = visibleRect!.left.floor().clamp(0, colCount - 1);
-      endCol = visibleRect!.right.floor().clamp(0, colCount - 1);
-    }
+ 
 
     // Отрисовка ячеек
     for (int row = startRow; row <= endRow; row++) {
       for (int col = startCol; col <= endCol; col++) {
-        if (effectiveTriangleMode && col < row) continue;
-        if (data.values[row][col] == 0) continue;
-        _paint.color = _getCachedColor(row, col);
+        if (holder.config.triangleMode && col < row) continue;
+        final value = data.values[row][col];
+        if (value == 0) continue;
+        final targetValue = targetData.values[row][col];
+        final cell = HeatmapCell(
+          value: value,
+          rowLabel: data.rowLabels[row],
+          colLabel: data.columnLabels[col],
+          rowIndex: row,
+          colIndex: col,
+        );
+
+
+        // Определяем цвет ячейки
+        Color cellColor;
+        final customColor = config.getCellColor?.call(cell);
+        if (customColor != null) {
+          cellColor = customColor;
+        } else {
+          cellColor = _getAnimatedColor(value, targetValue);
+        }
+        _paint.color = cellColor;
+
+
         final rect = Rect.fromLTWH(
           axisOffset + col * cellWidth,
           axisOffset + row * cellHeight,
           cellWidth,
           cellHeight,
         );
-        canvas.drawRect(rect, _paint);
 
-        // Значения в ячейках
-        if (config.showValues) {
-          final value = data.values[row][col];
-          final formatted = config.cellValueFormatter?.call(value) ??
-              formatHeatmapNumber(value);
+          if (config.cellRenderer != null) {
+            config.cellRenderer!(canvas, rect, cell);
+          } else {
+            canvas.drawRect(rect, _paint);
 
-          final backgroundColor = _getCachedColor(row, col);
-          final textColor = _contrastColor(backgroundColor);
+          // Отрисовка обводки
+          final border = config.getCellBorder?.call(cell);
+          if (border != null) {
+            final borderPaint = Paint()
+              ..color = border.color
+              ..strokeWidth = border.strokeWidth
+              ..style = PaintingStyle.stroke;
+            canvas.drawRect(rect, borderPaint);
+          }
 
-          final tp = _layoutCellText(
-            formatted,
-            cellWidth - 8,
-            cellHeight - 6,
-            TextStyle(
-              fontSize: math.min(cellWidth, cellHeight) * 0.35,
-              color: textColor,
-              fontWeight: FontWeight.w600,
-              shadows: textColor == Colors.white
-                  ? [const Shadow(blurRadius: 1.5, color: Colors.black54)]
-                  : null,
-            ),
-          );
-          tp.paint(
-            canvas,
-            Offset(
-              rect.center.dx - tp.width / 2,
-              rect.center.dy - tp.height / 2,
-            ),
-          );
+          // Значения в ячейках
+          if (config.showValues) {
+            String text;
+            final customLabel = config.getCellLabel?.call(cell);
+            if (customLabel != null) {
+              text = customLabel;
+            } else {
+              text = config.cellValueFormatter?.call(value) ?? formatHeatmapNumber(value);
+            }
+            
+            final textColor = _contrastColor(cellColor);
+            final tp = _layoutCellText(
+              text,
+              cellWidth - 8,
+              cellHeight - 6,
+              TextStyle(
+                fontSize: math.min(cellWidth, cellHeight) * 0.35,
+                color: textColor,
+                fontWeight: FontWeight.w600,
+                shadows: textColor == Colors.white
+                    ? [const Shadow(blurRadius: 1.5, color: Colors.black54)]
+                    : null,
+              ),
+            );
+            tp.paint(
+              canvas,
+              Offset(
+                rect.center.dx - tp.width / 2,
+                rect.center.dy - tp.height / 2,
+              ),
+            );
+          }
         }
       }
     }
@@ -449,6 +500,7 @@ class HeatmapPainter extends CustomPainter {
       }
     }
 
+
     // Подсветка под курсором и тултип
     if (hoverRow != null &&
         hoverCol != null &&
@@ -468,23 +520,19 @@ class HeatmapPainter extends CustomPainter {
   // Определение необходимости перерисовки
   @override
   bool shouldRepaint(covariant HeatmapPainter old) {
-    final repaint = old.data != data ||
-        old.colorMapper != colorMapper ||
-        old.previousMapper != previousMapper ||
-        old.animationValue != animationValue ||
+    return old.holder != holder ||
         old.cellWidth != cellWidth ||
         old.cellHeight != cellHeight ||
-        old.config != config ||
         old.axisOffset != axisOffset ||
+        old.bottomLabelOffset != bottomLabelOffset ||
         old.hoverRow != hoverRow ||
         old.hoverCol != hoverCol ||
-        old.hoverRange != hoverRange ||
-        old.visibleRect != visibleRect;
-
-    if (repaint) {
-      _textCache.clear();
-      _colorCache = null;
-    }
-    return repaint;
+        old.hoverRange != hoverRange;
   }
+
+  // Установить флаги для оптимизации Flutter
+  bool get isComplex => true;
+  
+  bool get willChange => holder.animationValue > 0.0 && holder.animationValue < 1.0;
+  
 }

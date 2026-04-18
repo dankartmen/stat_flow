@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart' hide DataColumn;
 import 'package:heatmap_canvas/heatmap.dart';
 import '../../../../core/dataset/dataset.dart';
@@ -53,8 +55,6 @@ class _HeatmapViewState extends State<HeatmapView> {
   /// Флаг загрузки данных (показывает индикатор при первом запуске).
   bool _isLoadingData = false;
 
-  /// Контроллер для управления отображением тепловой карты.
-  final _controller = HeatmapController();
 
   @override
   void initState() {
@@ -420,14 +420,19 @@ class _HeatmapViewState extends State<HeatmapView> {
       palette: state.palette,
       colorMode: state.colorMode,
       segments: state.segments,
-      showAxisLabels: state.showAxisLabels,
+      axis: HeatmapAxisData(
+        showLabels: state.showAxisLabels,
+      ),
+      legend: HeatmapLegendData(
+        tooltipBuilder: _legendTooltip,
+      ),
+      touchData: HeatmapTouchData(),
       showValues: state.showValues,
       triangleMode: state.triangleMode,
       sortX: state.sortX,
       sortY: state.sortY,
       clusterEnabled: state.clusterEnabled,
       cellTooltipBuilder: _createCellTooltip(min: min, max: max),
-      legendTooltipBuilder: _legendTooltip,
     );
   }
 
@@ -582,10 +587,6 @@ class _HeatmapViewState extends State<HeatmapView> {
     return Heatmap(
       data: _cachedData!,
       config: _buildConfig(),
-      controller: _controller,
-      loadingBuilder: (context) => const Center(
-        child: CircularProgressIndicator(),
-      ),
     );
   }
 }

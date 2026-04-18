@@ -12,3 +12,7 @@ export 'src/widgets/heatmap.dart';
 export 'src/builder/heatmap_data_builder.dart';
 export 'src/transforms/heatmap_transformer.dart';
 export 'src/model/legend_tooltip_info.dart';
+export 'src/model/touch_data.dart';
+export 'src/model/fl_line.dart';
+export 'src/model/paint_holder.dart';
+export 'src/controller/heatmap_legend_controller.dart';

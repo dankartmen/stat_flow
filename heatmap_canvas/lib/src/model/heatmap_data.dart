@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'heatmap_config.dart';
+import 'package:equatable/equatable.dart';
 
 /// {@template heatmap_data}
 /// Модель данных для отображения тепловой карты
@@ -17,7 +18,7 @@ import 'heatmap_config.dart';
 /// - Таблиц сопряженности
 /// - Любых двумерных числовых данных
 /// {@endtemplate}
-class HeatmapData {
+class HeatmapData with EquatableMixin{
   /// Подписи строк
   final List<String> rowLabels;
   
@@ -33,12 +34,14 @@ class HeatmapData {
 
   /// Минимальное значение 
   double get min {
+    if (values.isEmpty || values.first.isEmpty) return 0.0;
     _cachedMin ??= values.expand((v) => v).reduce((a, b) => a < b ? a : b);
     return _cachedMin!;
   }
 
   /// Максимальное значение
   double get max {
+    if (values.isEmpty || values.first.isEmpty) return 0.0;
     _cachedMax ??= values.expand((v) => v).reduce((a, b) => a > b ? a : b);
     return _cachedMax!;
   }
@@ -47,9 +50,39 @@ class HeatmapData {
     required this.rowLabels,
     required this.columnLabels,
     required this.values,
-  });
+  }){
+    // Проверка валидности размеров
+    assert(rowLabels.length == values.length,
+        'Длина rowLabels должна соответствовать количеству строк со значениями');
+    if (values.isNotEmpty) {
+      assert(columnLabels.length == values[0].length,
+          'Длина columnLabels должна соответствовать количеству столбцов values');
+    }
+  }
 
-  
+  /// Создаёт копию с изменёнными полями.
+  HeatmapData copyWith({
+    List<String>? rowLabels,
+    List<String>? columnLabels,
+    List<List<double>>? values,
+  }) {
+    final newRowLabels = rowLabels ?? this.rowLabels;
+    final newColumnLabels = columnLabels ?? this.columnLabels;
+    final newValues = values ?? this.values;
+    
+    if (newRowLabels.length != newValues.length) {
+      throw ArgumentError('Длина rowLabels должна соответствовать количеству строк со значениями  ');
+    }
+    if (newValues.isNotEmpty && newColumnLabels.length != newValues[0].length) {
+      throw ArgumentError('Длина columnLabels должна соответствовать количеству столбцов values');
+    }
+
+    return HeatmapData(
+      rowLabels: rowLabels ?? this.rowLabels,
+      columnLabels: columnLabels ?? this.columnLabels,
+      values: values ?? this.values,
+    );
+  }
 
   /// Применяет нормализацию к значениям матрицы
   /// 
@@ -478,6 +511,9 @@ class HeatmapData {
     }
     return _HeatmapDataResult(rowLabels: rows, columnLabels: cols, values: newValues);
   }
+
+  @override
+  List<Object?> get props => [rowLabels, columnLabels, values];
 }
 
 /// {@template heatmap_data_result}

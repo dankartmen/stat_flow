@@ -65,17 +65,22 @@ class DiscreteColorMapper implements HeatmapColorMapper {
     required this.baseColors,
   }) {
     _step = (max - min) / segments;
+    if (_step == 0 || _step.isNaN || _step.isInfinite) {
+      _step = 1.0; // fallback
+    }
     _generatedColors = _generateColors();
   }
 
   @override
   Color map(double value) {
     final clamped = value.clamp(min, max);
-    final index = ((clamped - min) / _step).floor();
-
-    return _generatedColors[
-        index.clamp(0, segments - 1)
-    ];
+    int index;
+    if (_step == 0) {
+      index = 0;
+    } else {
+      index = ((clamped - min) / _step).floor();
+    }
+    return _generatedColors[index.clamp(0, segments - 1)];
   }
 
   /// Генерация цветов для всех сегментов на основе базовой палитры

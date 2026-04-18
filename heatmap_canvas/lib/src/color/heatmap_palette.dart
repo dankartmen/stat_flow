@@ -1,5 +1,7 @@
 import 'dart:ui';
 
+import 'package:flutter/material.dart';
+
 /// {@template heatmap_palette}
 /// Доступные типы палитр для тепловой карты корреляции.
 /// {@endtemplate}
@@ -35,7 +37,9 @@ enum HeatmapPalette {
   coolWarm,
 
   /// Палитра Teal-Orange — от бирюзового (отрицательная корреляция) к оранжево-жёлтому (положительная корреляция)
-  tealOrange
+  tealOrange,
+
+  custom
 }
 
 /// {@template heatmap_palette_factory}
@@ -49,7 +53,7 @@ class HeatmapPaletteFactory {
   /// 
   /// Возвращает:
   /// - [List<Color>] — список цветов, составляющих палитру
-  static List<Color> baseColors(HeatmapPalette palette) {
+  static List<Color> baseColors(HeatmapPalette palette, {List<Color>? customColors}) {
     switch (palette) {
       case HeatmapPalette.redBlue:
         return [
@@ -154,6 +158,12 @@ class HeatmapPaletteFactory {
           const Color(0xFFFFFFFF), // белый
           const Color(0xFFFFB70B), // rgb(255,183,11) — оранжево-жёлтый
         ];
+
+      case HeatmapPalette.custom:
+        if (customColors == null || customColors.isEmpty) {
+          throw ArgumentError('customColors must be provided for HeatmapPalette.custom');
+        }
+        return customColors;
     }
   }
 }

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../controller/heatmap_legend_controller.dart';
+import '../model/heatmap_config.dart';
 import '../model/legend_tooltip_info.dart';
 import '../model/hover_range.dart';
 import '../color/heatmap_color_mapper.dart';
@@ -36,19 +38,22 @@ class HeatmapLegend extends StatefulWidget {
   /// Колбек, вызываемый при наведении на шкалу. Передаёт [HoverRange] или null.
   final ValueChanged<HoverRange?> onHover;
 
-  /// Пользовательский билдер тултипа. Если не задан, используется стандартный.
-  final Widget Function(BuildContext context, LegendTooltipInfo? value)? legendTooltipBuilder;
-
+  /// Контроллер легенды
+  final HeatmapLegendController? controller;
+  
+  final HeatmapLegendData legendData;
+  
   /// {@macro heatmap_legend}
   const HeatmapLegend({
     super.key,
     this.segments = 20,
-    this.legendTooltipBuilder,
     required this.mapper,
     required this.min,
     required this.max,
     required this.onHover,
     required this.colorMode,
+    this.controller,
+    required this.legendData,
   });
 
   @override
@@ -89,7 +94,7 @@ class _HeatmapLegendState extends State<HeatmapLegend> {
     _tooltipEntry?.remove();
     _tooltipEntry = null;
 
-    if (widget.legendTooltipBuilder != null) {
+    if (widget.legendData.tooltipBuilder != null) {
       _tooltipEntry = OverlayEntry(
         builder: (context) => Positioned(
           left: _tooltipX,
@@ -98,7 +103,7 @@ class _HeatmapLegendState extends State<HeatmapLegend> {
             ignoring: true,
             child: Material(
               color: Colors.transparent,
-              child: widget.legendTooltipBuilder!(context, _currentInfo),
+              child: widget.legendData.tooltipBuilder!(context, _currentInfo),
             ),
           ),
         ),
@@ -164,6 +169,7 @@ class _HeatmapLegendState extends State<HeatmapLegend> {
       _showMarker = true;
     }
 
+    HoverRange? range;
     // Вызываем колбек с информацией о наведении в зависимости от режима раскраски
     if (widget.colorMode == HeatmapColorMode.discrete) {
       final step = (widget.max - widget.min) / widget.segments;
@@ -171,10 +177,13 @@ class _HeatmapLegendState extends State<HeatmapLegend> {
       segmentMin = widget.min + step * segIndex;
       segmentMax = widget.min + step * (segIndex + 1);
       _markerX = local.dx;
-      widget.onHover(HoverRange(min: segmentMin, max: segmentMax));
+      range = HoverRange(min: segmentMin, max: segmentMax);
     } else {
-      widget.onHover(HoverRange(value: value));
+      range = HoverRange(value: value);
     }
+
+    widget.controller?.setHoverRange(range);
+    widget.onHover(range);
 
     _currentInfo = LegendTooltipInfo(
       value: value,
@@ -206,92 +215,129 @@ class _HeatmapLegendState extends State<HeatmapLegend> {
     setState(() {});
   }
 
+  void _handleExit() {
+    _isHovering = false;
+    _tooltipEntry?.remove();
+    _tooltipEntry = null;
+    _showMarker = false;
+    widget.controller?.clear();
+    widget.onHover(null);
+    setState(() {});
+  }
+
+  List<Widget> _buildTickLabels() {
+    final ticks = widget.legendData.customTicks ?? [widget.min, widget.max];
+    final labelFormatter = widget.legendData.labelFormatter;
+    
+    return ticks.map((value) {
+      Widget labelWidget;
+      if (widget.legendData.tickBuilder != null) {
+        labelWidget = widget.legendData.tickBuilder!(value);
+      } else {
+        final labelText = labelFormatter?.call(value) ?? formatHeatmapNumber(value);
+        labelWidget = Text(labelText, style: const TextStyle(fontSize: 11));
+      }
+      // Ограничиваем высоту, чтобы избежать overflow
+      return ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 24),
+        child: Align(
+          alignment: Alignment.center,
+          child: labelWidget,
+        ),
+      );
+    }).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        const height = 40.0;
-        final colors = List.generate(
-          widget.segments + 1,
-          (i) => widget.mapper.map(widget.min + i * (widget.max - widget.min) / widget.segments),
-        );
+    final colors = List.generate(
+      widget.segments + 1,
+      (i) => widget.mapper.map(widget.min + i * (widget.max - widget.min) / widget.segments),
+    );
 
-        return SizedBox(
-          height: height,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+    Widget legendContent = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        MouseRegion(
+          cursor: SystemMouseCursors.resizeLeftRight,
+          onHover: (event) {
+            if (!_isHovering) {
+              _isHovering = true;
+              _createTooltipEntry();
+              Overlay.of(context).insert(_tooltipEntry!);
+            }
+            final renderBox = context.findRenderObject() as RenderBox;
+            _updateTooltip(event.position, renderBox);
+          },
+          onExit: (_) {
+            _handleExit();
+          },
+          child: Stack(
+            clipBehavior: Clip.none,
             children: [
-              MouseRegion(
-                cursor: SystemMouseCursors.resizeLeftRight,
-                onHover: (event) {
-                  if (!_isHovering) {
-                    _isHovering = true;
-                    _createTooltipEntry();
-                    Overlay.of(context).insert(_tooltipEntry!);
-                  }
-                  final renderBox = context.findRenderObject() as RenderBox;
-                  _updateTooltip(event.position, renderBox);
-                },
-                onExit: (_) {
-                  _isHovering = false;
-                  _tooltipEntry?.remove();
-                  _tooltipEntry = null;
-                  _showMarker = false;
-                  widget.onHover(null);
-                  setState(() {});
-                },
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Container(
-                      width: width,
-                      height: 16,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: colors,
-                          begin: Alignment.centerLeft,
-                          end: Alignment.centerRight,
-                        ),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.grey.shade300),
-                      ),
-                    ),
-                    if (_showMarker)
-                      Positioned(
-                        left: _markerX - 6,
-                        top: 2,
-                        child: Container(
-                          width: 12,
-                          height: 12,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white70, width: 26),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.2),
-                                blurRadius: 2,
-                                offset: const Offset(0, 1),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                  ],
+              Container(
+                height: 16,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: colors,
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey.shade300),
                 ),
               ),
-              const SizedBox(height: 6),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(formatHeatmapNumber(widget.min), style: const TextStyle(fontSize: 11)),
-                  Text(formatHeatmapNumber(widget.max), style: const TextStyle(fontSize: 11)),
-                ],
-              ),
+              if (_showMarker)
+                Positioned(
+                  left: _markerX - 6,
+                  top: 2,
+                  child: Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white70, width: 26),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.2),
+                          blurRadius: 2,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
             ],
           ),
-        );
+        ),
+        const SizedBox(height: 6),
+        IntrinsicHeight(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: _buildTickLabels(),
+          ),
+        ),
+      ],
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth.isFinite) {
+          return SizedBox(
+            width: constraints.maxWidth,
+            child: legendContent,
+          );
+        } else {
+          return IntrinsicWidth(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minWidth: widget.legendData.minWidth ?? 120.0, // разумное значение по умолчанию
+              ),
+              child: legendContent,
+            ),
+          );
+        }
       },
     );
   }

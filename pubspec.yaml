@@ -30,16 +30,18 @@ environment:
 dependencies:
   async: ^2.13.1
   cupertino_icons: ^1.0.8
-  draggable_overlay_window: ^1.0.0
-  draggable_widget: ^2.0.0
   dropdown_button2: ^3.0.0
+  equatable: ^2.0.8
   expandable: ^5.0.1
   file_picker: ^10.3.10
   flutter:
     sdk: flutter
+  flutter_lints: ^6.0.0
   flutter_localizations:
     sdk: flutter
   flutter_riverpod: ^3.3.1
+  heatmap_canvas:
+    path: C:/projects/stat_flow/heatmap_canvas
   http: ^1.6.0
   intl: ^0.20.2
   open_file: ^3.5.11
@@ -47,16 +49,14 @@ dependencies:
   pluto_grid: ^8.1.0
   riverpod: ^3.2.1
   screenshot: ^3.0.0
+  shared_preferences: ^2.5.5
   syncfusion_flutter_charts: ^32.2.8
   syncfusion_flutter_datagrid: ^32.2.8
   syncfusion_localizations: ^32.2.8
-  shared_preferences: ^2.5.5
   trina_grid: ^2.2.1
   vector_math: ^2.2.0
-  heatmap_canvas:
-    path: C:/projects/stat_flow/heatmap_canvas
+
 dev_dependencies:
-  flutter_lints: ^5.0.0
   flutter_test:
     sdk: flutter
 
