@@ -131,6 +131,16 @@ class HeatmapLegendData with EquatableMixin {
   /// Кастомный виджет для отображения метки шкалы вместо текста.
   final Widget Function(double value)? tickBuilder;
 
+  /// Резерв высоты сверху под легенду (когда position == topRight).
+  /// 
+  /// При showLabels = false гарантирует, что легенда не налезет на ячейки.
+  /// При showLabels = true — не уменьшает уже рассчитанный отступ.
+  final double reserveTopSpace;
+
+  /// Резерв ширины справа (по умолчанию оставляем 12 px, как outerPadding).
+  /// Можно увеличить, если легенда очень широкая.
+  final double reserveRightSpace;
+
   const HeatmapLegendData({
     this.position = LegendPosition.topRight,
     this.minWidth = 140,
@@ -139,6 +149,8 @@ class HeatmapLegendData with EquatableMixin {
     this.labelFormatter,
     this.customTicks,
     this.tickBuilder,
+    this.reserveTopSpace = 58.0,      // 12 (top) + ~46 px высота легенды
+    this.reserveRightSpace = 12.0,    // можно увеличить до 20-30 если нужно
   });
 
   HeatmapLegendData copyWith({
@@ -149,6 +161,8 @@ class HeatmapLegendData with EquatableMixin {
     String Function(double value)? labelFormatter,
     List<double>? customTicks,
     Widget Function(double value)? tickBuilder,
+    double? reserveTopSpace,
+    double? reserveRightSpace,
   }) {
     return HeatmapLegendData(
       position: position ?? this.position,
@@ -158,6 +172,8 @@ class HeatmapLegendData with EquatableMixin {
       labelFormatter: labelFormatter ?? this.labelFormatter,
       customTicks: customTicks ?? this.customTicks,
       tickBuilder: tickBuilder ?? this.tickBuilder,
+      reserveTopSpace: reserveTopSpace ?? this.reserveTopSpace,
+      reserveRightSpace: reserveRightSpace ?? this.reserveRightSpace,
     );
   }
   
@@ -170,6 +186,8 @@ class HeatmapLegendData with EquatableMixin {
         labelFormatter,
         customTicks,
         tickBuilder,
+        reserveTopSpace,
+        reserveRightSpace,
       ];
 }
 

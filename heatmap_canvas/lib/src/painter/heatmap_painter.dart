@@ -9,7 +9,6 @@ import '../model/heatmap_config.dart';
 import '../model/heatmap_data.dart';
 import '../model/hover_range.dart';
 import '../model/paint_holder.dart';
-import '../model/touch_data.dart';
 import '../utils/number_formatter.dart';
 
 /// Кастомный рисовальщик для отрисовки тепловой карты.
@@ -29,9 +28,11 @@ class HeatmapPainter extends CustomPainter {
   /// Высота ячейки в пикселях
   final double cellHeight;
 
+  /// Отступ слева до начала ячеек и подписей строк
+  final double leftPadding;
 
-  /// Смещение от края для подписей осей (вычисляется снаружи)
-  final double axisOffset;
+  /// Отступ сверху до первой строки ячеек
+  final double topPadding;
 
   /// Дополнительное пространство снизу для подписи столбцов
   final double bottomLabelOffset;
@@ -53,7 +54,8 @@ class HeatmapPainter extends CustomPainter {
     required this.holder,
     required this.cellWidth,
     required this.cellHeight,
-    required this.axisOffset,
+    required this.leftPadding,
+    required this.topPadding,
     required this.bottomLabelOffset,
     this.hoverRow,
     this.hoverCol,
@@ -87,9 +89,15 @@ class HeatmapPainter extends CustomPainter {
     ..strokeWidth = 1;
 
   // Генерация ключей для кэша
-  String _gridKey() => '${holder.data.rowLabels.length}_${holder.data.columnLabels.length}_${cellWidth}_${cellHeight}_${axisOffset}_${bottomLabelOffset}_${holder.config.axis.showLabels}';
-  String _rowLabelsKey() => '${holder.data.rowLabels.join()}_${holder.config.axis.textStyle}_${axisOffset}';
-  String _colLabelsKey() => '${holder.data.columnLabels.join()}_${holder.config.axis.textStyle}_${holder.config.axis.labelRotation}_${cellWidth}';
+  String _gridKey() => '${holder.data.rowLabels.length}_${holder.data.columnLabels.length}_'
+      '${cellWidth}_${cellHeight}_${leftPadding}_${topPadding}_${bottomLabelOffset}_'
+      '${holder.config.axis.showLabels}';
+
+  String _rowLabelsKey() => '${holder.data.rowLabels.join()}_${holder.config.axis.textStyle}_'
+      '${leftPadding}_$topPadding';
+
+  String _colLabelsKey() => '${holder.data.columnLabels.join()}_${holder.config.axis.textStyle}_'
+      '${holder.config.axis.labelRotation}_${cellWidth}_$bottomLabelOffset';
 
   /// Получает или создает TextPainter для заданного текста и стиля.
   ///
@@ -151,19 +159,19 @@ class HeatmapPainter extends CustomPainter {
     canvas.drawRect(Rect.fromLTWH(0, 0, totalSize.width, totalSize.height), Paint()..color = Colors.white);
     // Рамка вокруг ячеек
     canvas.drawRect(
-      Rect.fromLTWH(axisOffset, axisOffset, colCount * cellWidth, rowCount * cellHeight),
+      Rect.fromLTWH(leftPadding, topPadding, colCount * cellWidth, rowCount * cellHeight),
       Paint()..color = Colors.grey.shade300..style = PaintingStyle.stroke..strokeWidth = 1,
     );
     
     // Горизонтальные линии
     for (int i = 0; i <= rowCount; i++) {
-      final y = axisOffset + i * cellHeight;
-      canvas.drawLine(Offset(axisOffset, y), Offset(totalSize.width, y), gridPaint);
+      final y = topPadding + i * cellHeight;
+      canvas.drawLine(Offset(leftPadding, y), Offset(totalSize.width, y), gridPaint);
     }
     // Вертикальные линии
     for (int i = 0; i <= colCount; i++) {
-      final x = axisOffset + i * cellWidth;
-      canvas.drawLine(Offset(x, axisOffset), Offset(x, totalSize.height), gridPaint);
+      final x = leftPadding + i * cellWidth;
+      canvas.drawLine(Offset(x, topPadding), Offset(x, totalSize.height), gridPaint);
     }
     
     return recorder.endRecording();
@@ -194,13 +202,15 @@ class HeatmapPainter extends CustomPainter {
       }
 
       if (holder.config.checkToShowAxisLabel != null &&
-          !holder.config.checkToShowAxisLabel!(label, Axis.vertical)) continue;
+          !holder.config.checkToShowAxisLabel!(label, Axis.vertical)) {
+        continue;
+      }
       
-      final truncated = _truncateText(label, labelStyle, axisOffset - 12);
+      final truncated = _truncateText(label, labelStyle, leftPadding - 12);
       final tp = _getTextPainter(truncated, labelStyle);
       tp.paint(canvas, Offset(
-        axisOffset - tp.width - 8,
-        axisOffset + i * cellHeight + cellHeight / 2 - tp.height / 2,
+        leftPadding - tp.width - 8,
+        topPadding + i * cellHeight + cellHeight / 2 - tp.height / 2,
       ));
     }
     return recorder.endRecording();
@@ -231,14 +241,16 @@ class HeatmapPainter extends CustomPainter {
         label = holder.config.axis.labelFormatter!(label);
       }
       if (holder.config.checkToShowAxisLabel != null &&
-          !holder.config.checkToShowAxisLabel!(label, Axis.horizontal)) continue;
+          !holder.config.checkToShowAxisLabel!(label, Axis.horizontal)) {
+        continue;
+      }
       
       final truncated = _truncateText(label, labelStyle, cellWidth * 0.9);
       final tp = _getTextPainter(truncated, labelStyle);
       canvas.save();
       canvas.translate(
-        axisOffset + i * cellWidth + cellWidth / 2,
-        axisOffset + rowCount * cellHeight + 8,
+        leftPadding + i * cellWidth + cellWidth / 2,
+        topPadding + rowCount * cellHeight + 8,
       );
       canvas.rotate(angle);
       tp.paint(canvas, Offset(-tp.width / 2, 0));
@@ -349,8 +361,8 @@ class HeatmapPainter extends CustomPainter {
     final colCount = data.columnLabels.length;
     if (rowCount == 0 || colCount == 0) return;
 
-    final totalWidth = colCount * cellWidth + axisOffset;
-    final totalHeight = rowCount * cellHeight + axisOffset + bottomLabelOffset;
+    final totalWidth = leftPadding + colCount * cellWidth;
+    final totalHeight = topPadding + rowCount * cellHeight + bottomLabelOffset;
     final totalSize = Size(totalWidth, totalHeight);
 
     // Инвалидация и перестроение кэшей при необходимости
@@ -409,16 +421,16 @@ class HeatmapPainter extends CustomPainter {
 
 
         final rect = Rect.fromLTWH(
-          axisOffset + col * cellWidth,
-          axisOffset + row * cellHeight,
+          leftPadding + col * cellWidth,
+          topPadding + row * cellHeight,
           cellWidth,
           cellHeight,
         );
 
-          if (config.cellRenderer != null) {
-            config.cellRenderer!(canvas, rect, cell);
-          } else {
-            canvas.drawRect(rect, _paint);
+        if (config.cellRenderer != null) {
+          config.cellRenderer!(canvas, rect, cell);
+        } else {
+          canvas.drawRect(rect, _paint);
 
           // Отрисовка обводки
           final border = config.getCellBorder?.call(cell);
@@ -489,8 +501,8 @@ class HeatmapPainter extends CustomPainter {
           }
           if (match) {
             final rect = Rect.fromLTWH(
-              axisOffset + col * cellWidth,
-              axisOffset + row * cellHeight,
+              leftPadding + col * cellWidth,
+              topPadding + row * cellHeight,
               cellWidth,
               cellHeight,
             );
@@ -508,12 +520,13 @@ class HeatmapPainter extends CustomPainter {
         hoverRow! <= endRow &&
         hoverCol! >= startCol &&
         hoverCol! <= endCol) {
-      final left = axisOffset + hoverCol! * cellWidth;
-      final top = axisOffset + hoverRow! * cellHeight;
-      canvas.drawRect(
-        Rect.fromLTWH(left, top, cellWidth, cellHeight),
-        _highlightPaint,
+      final rect = Rect.fromLTWH(
+        leftPadding + hoverCol! * cellWidth,
+        topPadding + hoverRow! * cellHeight,
+        cellWidth,
+        cellHeight,
       );
+      canvas.drawRect(rect, _highlightPaint);
     }
   }
 
@@ -523,16 +536,11 @@ class HeatmapPainter extends CustomPainter {
     return old.holder != holder ||
         old.cellWidth != cellWidth ||
         old.cellHeight != cellHeight ||
-        old.axisOffset != axisOffset ||
+        old.leftPadding != leftPadding ||
+        old.topPadding != topPadding ||
         old.bottomLabelOffset != bottomLabelOffset ||
         old.hoverRow != hoverRow ||
         old.hoverCol != hoverCol ||
         old.hoverRange != hoverRange;
   }
-
-  // Установить флаги для оптимизации Flutter
-  bool get isComplex => true;
-  
-  bool get willChange => holder.animationValue > 0.0 && holder.animationValue < 1.0;
-  
 }

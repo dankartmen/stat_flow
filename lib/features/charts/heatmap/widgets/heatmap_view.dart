@@ -425,6 +425,8 @@ class _HeatmapViewState extends State<HeatmapView> {
       ),
       legend: HeatmapLegendData(
         tooltipBuilder: _legendTooltip,
+        reserveRightSpace: 18,
+        reserveTopSpace: 62,
       ),
       touchData: HeatmapTouchData(),
       showValues: state.showValues,

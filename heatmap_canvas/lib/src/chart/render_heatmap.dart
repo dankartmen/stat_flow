@@ -13,21 +13,42 @@ import '../model/touch_data.dart';
 import '../painter/heatmap_painter.dart';
 import '../utils/number_formatter.dart';
 
-/// {@template render_heatmap._axis_metrics}
-/// Вспомогательная структура для хранения рассчитанных отступов осей.
-/// 
-/// Содержит:
-/// - [offset] - отступ слева для подписей строк
-/// - [bottomSpace] - отступ снизу для подписей столбцов
+/// {@template render_heatmap.axis_metrics}
+/// Структура, хранящая рассчитанные отступы со всех четырёх сторон.
+///
+/// Теперь отступы разделены явно:
+/// - [left]   — место под подписи строк (row labels)
+/// - [top]    — отступ сверху до первой строки ячеек (учитывает легенду)
+/// - [right]  — резерв справа (обычно под легенду в topRight)
+/// - [bottom] — место под подписи столбцов (column labels)
 /// {@endtemplate}
 class AxisMetrics {
-  /// Отступ слева для подписей строк (в пикселях).
-  final double offset;
-  
-  /// Отступ снизу для подписей столбцов (в пикселях).
-  final double bottomSpace;
+  /// Отступ слева до начала ячеек и подписей строк
+  final double left;
 
-  const AxisMetrics({required this.offset, required this.bottomSpace});
+  /// Отступ сверху до первой строки ячеек
+  final double top;
+
+  /// Отступ справа (резерв под легенду или другие элементы)
+  final double right;
+
+  /// Отступ снизу под подписи столбцов
+  final double bottom;
+
+  const AxisMetrics({
+    required this.left,
+    required this.top,
+    this.right = 0.0,
+    required this.bottom,
+  });
+
+  /// Удобный конструктор для случая, когда showLabels = false
+  const AxisMetrics.noLabels({
+    double left = 12.0,
+    double top = 12.0,
+    double right = 0.0,
+    double bottom = 0.0,
+  }) : this(left: left, top: top, right: right, bottom: bottom);
 }
 
 
@@ -51,11 +72,16 @@ class RenderHeatmap extends RenderBox {
   TextScaler _textScaler;
   
   // Кэшированные результаты геометрии (пересчитываются в performLayout)
-  double _axisOffset = 0;        // Отступ для левых подписей строк
   double _bottomLabelOffset = 0; // Отступ для нижних подписей столбцов
   double _cellWidth = 0;         // Ширина одной ячейки в пикселях
   double _cellHeight = 0;        // Высота одной ячейки в пикселях
-  
+  double _leftPadding = 0.0;     // место под подписи строк
+  double _topPadding = 0.0;      // отступ сверху
+  double _rightPadding = 0.0;    // отступ справа
+  double _bottomPadding = 0.0;   // место под подписи столбцов
+
+
+
   // Кэш последней определённой ячейки для оптимизации hit testing
   ({int row, int col})? _cachedCell;
   Offset? _lastLocalPosition;
@@ -209,8 +235,8 @@ class RenderHeatmap extends RenderBox {
     }
 
     // Вычисляем положение тултипа
-    final cellLeft = _axisOffset + cell.colIndex * _cellWidth;
-    final cellTop = _axisOffset + cell.rowIndex * _cellHeight;
+    final cellLeft = _leftPadding + cell.colIndex * _cellWidth;
+    final cellTop = _topPadding + cell.rowIndex * _cellHeight;
     final cellCenter = Offset(cellLeft + _cellWidth / 2, cellTop + _cellHeight / 2);
     
     // Получаем глобальные координаты
@@ -256,29 +282,44 @@ class RenderHeatmap extends RenderBox {
   void performLayout() {
     _cachedCell = null;
     _lastLocalPosition = null;
-    final constraints = this.constraints;
+
     final rowCount = _data.rowLabels.length;
     final colCount = _data.columnLabels.length;
 
     // Вычисляем отступы для подписей осей
-    final axisMetrics = _computeAxisMetrics(constraints, rowCount, colCount);
-    _axisOffset = axisMetrics.offset;
-    _bottomLabelOffset = axisMetrics.bottomSpace;
+    final metrics = _computeAxisMetrics(constraints, rowCount, colCount);
+
+    _leftPadding = metrics.left;
+    _topPadding = metrics.top;
+    _bottomPadding = metrics.bottom;
+    _rightPadding = metrics.right;
+
 
     // Доступное пространство для ячеек
-    const outerPadding = 12.0;
-    final bottomReserve = 16.0;
-    final availableWidth = (constraints.maxWidth - _axisOffset - outerPadding).clamp(0.0, double.infinity);
-    final availableHeight = (constraints.maxHeight - _axisOffset - bottomReserve - _bottomLabelOffset)
-        .clamp(0.0, double.infinity);
+    const outerPadding = 8.0;
+
+    final availableWidth = (constraints.maxWidth - _leftPadding - _rightPadding - outerPadding)
+      .clamp(0.0, double.infinity);
+    final availableHeight = (constraints.maxHeight - _topPadding - _bottomPadding - outerPadding)
+      .clamp(0.0, double.infinity);
 
     // Размеры ячеек (с ограничениями)
     _cellWidth = colCount > 0 ? (availableWidth / colCount).clamp(0.0, 200.0) : 28.0;
     _cellHeight = rowCount > 0 ? (availableHeight / rowCount).clamp(0.0, 200.0) : 28.0;
 
+    final contentWidth = colCount * _cellWidth;
+    final availableWidthForContent = constraints.maxWidth - _leftPadding - _rightPadding;
+
+    if (availableWidthForContent > contentWidth) {
+      final extraSpace = availableWidthForContent - contentWidth;
+      // Центрируем область ячеек горизонтально
+      _leftPadding += extraSpace / 2;
+      _rightPadding += extraSpace / 2;
+    }
+
     // Итоговый размер рендер-объекта
-    final totalWidth = colCount * _cellWidth + _axisOffset;
-    final totalHeight = rowCount * _cellHeight + _axisOffset + _bottomLabelOffset;
+    final totalWidth = _leftPadding + colCount * _cellWidth + _rightPadding;
+    final totalHeight = _topPadding + rowCount * _cellHeight + _bottomPadding;
     size = constraints.constrain(Size(totalWidth, totalHeight));
   }
 
@@ -295,37 +336,57 @@ class RenderHeatmap extends RenderBox {
     _targetMapper = _createMapper(newConfig, newData);
   }
 
-  /// Вычисляет оптимальные отступы для подписей осей с учётом максимальной длины меток.
+  /// Вычисляет отступы со всех четырёх сторон с учётом:
+  /// - Наличия подписей осей (`showLabels`)
+  /// - Длины и поворота подписей
+  /// - Резерва места под легенду в правом верхнем углу
   AxisMetrics _computeAxisMetrics(
     BoxConstraints constraints,
     int rowCount,
     int colCount,
   ) {
     if (!_config.axis.showLabels) {
-      return const AxisMetrics(offset: 16.0, bottomSpace: 0.0);
+      // Когда подписи отключены — используем минимальные отступы,
+      // но обязательно учитываем резерв под легенду сверху
+      final topPadding = _config.legend.position == LegendPosition.topRight
+          ? _config.legend.reserveTopSpace
+          : 12.0;
+
+      return AxisMetrics.noLabels(
+        left: 16,           // небольшой отступ слева для красоты
+        top: topPadding,
+        right: 16,
+        bottom: 0.0,
+      );
     }
 
-    const outerPadding = 12.0;
+    // === showLabels == true ===
+    // Выполняем итеративный расчёт, чтобы подписи точно помещались
+    const outerPadding = 8.0;
     final bottomReserve = 16.0;
 
-    double axisOffset = 48.0;
-    double bottomSpace = 24.0;
+    double left = 48.0;
+    double bottom = 24.0;
 
-    // Итеративное уточнение (до 4 итераций для сходимости)
+    // Итеративное уточнение отступов (до 4 проходов для сходимости)
     for (int iteration = 0; iteration < 4; iteration++) {
-      final availableWidth = (constraints.maxWidth - axisOffset - outerPadding).clamp(0.0, double.infinity);
-      final availableHeight = (constraints.maxHeight - axisOffset - bottomReserve - bottomSpace)
+      final availableWidth = (constraints.maxWidth - left - outerPadding - _config.legend.reserveRightSpace)
           .clamp(0.0, double.infinity);
+
+      final availableHeight = (constraints.maxHeight - left - bottomReserve - bottom)
+          .clamp(0.0, double.infinity);   // здесь left используется как приближение top
 
       final cellWidth = colCount > 0 ? (availableWidth / colCount).clamp(28.0, 200.0) : 28.0;
       final cellHeight = rowCount > 0 ? (availableHeight / rowCount).clamp(28.0, 200.0) : 28.0;
 
       final textStyle = _axisTextStyle(cellWidth, cellHeight);
-      // Максимальная ширина подписи строки (с учётом усечения)
+
+      // Максимальная ширина подписи строки
       final maxRowLabelWidth = _data.rowLabels
           .map((label) => _measureText(_shortenRowLabel(label), textStyle).width)
           .fold(0.0, math.max);
-      // Максимальная высота подписи столбца (с учётом поворота)
+
+      // Максимальная высота подписи столбца с учётом поворота
       final maxColLabelHeight = _data.columnLabels
           .map((label) => _rotatedTextSize(
                 _shortenColumnLabel(label, textStyle, cellWidth),
@@ -334,18 +395,31 @@ class RenderHeatmap extends RenderBox {
               ).height)
           .fold(0.0, math.max);
 
-      final newOffset = math.max(48.0, maxRowLabelWidth + 16.0);
-      final newBottomSpace = math.max(24.0, maxColLabelHeight + 12.0);
+      final newLeft = math.max(48.0, maxRowLabelWidth + 16.0);
+      final newBottom = math.max(24.0, maxColLabelHeight + 12.0);
 
-      if ((axisOffset - newOffset).abs() < 1.0 && (bottomSpace - newBottomSpace).abs() < 1.0) {
-        axisOffset = newOffset;
-        bottomSpace = newBottomSpace;
+      if ((left - newLeft).abs() < 1.0 && (bottom - newBottom).abs() < 1.0) {
+        left = newLeft;
+        bottom = newBottom;
         break;
       }
-      axisOffset = newOffset;
-      bottomSpace = newBottomSpace;
+
+      left = newLeft;
+      bottom = newBottom;
     }
-    return AxisMetrics(offset: axisOffset, bottomSpace: bottomSpace);
+
+    double top = _config.legend.reserveTopSpace;
+
+    if (_config.legend.position == LegendPosition.topRight) {
+      top = math.max(top, _config.legend.reserveTopSpace);
+    }
+
+    return AxisMetrics(
+      left: left,
+      top: top,
+      right: _config.legend.reserveRightSpace,
+      bottom: bottom,
+    );
   }
 
   // Вспомогательные методы для расчёта размеров текста (копия из старого виджета)
@@ -423,7 +497,8 @@ class RenderHeatmap extends RenderBox {
       holder: holder,
       cellWidth: _cellWidth,
       cellHeight: _cellHeight,
-      axisOffset: _axisOffset,
+      leftPadding: _leftPadding,
+      topPadding: _topPadding,
       bottomLabelOffset: _bottomLabelOffset,
       hoverRow: _hoverRow,
       hoverCol: _hoverCol,
@@ -446,7 +521,7 @@ class RenderHeatmap extends RenderBox {
   bool hitTestSelf(Offset position) => _config.touchData.enabled;
 
   @override
-    void handleEvent(PointerEvent event, BoxHitTestEntry entry) {
+  void handleEvent(PointerEvent event, BoxHitTestEntry entry) {
     if (event is PointerExitEvent) {
       _hoverRow = null;
       _hoverCol = null;
@@ -510,12 +585,12 @@ class RenderHeatmap extends RenderBox {
     
     _lastLocalPosition = localPosition;
     
-    if (localPosition.dx < _axisOffset || localPosition.dy < _axisOffset) {
+    if (localPosition.dx < _leftPadding || localPosition.dy < _topPadding) {
       _cachedCell = null;
       return null;
     }
-    final col = ((localPosition.dx - _axisOffset) / _cellWidth).floor();
-    final row = ((localPosition.dy - _axisOffset) / _cellHeight).floor();
+    final col = ((localPosition.dx - _leftPadding) / _cellWidth).floor();
+    final row = ((localPosition.dy - _topPadding) / _cellHeight).floor();
     if (row >= 0 && row < _data.rowLabels.length && col >= 0 && col < _data.columnLabels.length) {
       _cachedCell = (row: row, col: col);
       return _cachedCell;
