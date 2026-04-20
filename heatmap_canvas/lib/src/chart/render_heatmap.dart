@@ -281,7 +281,7 @@ class RenderHeatmap extends RenderBox {
   @override
   void performLayout() {
     _cachedCell = null;
-    _lastLocalPosition = null;
+    _lastLocalPosition = null;  
 
     final rowCount = _data.rowLabels.length;
     final colCount = _data.columnLabels.length;
@@ -295,27 +295,15 @@ class RenderHeatmap extends RenderBox {
     _rightPadding = metrics.right;
 
 
-    // Доступное пространство для ячеек
-    const outerPadding = 8.0;
-
-    final availableWidth = (constraints.maxWidth - _leftPadding - _rightPadding - outerPadding)
+    final availableWidth = (constraints.maxWidth - _leftPadding - _rightPadding)
       .clamp(0.0, double.infinity);
-    final availableHeight = (constraints.maxHeight - _topPadding - _bottomPadding - outerPadding)
+    final availableHeight = (constraints.maxHeight - _topPadding - _bottomPadding)
       .clamp(0.0, double.infinity);
 
     // Размеры ячеек (с ограничениями)
     _cellWidth = colCount > 0 ? (availableWidth / colCount).clamp(0.0, 200.0) : 28.0;
     _cellHeight = rowCount > 0 ? (availableHeight / rowCount).clamp(0.0, 200.0) : 28.0;
 
-    final contentWidth = colCount * _cellWidth;
-    final availableWidthForContent = constraints.maxWidth - _leftPadding - _rightPadding;
-
-    if (availableWidthForContent > contentWidth) {
-      final extraSpace = availableWidthForContent - contentWidth;
-      // Центрируем область ячеек горизонтально
-      _leftPadding += extraSpace / 2;
-      _rightPadding += extraSpace / 2;
-    }
 
     // Итоговый размер рендер-объекта
     final totalWidth = _leftPadding + colCount * _cellWidth + _rightPadding;
@@ -353,10 +341,10 @@ class RenderHeatmap extends RenderBox {
           : 12.0;
 
       return AxisMetrics.noLabels(
-        left: 16,           // небольшой отступ слева для красоты
+        left: _config.legend.reserveRightSpace,           // небольшой отступ слева для красоты
         top: topPadding,
-        right: 16,
-        bottom: 0.0,
+        right: _config.legend.reserveRightSpace,
+        bottom: 10.0,
       );
     }
 
@@ -366,6 +354,7 @@ class RenderHeatmap extends RenderBox {
     final bottomReserve = 16.0;
 
     double left = 48.0;
+    double right = _config.legend.reserveRightSpace;
     double bottom = 24.0;
 
     // Итеративное уточнение отступов (до 4 проходов для сходимости)
@@ -374,7 +363,7 @@ class RenderHeatmap extends RenderBox {
           .clamp(0.0, double.infinity);
 
       final availableHeight = (constraints.maxHeight - left - bottomReserve - bottom)
-          .clamp(0.0, double.infinity);   // здесь left используется как приближение top
+          .clamp(0.0, double.infinity);  
 
       final cellWidth = colCount > 0 ? (availableWidth / colCount).clamp(28.0, 200.0) : 28.0;
       final cellHeight = rowCount > 0 ? (availableHeight / rowCount).clamp(28.0, 200.0) : 28.0;
@@ -417,7 +406,7 @@ class RenderHeatmap extends RenderBox {
     return AxisMetrics(
       left: left,
       top: top,
-      right: _config.legend.reserveRightSpace,
+      right: right,
       bottom: bottom,
     );
   }
@@ -498,8 +487,9 @@ class RenderHeatmap extends RenderBox {
       cellWidth: _cellWidth,
       cellHeight: _cellHeight,
       leftPadding: _leftPadding,
+      rightPadding: _rightPadding,
       topPadding: _topPadding,
-      bottomLabelOffset: _bottomLabelOffset,
+      bottomPadding: _bottomPadding,
       hoverRow: _hoverRow,
       hoverCol: _hoverCol,
       hoverRange: _externalHoverRange ?? _hoverRange,

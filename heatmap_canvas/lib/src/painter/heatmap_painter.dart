@@ -31,11 +31,14 @@ class HeatmapPainter extends CustomPainter {
   /// Отступ слева до начала ячеек и подписей строк
   final double leftPadding;
 
+  /// Отступ справа от конца ячеек
+  final double rightPadding;
+
   /// Отступ сверху до первой строки ячеек
   final double topPadding;
 
   /// Дополнительное пространство снизу для подписи столбцов
-  final double bottomLabelOffset;
+  final double bottomPadding;
 
   /// Индекс строки под курсором (для подсветки)
   final int? hoverRow;
@@ -55,8 +58,9 @@ class HeatmapPainter extends CustomPainter {
     required this.cellWidth,
     required this.cellHeight,
     required this.leftPadding,
+    required this.rightPadding,
     required this.topPadding,
-    required this.bottomLabelOffset,
+    required this.bottomPadding,
     this.hoverRow,
     this.hoverCol,
     this.hoverRange,
@@ -90,14 +94,14 @@ class HeatmapPainter extends CustomPainter {
 
   // Генерация ключей для кэша
   String _gridKey() => '${holder.data.rowLabels.length}_${holder.data.columnLabels.length}_'
-      '${cellWidth}_${cellHeight}_${leftPadding}_${topPadding}_${bottomLabelOffset}_'
+      '${cellWidth}_${cellHeight}_${leftPadding}_${rightPadding}_${topPadding}_${bottomPadding}_'
       '${holder.config.axis.showLabels}';
 
   String _rowLabelsKey() => '${holder.data.rowLabels.join()}_${holder.config.axis.textStyle}_'
       '${leftPadding}_$topPadding';
 
   String _colLabelsKey() => '${holder.data.columnLabels.join()}_${holder.config.axis.textStyle}_'
-      '${holder.config.axis.labelRotation}_${cellWidth}_$bottomLabelOffset';
+      '${holder.config.axis.labelRotation}_${cellWidth}_$bottomPadding';
 
   /// Получает или создает TextPainter для заданного текста и стиля.
   ///
@@ -152,12 +156,12 @@ class HeatmapPainter extends CustomPainter {
     final colCount = holder.data.columnLabels.length;
     final gridPaint = Paint()
       ..color = Colors.grey.shade300
-      ..strokeWidth = 0.5
+      ..strokeWidth = 1.5
       ..style = PaintingStyle.stroke;
     
     // Фон
     canvas.drawRect(Rect.fromLTWH(0, 0, totalSize.width, totalSize.height), Paint()..color = Colors.white);
-    // Рамка вокруг ячеек
+    // Рамка вокруг ячеек 
     canvas.drawRect(
       Rect.fromLTWH(leftPadding, topPadding, colCount * cellWidth, rowCount * cellHeight),
       Paint()..color = Colors.grey.shade300..style = PaintingStyle.stroke..strokeWidth = 1,
@@ -166,7 +170,7 @@ class HeatmapPainter extends CustomPainter {
     // Горизонтальные линии
     for (int i = 0; i <= rowCount; i++) {
       final y = topPadding + i * cellHeight;
-      canvas.drawLine(Offset(leftPadding, y), Offset(totalSize.width, y), gridPaint);
+      canvas.drawLine(Offset(leftPadding - 15, y), Offset(totalSize.width - rightPadding, y), gridPaint);
     }
     // Вертикальные линии
     for (int i = 0; i <= colCount; i++) {
@@ -361,8 +365,8 @@ class HeatmapPainter extends CustomPainter {
     final colCount = data.columnLabels.length;
     if (rowCount == 0 || colCount == 0) return;
 
-    final totalWidth = leftPadding + colCount * cellWidth;
-    final totalHeight = topPadding + rowCount * cellHeight + bottomLabelOffset;
+    final totalWidth = leftPadding + colCount * cellWidth + rightPadding;
+    final totalHeight = topPadding + rowCount * cellHeight + bottomPadding;
     final totalSize = Size(totalWidth, totalHeight);
 
     // Инвалидация и перестроение кэшей при необходимости
@@ -537,8 +541,9 @@ class HeatmapPainter extends CustomPainter {
         old.cellWidth != cellWidth ||
         old.cellHeight != cellHeight ||
         old.leftPadding != leftPadding ||
+        old.rightPadding != rightPadding ||
         old.topPadding != topPadding ||
-        old.bottomLabelOffset != bottomLabelOffset ||
+        old.bottomPadding != bottomPadding ||
         old.hoverRow != hoverRow ||
         old.hoverCol != hoverCol ||
         old.hoverRange != hoverRange;
