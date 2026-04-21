@@ -224,6 +224,7 @@ class _NoChartContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -233,6 +234,11 @@ class _NoChartContent extends StatelessWidget {
           const SizedBox(height: 16),
           ElevatedButton(
             onPressed: () => _showChartMenu(context),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: theme.colorScheme.primary,
+              foregroundColor: theme.colorScheme.onPrimary,
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+            ),
             child: const Text('Создать график'),
           ),
         ],

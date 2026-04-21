@@ -214,17 +214,25 @@ class _LeftPanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final dataset = ref.watch(datasetProvider);
-    final selectedChartId = ref.watch(selectedChartIdProvider);
-    final charts = ref.watch(chartsProvider);
-    final selectedChart = selectedChartId != null
-        ? charts.cast<FloatingChartData?>().firstWhere((c) => c?.id == selectedChartId, orElse: () => null)
-        : null;
+    final selectedChart = ref.watch(
+      selectedChartIdProvider.select(
+        (id) {
+          if (id == null) return null;
+          final charts = ref.read(chartsProvider);
+          return charts
+              .cast<FloatingChartData?>()
+              .firstWhere((c) => c?.id == id, orElse: () => null);
+        },
+      ),
+    );
 
-    return ContextPanel(
-      dataset: dataset,
-      selectedChart: selectedChart,
-      onAddChart: onAddChart,
-      onUpdateChartState: onUpdateChartState,
+    return RepaintBoundary(
+      child: ContextPanel(
+        dataset: dataset,
+        selectedChart: selectedChart,
+        onAddChart: onAddChart,
+        onUpdateChartState: onUpdateChartState,
+      ),
     );
   }
 }
