@@ -3,20 +3,26 @@ import 'package:stat_flow/core/dataset/dataset.dart';
 import 'package:stat_flow/features/table/grid/syncfusion_grid_data.dart';
 import 'package:syncfusion_flutter_datagrid/datagrid.dart';
 
+import '../../statistics/widgets/statistic_widget.dart';
+
 /// {@template full_table_screen}
-/// Экран полного отображения таблицы данных с расширенными возможностями
+/// Экран полного отображения таблицы данных с расширенными возможностями.
 /// 
 /// Предоставляет:
-/// - Отображение всех строк и колонок датасета в Syncfusion DataGrid
-/// - Выбор отображаемых колонок через боковую панель
-/// - Сортировку, фильтрацию и изменение размера колонок
-/// - Множественный выбор записей
-/// - Экспорт данных в различные форматы (PDF, CSV, изображение)
+/// - Отображение всех строк и колонок датасета в Syncfusion DataGrid.
+/// - Выбор отображаемых колонок через боковую панель (планируется).
+/// - Сортировку, фильтрацию и изменение размера колонок.
+/// - Множественный выбор записей.
+/// - Экспорт данных в различные форматы (PDF, CSV, изображение) — через стандартные возможности DataGrid.
 /// 
-/// Экран открывается в полноэкранном режиме поверх основного интерфейса.
+/// Экран имеет две вкладки: "Данные" (таблица) и "Статистика" (сводка по числовым колонкам).
+/// Открывается в полноэкранном режиме поверх основного интерфейса.
+/// 
+/// TODO: Добавить панель выбора отображаемых колонок
+/// TODO: Реализовать экспорт данных
 /// {@endtemplate}
 class FullTableScreen extends StatefulWidget {
-  /// Датасет для отображения
+  /// Датасет для отображения.
   final Dataset dataset;
 
   /// {@macro full_table_screen}
@@ -29,8 +35,13 @@ class FullTableScreen extends StatefulWidget {
   State<FullTableScreen> createState() => _FullTableScreenState();
 }
 
+/// Состояние экрана полной таблицы.
+/// Управляет подготовкой данных для DataGrid и переключением между вкладками.
 class _FullTableScreenState extends State<FullTableScreen> {
-  /// Подготовленные данные для Syncfusion DataGrid
+  /// Подготовленные данные и колонки для Syncfusion DataGrid.
+  /// 
+  /// Создаётся в [initState] с помощью [SyncfusionGridConverter].
+  /// Утилизируется в [dispose] через вызов [dispose] у источника данных.
   late SyncfusionGridData _gridData;
 
   @override
@@ -41,6 +52,7 @@ class _FullTableScreenState extends State<FullTableScreen> {
 
   @override
   void dispose() {
+    // Освобождаем ресурсы источника данных DataGrid (отписываемся от слушателей и т.п.)
     _gridData.source.dispose();
     super.dispose();
   }
@@ -48,31 +60,51 @@ class _FullTableScreenState extends State<FullTableScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);  
-    return Container(
-      color: theme.colorScheme.surface,
+    return DefaultTabController(
+      length: 2,
       child: Column(
         children: [
-          const _TableHeader(),
-          const Divider(),
+          const TabBar(
+            tabs: [
+              Tab(text: 'Данные'),
+              Tab(text: 'Статистика'),
+            ],
+          ),
           Expanded(
-            child: SfDataGrid(
-              source: _gridData.source,
-              columns: _gridData.columns,
-              gridLinesVisibility: GridLinesVisibility.both,
-              headerGridLinesVisibility: GridLinesVisibility.both,
-              allowSorting: true,
-              allowMultiColumnSorting: true,
-              allowTriStateSorting: true,
-              allowFiltering: true,
-              allowColumnsResizing: true,
-              selectionMode: SelectionMode.multiple,
-              navigationMode: GridNavigationMode.cell,
-              columnWidthMode: ColumnWidthMode.auto,
-              defaultColumnWidth: 100.0,
-              rowHeight: 40.0,
-              headerRowHeight: 50.0,
-              isScrollbarAlwaysShown: true,
-              frozenColumnsCount: 0,
+            child: TabBarView(
+              children: [
+                Container(
+                  color: theme.colorScheme.surface,
+                  child: Column(
+                    children: [
+                      const _TableHeader(),
+                      const Divider(),
+                      Expanded(
+                        child: SfDataGrid(
+                          source: _gridData.source,
+                          columns: _gridData.columns,
+                          gridLinesVisibility: GridLinesVisibility.both,
+                          headerGridLinesVisibility: GridLinesVisibility.both,
+                          allowSorting: true,
+                          allowMultiColumnSorting: true,
+                          allowTriStateSorting: true,
+                          allowFiltering: true,
+                          allowColumnsResizing: true,
+                          selectionMode: SelectionMode.multiple,
+                          navigationMode: GridNavigationMode.cell,
+                          columnWidthMode: ColumnWidthMode.auto,
+                          defaultColumnWidth: 100.0,
+                          rowHeight: 40.0,
+                          headerRowHeight: 50.0,
+                          isScrollbarAlwaysShown: true,
+                          frozenColumnsCount: 0,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                StatisticsTable(dataset: widget.dataset),
+              ],
             ),
           ),
         ],
@@ -81,13 +113,14 @@ class _FullTableScreenState extends State<FullTableScreen> {
   }
 }
 
-///{@template table_header}
-/// Заголовок экрана полной таблицы с названием и кнопкой закрытия
-/// Расположен в верхней части экрана и обеспечивает быстрый доступ к закрытию просмотра таблицы
+/// {@template table_header}
+/// Заголовок экрана полной таблицы с названием и кнопкой закрытия.
+/// 
+/// Расположен в верхней части экрана и обеспечивает быстрый доступ к закрытию просмотра таблицы.
 /// Содержит:
-/// - Название "Таблица данных"
-/// - Кнопку "Закрыть", которая закрывает экран и возвращает пользователя к основному интерфейсу
-///{@endtemplate}
+/// - Название "Таблица данных".
+/// - Кнопку "Закрыть", которая закрывает экран и возвращает пользователя к основному интерфейсу.
+/// {@endtemplate}
 class _TableHeader extends StatelessWidget {
   const _TableHeader();
 
@@ -102,6 +135,12 @@ class _TableHeader extends StatelessWidget {
           Text(
             'Таблица данных',
             style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          // Кнопка закрытия экрана
+          IconButton(
+            icon: const Icon(Icons.close),
+            tooltip: 'Закрыть',
+            onPressed: () => Navigator.of(context).pop(),
           ),
         ],
       ),

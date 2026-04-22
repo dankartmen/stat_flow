@@ -4,7 +4,7 @@ import '../../../core/theme/controls_style.dart';
 import 'bar_state.dart';
 
 /// {@template bar_controls}
-/// Фабрика для создания элементов управления столбчатой диаграммой
+/// Фабрика для создания элементов управления столбчатой диаграммой.
 /// Предоставляет статические методы для построения UI-компонентов,
 /// управляющих отображением столбчатой диаграммы:
 /// - Выбор колонки для анализа (числовая, категориальная или текстовая)
@@ -15,6 +15,16 @@ import 'bar_state.dart';
 /// - Дополнительные настройки для категориальных/текстовых колонок (макс. категории, сортировка) 
 /// {@endtemplate}
 class BarControls {
+  /// Строит список виджетов управления на основе состояния.
+  ///
+  /// Принимает:
+  /// - [context] — контекст сборки
+  /// - [dataset] — датасет с данными
+  /// - [state] — текущее состояние диаграммы
+  /// - [onChanged] — колбэк для обновления состояния
+  ///
+  /// Возвращает:
+  /// - список виджетов для панели управления
   static List<Widget> build({
     required BuildContext context,
     required Dataset dataset,
@@ -25,6 +35,13 @@ class BarControls {
         .where((c) => c is NumericColumn || c is CategoricalColumn || c is TextColumn)
         .map((c) => c.name)
         .toList();
+
+    final groupingColumns = dataset.columns
+        .where((c) => c is CategoricalColumn || c is TextColumn)
+        .map((c) => c.name)
+        .toList();
+
+    final groupByItems = <String?>[null, ...groupingColumns];
     final theme = Theme.of(context);
 
     return [
@@ -43,6 +60,25 @@ class BarControls {
         ),
       ),
 
+      // Группировка
+      /// TODO: Исправить ошибку с группировками
+      buildSection(
+        context: context,
+        title: 'Группировка',
+        icon: Icons.group_work_rounded,
+        child: Column(
+          children: [
+            buildDropdown<String?>(
+              context: context,
+              label: 'Группировать по',
+              initialValue: state.groupByColumn,
+              items: groupByItems,
+              onChanged: (value) => onChanged(state.copyWith(groupByColumn: value)),
+              displayName: (item) => item ?? 'Без группировки',
+            ),
+          ],
+        ),
+      ),
       buildSection(
         context: context,
         title: 'Основные настройки',
@@ -131,6 +167,7 @@ class BarControls {
         ),
       ),
 
+      // Дополнительные настройки для числовых колонок (гистограмма)
       if (state.columnName != null && dataset.column(state.columnName!) is NumericColumn)
         buildSection(
           context: context,
@@ -156,6 +193,7 @@ class BarControls {
           ),
         ),
 
+      // Дополнительные настройки для категориальных/текстовых колонок
       if (state.columnName != null &&
           (dataset.column(state.columnName!) is CategoricalColumn ||
            dataset.column(state.columnName!) is TextColumn))

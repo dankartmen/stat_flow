@@ -15,18 +15,18 @@ import 'boxplot_state.dart';
 /// - Ограничение числа точек для рендеринга
 /// - Настройка визуального стиля (ширина, отступы, режим расчёта)
 /// - Включение отображения всех точек с джиттером
-/// 
 /// {@endtemplate}
 class BoxPlotControls {
-  /// Строит список виджетов управления на основе состояния
+  /// Строит список виджетов управления на основе состояния.
   ///
   /// Принимает:
+  /// - [context] — контекст сборки для доступа к теме
   /// - [dataset] — датасет с данными для анализа
   /// - [state] — текущее состояние ящика с усами
   /// - [onChanged] — колбэк для обновления состояния
   ///
   /// Возвращает:
-  /// - [List<Widget>] — список виджетов для размещения в панели управления
+  /// - список виджетов для размещения в панели управления
   static List<Widget> build({
     required BuildContext context,
     required Dataset dataset,
@@ -34,6 +34,11 @@ class BoxPlotControls {
     required ValueChanged<BoxPlotState> onChanged,
   }) {
     final numericColumns = dataset.numericColumns;
+    final groupingColumns = dataset.columns
+        .where((c) => c is CategoricalColumn || c is TextColumn)
+        .map((c) => c.name)
+        .toList();
+    final groupByItems = <String?>[null, ...groupingColumns];
     final theme = Theme.of(context);
 
     return [
@@ -50,6 +55,20 @@ class BoxPlotControls {
           initialValue: state.columnName,
           items: numericColumns.map((c) => c.name).toList(),
           onChanged: (value) => onChanged(state.copyWith(columnName: value)),
+        ),
+      ),
+      // Группировка
+      buildSection(
+        context: context,
+        title: 'Группировка',
+        icon: Icons.group_work_rounded,
+        child: buildDropdown<String?>(
+          context: context,
+          label: 'Группировать по',
+          initialValue: state.groupByColumn,
+          items: groupByItems,
+          onChanged: (value) => onChanged(state.copyWith(groupByColumn: value)),
+          displayName: (item) => item ?? 'Без группировки',
         ),
       ),
 

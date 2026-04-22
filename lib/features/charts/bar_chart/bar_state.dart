@@ -1,63 +1,80 @@
 import '../chart_state.dart';
 
-/// Тип выравнивания столбцов
+/// Тип выравнивания подписей значений на столбцах.
 enum BarAlignment {
-  /// Выравнивание по дальнему краю
+  /// Выравнивание по дальнему краю (относительно столбца).
   far,
   
-  /// Выравнивание по ближнему краю
+  /// Выравнивание по ближнему краю.
   near,
   
-  /// Выравнивание по центру
+  /// Выравнивание по центру.
   center,
 }
 
 /// {@template bar_state}
-/// Состояние столбчатой диаграммы для системы плагинов
+/// Состояние столбчатой диаграммы для системы плагинов.
 /// 
 /// Хранит настройки отображения столбчатой диаграммы:
 /// - [columnName] — имя выбранной колонки (может быть категориальной, текстовой или числовой)
+/// - [groupByColumn] — колонка для группировки (строятся несколько серий)
+/// - [stacked] — режим составных столбцов (stacked)
 /// - [showValues] — показывать значения на столбцах
 /// - [barWidth] — ширина столбцов (0.1-1.0)
-/// - [alignment] — выравнивание столбцов
+/// - [alignment] — выравнивание подписей значений
+/// - [binCount] — количество интервалов для числовых данных (гистограмма)
+/// - [maxCategories] — максимальное количество категорий для отображения
+/// - [showTrack] — показывать трек (фон) для столбцов
+/// - [borderRadius] — радиус скругления углов столбцов
+/// - [borderWidth] — толщина границы столбцов
+/// - [spacing] — расстояние между столбцами (в относительных единицах)
+/// - [sortDescending] — сортировать категории по убыванию частоты
 /// {@endtemplate}
 class BarState extends ChartState {
-  /// Имя выбранной колонки
+  /// Имя выбранной колонки.
   String? columnName;
   
-  /// Показывать значения на столбцах
+  /// Колонка для группировки (категориальная или текстовая).
+  String? groupByColumn;
+
+  /// Флаг stacked-режима (составные столбцы).
+  bool stacked;
+
+  /// Показывать значения на столбцах.
   bool showValues;
   
-  /// Ширина столбцов (0.1-1.0)
+  /// Ширина столбцов в относительных единицах (0.1-1.0).
   double barWidth;
   
-  /// Выравнивание столбцов
+  /// Выравнивание подписей значений.
   BarAlignment alignment;
 
-  /// Количество корзин для числовых данных
+  /// Количество интервалов для числовых данных (гистограмма).
   int binCount;
 
-  /// Максимальное количество категорий для отображения (для категориальных данных)                   
+  /// Максимальное количество категорий для отображения (для категориальных данных).                   
   int maxCategories;
 
-  /// Показывать трек (фон для столбцов)
+  /// Показывать трек (фон для столбцов).
   bool showTrack;
 
-  /// Радиус скругления углов столбцов
+  /// Радиус скругления углов столбцов (в пикселях).
   double borderRadius;
 
-  /// Толщина границы столбцов
+  /// Толщина границы столбцов (в пикселях).
   double borderWidth;
 
-  /// Расстояние между столбцами (для категориальных данных)
+  /// Расстояние между столбцами (относительное, 0…1).
   double spacing;
 
-  /// Сортировать категории по убыванию (для категориальных данных)
+  /// Сортировать категории по убыванию частоты (для категориальных данных).
   bool sortDescending;
   
   /// {@macro bar_state}
   BarState({
     this.columnName,
+    this.groupByColumn,
+    this.stacked = false,
     this.showValues = false,
     this.barWidth = 0.7,
     this.alignment = BarAlignment.center,
@@ -70,9 +87,12 @@ class BarState extends ChartState {
     this.sortDescending = true,
   });
 
+  /// Создаёт копию состояния с изменёнными полями.
   @override
   BarState copyWith({
     String? columnName,
+    String? groupByColumn,
+    bool? stacked,
     bool? showValues,
     double? barWidth,
     BarAlignment? alignment,
@@ -86,6 +106,8 @@ class BarState extends ChartState {
   }) {
     return BarState(
       columnName: columnName ?? this.columnName,
+      groupByColumn: groupByColumn ?? this.groupByColumn,
+      stacked: stacked ?? this.stacked,
       showValues: showValues ?? this.showValues,
       barWidth: barWidth ?? this.barWidth,
       alignment: alignment ?? this.alignment,
@@ -99,6 +121,7 @@ class BarState extends ChartState {
     );
   }
 
+  /// Обновляет состояние при выборе колонки из панели управления.
   @override
   BarState withField(String columnName, {ColumnType? type}) {
     if (type == ColumnType.categorical || 

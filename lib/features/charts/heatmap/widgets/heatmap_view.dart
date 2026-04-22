@@ -1,5 +1,3 @@
-import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart' hide DataColumn;
 import 'package:heatmap_canvas/heatmap.dart';
 import '../../../../core/dataset/dataset.dart';

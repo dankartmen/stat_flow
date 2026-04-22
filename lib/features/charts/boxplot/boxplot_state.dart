@@ -2,8 +2,6 @@ import 'package:syncfusion_flutter_charts/charts.dart';
 
 import '../chart_state.dart';
 
-
-
 /// {@template boxplot_state}
 /// Состояние ящика с усами (box plot) для системы плагинов
 /// 
@@ -18,39 +16,45 @@ import '../chart_state.dart';
 /// Наследуется от [ChartState] для интеграции с системой плагинов.
 /// {@endtemplate}
 class BoxPlotState extends ChartState {
-  /// Имя выбранной числовой колонки для отображения
+  /// Имя выбранной числовой колонки для отображения.
   String? columnName;
 
-  /// Показывать ли на графике среднее значение
+  /// Колонка для группировки (категориальная или текстовая).
+  /// Если указана, строятся несколько ящиков — по одному на каждую категорию.
+  String? groupByColumn;
+
+  /// Показывать ли на графике среднее значение (маркером).
   bool showMean;
 
-  /// Показывать ли выбросы (outliers)
+  /// Показывать ли выбросы (outliers) — точки за пределами усов.
   bool showOutliers;
 
-  /// Показывать все точки (джиттер)
+  /// Показывать все точки (с джиттером) поверх ящика.
   bool showAllPoints;
 
-  /// Максимальное количество точек для расчёта и отображения
+  /// Максимальное количество точек для расчёта и отображения.
+  /// При превышении выполняется сэмплирование.
   int maxPoints;
 
-  /// Режим расчёта box plot
+  /// Режим расчёта box plot: обычный (нормальный), исключительный или включающий.
   BoxPlotMode boxPlotMode;
 
-  /// Ширина ящика (0.1–1.0)
+  /// Ширина ящика в относительных единицах (0.1–1.0).
   double boxWidth;
 
-  /// Отступ между ящиками (для будущей поддержки нескольких серий)
+  /// Отступ между ящиками (для будущей поддержки нескольких серий).
   double spacing;
 
-  /// Толщина границы
+  /// Толщина границы ящика и усов в пикселях.
   double borderWidth;
 
-  /// Размер маркеров выбросов
+  /// Размер маркеров выбросов в пикселях.
   double outlierSize;
 
   /// {@macro boxplot_state}
   BoxPlotState({
     this.columnName,
+    this.groupByColumn,
     this.showMean = true,
     this.showOutliers = true,
     this.showAllPoints = false,
@@ -62,9 +66,11 @@ class BoxPlotState extends ChartState {
     this.outlierSize = 6.0,
   });
 
+  /// Создаёт копию состояния с изменёнными полями.
   @override
   BoxPlotState copyWith({
     String? columnName,
+    String? groupByColumn,
     bool? showMean,
     bool? showOutliers,
     bool? showAllPoints,
@@ -77,6 +83,7 @@ class BoxPlotState extends ChartState {
   }) {
     return BoxPlotState(
       columnName: columnName ?? this.columnName,
+      groupByColumn: groupByColumn ?? this.groupByColumn,
       showMean: showMean ?? this.showMean,
       showOutliers: showOutliers ?? this.showOutliers,
       showAllPoints: showAllPoints ?? this.showAllPoints,
@@ -89,6 +96,14 @@ class BoxPlotState extends ChartState {
     );
   }
 
+  /// Обновляет состояние при выборе колонки из панели управления.
+  /// 
+  /// Принимает:
+  /// - [columnName] — имя выбранной колонки
+  /// - [type] — тип колонки (если известен)
+  /// 
+  /// Возвращает:
+  /// - новое состояние с обновлённой колонкой, если тип числовой
   @override
   BoxPlotState withField(String columnName, {ColumnType? type}) {
     if (type == ColumnType.numeric) {

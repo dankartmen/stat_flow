@@ -275,20 +275,30 @@ class CsvLoader {
     bool allNumeric = true;
     bool allDateTime = true;
 
+    final uniqueValues = <String>{};
+
     for (final v in values) {
       if (v == null || v.isEmpty) continue;
       nonNullCount++;
+      uniqueValues.add(v);
       if (double.tryParse(v.replaceAll(',', '.')) == null) allNumeric = false;
       if (DateTime.tryParse(v) == null) allDateTime = false;
     }
 
     if (nonNullCount == 0) return 'text';
+    // Явные категориальные: мало уникальных значений (≤5) и не даты
+    if (uniqueValues.length <= 5 && !allDateTime) {
+      return 'categorical';
+    }
+
+    // Числовые
     if (allNumeric) return 'numeric';
+
+    // Даты
     if (allDateTime) return 'datetime';
 
-    // Категориальная эвристика: количество уникальных менее 20% от ненулевых
-    final unique = values.whereType<String>().toSet().length;
-    if (unique < nonNullCount * 0.2) return 'categorical';
+    // Категориальные по эвристике (<20% уникальных)
+    if (uniqueValues.length < nonNullCount * 0.2) return 'categorical';
     return 'text';
   }
 
