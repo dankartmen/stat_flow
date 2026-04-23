@@ -1,4 +1,3 @@
-import 'dart:developer';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -72,7 +71,6 @@ class RenderHeatmap extends RenderBox {
   TextScaler _textScaler;
   
   // Кэшированные результаты геометрии (пересчитываются в performLayout)
-  double _bottomLabelOffset = 0; // Отступ для нижних подписей столбцов
   double _cellWidth = 0;         // Ширина одной ячейки в пикселях
   double _cellHeight = 0;        // Высота одной ячейки в пикселях
   double _leftPadding = 0.0;     // место под подписи строк

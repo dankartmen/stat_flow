@@ -146,10 +146,12 @@ class ChartsNotifier extends StateNotifier<List<FloatingChartData>> {
 
   /// Обновляет внутреннее состояние графика (выбранные колонки, параметры)
   void updateChartState(int id, ChartState newState) {
+    log('[ChartsNotifier.updateChartState] id=$id, newState type=${newState.runtimeType}, groupByColumn=${(newState is BarState) ? newState.groupByColumn : 'N/A'}');
     state = [
       for (final chart in state)
         if (chart.id == id) chart.copyWith(state: newState) else chart
     ];
+    log('[ChartsNotifier.updateChartState] обновлено состояние графика');
   }
 
   /// Перемещает график в конец списка (делает его выбранным/поверх других)

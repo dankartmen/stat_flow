@@ -1,4 +1,3 @@
-import 'dart:developer';
 import 'package:flutter/material.dart' hide DataColumn;
 import 'package:syncfusion_flutter_charts/charts.dart';
 import '../../../core/dataset/dataset.dart';
@@ -75,9 +74,7 @@ class _BarViewState extends State<BarView> {
   /// - Для числовых данных выполняет группировку в интервалы (гистограмма).
   /// - Для категориальных и текстовых данных считает частоты.
   /// - Выполняет сэмплирование, если количество данных превышает порог.
-  void _updateData() {
-    log("Обновление данных в BarView с состоянием: ${widget.state.toString()}", name: 'BarView');
-    
+  void _updateData() {    
     final result = BarDataCalculator.calculate(
       dataset: widget.dataset,
       state: widget.state,

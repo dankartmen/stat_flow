@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
 import '../../../core/dataset/dataset.dart';
+import 'boxplot_data_calculator.dart';
+import 'boxplot_models.dart';
 import 'boxplot_state.dart';
 
 /// {@template boxplot_view}
@@ -57,6 +59,7 @@ class _BoxPlotViewState extends State<BoxPlotView> {
     super.didUpdateWidget(oldWidget);
     // Пересчитываем данные при изменении ключевых параметров
     if (oldWidget.state.columnName != widget.state.columnName ||
+        oldWidget.state.groupByColumn != widget.state.groupByColumn ||
         oldWidget.state.maxPoints != widget.state.maxPoints ||
         oldWidget.dataset != widget.dataset) {
       _prepareData();
@@ -69,83 +72,15 @@ class _BoxPlotViewState extends State<BoxPlotView> {
   /// - Если задана группировка, разбивает данные по категориям.
   /// - Выполняет сэмплирование, если количество точек превышает порог [maxPoints].
   void _prepareData() {
-    final columnName = widget.state.columnName;
-    if (columnName == null) {
-      _clearData();
-      return;
-    }
-
-    final column = widget.dataset.numeric(columnName);
-    final allValues = column.data;
-
-    // Обработка с группировкой
-    if (widget.state.groupByColumn != null) {
-      final groupColName = widget.state.groupByColumn!;
-      final groupCol = widget.dataset.column(groupColName);
-      if (groupCol == null) {
-        _clearData();
-        return;
-      }
-
-      // Приводим группирующую колонку к списку строк
-      List<String?> groupData;
-      if (groupCol is CategoricalColumn) {
-        groupData = groupCol.data;
-      } else if (groupCol is TextColumn) {
-        groupData = groupCol.data;
-      } else {
-        _clearData();
-        return;
-      }
-
-      // Группируем числовые значения по категориям
-      final Map<String, List<double>> groupsMap = {};
-      for (int i = 0; i < allValues.length; i++) {
-        final val = allValues[i];
-        final group = groupData[i];
-        if (val != null && group != null) {
-          groupsMap.putIfAbsent(group, () => []).add(val);
-        }
-      }
-
-      // Сортируем группы для стабильного порядка
-      final sortedGroups = groupsMap.keys.toList()..sort();
-
-      final List<BoxPlotSeriesData> newSeriesData = [];
-      int totalBefore = 0;
-
-      for (final group in sortedGroups) {
-        final values = groupsMap[group]!;
-        totalBefore += values.length;
-
-        // Сэмплирование при необходимости
-        final sampledValues = values.length > widget.state.maxPoints
-            ? values.sample(widget.state.maxPoints)
-            : values;
-
-        newSeriesData.add(BoxPlotSeriesData(group, sampledValues));
-      }
-
-      final totalAfter = newSeriesData.fold(0, (sum, series) => sum + series.values.length);
-
-      setState(() {
-        _seriesData = newSeriesData;
-        _isSampled = totalAfter < totalBefore;
-        _totalCount = totalBefore;
-      });
-    } else {
-      // Без группировки — одна серия
-      final validValues = allValues.whereType<double>().toList();
-      final sampled = validValues.length > widget.state.maxPoints
-          ? validValues.sample(widget.state.maxPoints)
-          : validValues;
-
-      setState(() {
-        _seriesData = [BoxPlotSeriesData(columnName, sampled)];
-        _isSampled = sampled.length < validValues.length;
-        _totalCount = validValues.length;
-      });
-    }
+    final result = BoxPlotDataCalculator.calculate(
+      dataset: widget.dataset,
+      state: widget.state,
+    );
+    setState(() {
+      _seriesData = result.seriesData;
+      _isSampled = result.isSampled;
+      _totalCount = result.totalCount;
+    });
   }
 
   /// Очищает данные при отсутствии выбранной колонки.
@@ -193,6 +128,7 @@ class _BoxPlotViewState extends State<BoxPlotView> {
             primaryYAxis: NumericAxis(
               title: AxisTitle(text: widget.state.columnName),
             ),
+            legend: Legend(isVisible: _seriesData.length > 1),
             series: <BoxAndWhiskerSeries<List<double>, String>>[
               BoxAndWhiskerSeries<List<double>, String>(
                 dataSource: valuesList,
@@ -219,16 +155,4 @@ class _BoxPlotViewState extends State<BoxPlotView> {
       ],
     );
   }
-}
-
-/// Данные для одной серии (группы) ящика с усами.
-class BoxPlotSeriesData {
-  /// Название группы (категория или имя колонки).
-  final String groupName;
-
-  /// Список числовых значений в этой группе.
-  final List<double> values;
-
-  /// {@macro boxplot_series_data}
-  BoxPlotSeriesData(this.groupName, this.values);
 }

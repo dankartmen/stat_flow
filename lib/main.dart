@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide DataColumn;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:stat_flow/features/charts/register_charts.dart';
@@ -21,7 +20,7 @@ import 'core/providers/theme_provider.dart';
       final theme = ref.watch(currentThemeProvider);
 
       return MaterialApp(
-        showPerformanceOverlay: false, //kDebugMode,
+        showPerformanceOverlay: false,
         title: 'StatFlow',
         localizationsDelegates: const [
           GlobalMaterialLocalizations.delegate,

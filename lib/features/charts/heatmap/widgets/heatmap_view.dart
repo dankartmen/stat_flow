@@ -2,6 +2,7 @@ import 'package:flutter/material.dart' hide DataColumn;
 import 'package:heatmap_canvas/heatmap.dart';
 import '../../../../core/dataset/dataset.dart';
 import '../../chart_state.dart';
+import '../model/heatmap_models.dart';
 import '../model/heatmap_state.dart';
 
 /// Максимальное количество уникальных категорий для отображения в таблице сопряжённости.
@@ -493,7 +494,7 @@ class _HeatmapViewState extends State<HeatmapView> {
   Widget Function(BuildContext, HeatmapCell) _createCellTooltip({
     required double min,
     required double max,
-    _HeatmapTooltipStyle style = const _HeatmapTooltipStyle(),
+    HeatmapTooltipStyle style = const HeatmapTooltipStyle(),
   }) {
     return (context, cell) {
       final value = cell.value;
@@ -591,38 +592,3 @@ class _HeatmapViewState extends State<HeatmapView> {
   }
 }
 
-/// {@template heatmap_tooltip_style}
-/// Стиль для кастомного тултипа с прогресс-баром.
-/// 
-/// Позволяет настроить цвета для положительных/отрицательных значений,
-/// фон, стили текста и ширину тултипа.
-/// {@endtemplate}
-class _HeatmapTooltipStyle {
-  /// Цвет для положительных значений (или значений ≥0).
-  final Color positiveColor;
-
-  /// Цвет для отрицательных значений.
-  final Color negativeColor;
-
-  /// Цвет фона тултипа.
-  final Color backgroundColor;
-
-  /// Стиль текста заголовка (названия строки и колонки).
-  final TextStyle labelStyle;
-
-  /// Стиль текста значения.
-  final TextStyle valueStyle;
-
-  /// Ширина тултипа в пикселях.
-  final double width;
-
-  /// {@macro heatmap_tooltip_style}
-  const _HeatmapTooltipStyle({
-    this.positiveColor = Colors.green,
-    this.negativeColor = Colors.red,
-    this.backgroundColor = Colors.white,
-    this.labelStyle = const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-    this.valueStyle = const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-    this.width = 240,
-  });
-}

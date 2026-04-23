@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:flutter/material.dart';
 import '../../../core/dataset/dataset.dart';
 import '../../../core/theme/controls_style.dart';
@@ -35,18 +37,22 @@ class BarControls {
         .where((c) => c is NumericColumn || c is CategoricalColumn || c is TextColumn)
         .map((c) => c.name)
         .toList();
+    final theme = Theme.of(context);
 
+    // Определяем, можно ли группировать по выбранной колонке
+    final mainColumn = state.columnName != null ? dataset.column(state.columnName!) : null;
+    final canGroup = mainColumn is CategoricalColumn || mainColumn is TextColumn;
+
+    // Колонки, доступные для группировки (только категориальные и текстовые)
     final groupingColumns = dataset.columns
         .where((c) => c is CategoricalColumn || c is TextColumn)
         .map((c) => c.name)
         .toList();
 
-    final groupByItems = <String?>[null, ...groupingColumns];
-    final theme = Theme.of(context);
-
     return [
       const SizedBox(height: 8),
 
+      // Выбор колонки
       buildSection(
         context: context,
         title: 'Колонка',
@@ -56,29 +62,51 @@ class BarControls {
           label: 'Выбрать колонку',
           initialValue: state.columnName,
           items: suitableColumns,
-          onChanged: (value) => onChanged(state.copyWith(columnName: value)),
+          onChanged: (value) {
+            log('[BarControls] columnName changed to $value, current state: columnName=${state.columnName}, groupByColumn=${state.groupByColumn}');
+            var newState = state.copyWith(columnName: value);
+            if (value != null) {
+              final col = dataset.column(value);
+              if (col is NumericColumn) {
+                log('[BarControls] selected column is NumericColumn -> resetting groupByColumn');
+                newState = newState.resetGroupBy();
+              }
+            }
+            log('[BarControls] calling onChanged with state: columnName=${newState.columnName}, groupByColumn=${newState.groupByColumn}');
+            onChanged(newState);
+          },
         ),
       ),
 
-      // Группировка
-      /// TODO: Исправить ошибку с группировками
-      buildSection(
-        context: context,
-        title: 'Группировка',
-        icon: Icons.group_work_rounded,
-        child: Column(
-          children: [
-            buildDropdown<String?>(
-              context: context,
-              label: 'Группировать по',
-              initialValue: state.groupByColumn,
-              items: groupByItems,
-              onChanged: (value) => onChanged(state.copyWith(groupByColumn: value)),
-              displayName: (item) => item ?? 'Без группировки',
-            ),
-          ],
+      // Группировка (только если текущая колонка допускает)
+      if (canGroup && groupingColumns.isNotEmpty)
+        buildSection(
+          context: context,
+          title: 'Группировка',
+          icon: Icons.group_work_rounded,
+          child: Column(
+            children: [
+              buildDropdown<String>(
+                context: context,
+                label: 'Группировать по',
+                initialValue: state.groupByColumn,
+                items: groupingColumns,
+                onChanged: (value) => onChanged(state.copyWith(groupByColumn: value)),
+              ),
+              if (state.groupByColumn != null) ...[
+                const SizedBox(height: 12),
+                SwitchListTile(
+                  title: const Text('Составные столбцы (stacked)'),
+                  value: state.stacked,
+                  onChanged: (v) => onChanged(state.copyWith(stacked: v)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                  activeThumbColor: theme.colorScheme.primary,
+                ),
+              ],
+            ],
+          ),
         ),
-      ),
+        
       buildSection(
         context: context,
         title: 'Основные настройки',

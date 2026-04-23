@@ -36,19 +36,24 @@ class MainScreen extends ConsumerStatefulWidget {
   ConsumerState<MainScreen> createState() => _MainScreenState();
 }
 
+/// {@template main_screen_state}
+/// Состояние главного экрана.
+/// Управляет созданием графиков, загрузкой датасета и диалогами.
+/// {@endtemplate}
 class _MainScreenState extends ConsumerState<MainScreen> {
-  /// Счетчик для генерации уникальных идентификаторов графиков
+  /// Счетчик для генерации уникальных идентификаторов графиков.
   int _nextChartId = 0;
 
   @override
   void initState() {
     super.initState();
+    // Показываем приветственный диалог после первой отрисовки
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _showWelcomeDialog();
     });
   }
 
-  /// Отображает приветственный диалог при первом запуске
+  /// Отображает приветственный диалог при первом запуске.
   void _showWelcomeDialog() {
     showDialog(
       context: context,
@@ -60,7 +65,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     );
   }
 
-  /// Загружает датасет через экран предпросмотра таблицы
+  /// Загружает датасет через экран предпросмотра таблицы.
   /// 
   /// После успешной загрузки:
   /// - Сохраняет датасет в провайдере
@@ -77,13 +82,17 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     }
   }
 
-  /// Создает новый график указанного типа
+  /// Создает новый график указанного типа.
   /// 
   /// Процесс создания:
   /// 1. Получает плагин для типа графика из реестра
   /// 2. Создает начальное состояние графика
   /// 3. Генерирует уникальный ID и начальную позицию
   /// 4. Добавляет график в список и выбирает его
+  /// 
+  /// Особое поведение для тепловой карты (heatmap):
+  /// - Размер вычисляется динамически на основе количества колонок
+  /// - Ожидаемый размер ячейки ~38px + место для подписей и легенды (~140px)
   void _addChart(ChartType type) {
     final dataset = ref.read(datasetProvider);
     if (dataset == null) return;
@@ -92,10 +101,11 @@ class _MainScreenState extends ConsumerState<MainScreen> {
 
     Size initialSize;
 
+    // Для тепловой карты размер зависит от количества колонок (квадратная матрица)
     if (type == ChartType.heatmap) {
       final n = dataset.columns.length;
-      const desiredCellSize = 38.0;    
-      const extraForLabelsAndLegend = 140.0;
+      const desiredCellSize = 20.0;          // Желаемый размер ячейки в пикселях
+      const extraForLabelsAndLegend = 140.0; // Запас под подписи осей и легенду
       final contentWidth  = n * desiredCellSize + extraForLabelsAndLegend;
       final contentHeight = n * desiredCellSize + extraForLabelsAndLegend + 60;
       initialSize = Size(
@@ -119,8 +129,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     ref.read(selectedChartIdProvider.notifier).state = newChart.id;
   }
 
-
-  /// Отображает диалог с информацией о приложении
+  /// Отображает диалог с информацией о приложении.
   void _showInfoDialog() {
     showDialog(
       context: context,
@@ -178,12 +187,11 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                     ref.read(chartsProvider.notifier).updateChartState(id, newState);
                   },
                 ),
-                // Центральная область
+                // Центральная область с канвасом или полноэкранной таблицей
                 Expanded(
                   child: IndexedStack(
                     index: currentScreen == ScreenType.canvas ? 0 : 1,
                     children: [
-                      // Канвас с графиками
                       const _CanvasArea(),
                       if (datasetExists)
                         const _FullTableArea()
@@ -201,9 +209,16 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   }
 }
 
-
+/// {@template left_panel}
+/// Левая панель с контекстными элементами управления.
+/// Отображает панель [ContextPanel] для выбранного графика.
+/// Использует [RepaintBoundary] для оптимизации перерисовок.
+/// {@endtemplate}
 class _LeftPanel extends ConsumerWidget {
+  /// Колбэк для добавления нового графика.
   final void Function(ChartType) onAddChart;
+
+  /// Колбэк для обновления состояния выбранного графика.
   final void Function(int, ChartState) onUpdateChartState;
 
   const _LeftPanel({
@@ -214,17 +229,41 @@ class _LeftPanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final dataset = ref.watch(datasetProvider);
-    final selectedChart = ref.watch(
-      selectedChartIdProvider.select(
-        (id) {
-          if (id == null) return null;
-          final charts = ref.read(chartsProvider);
-          return charts
-              .cast<FloatingChartData?>()
-              .firstWhere((c) => c?.id == id, orElse: () => null);
-        },
-      ),
-    );
+    final selectedId = ref.watch(selectedChartIdProvider);
+
+    // Выбираем только стабильные данные: id, type, dataset (позиция/размер не важны)
+    final chartInfo = ref.watch(chartsProvider.select((charts) {
+      if (selectedId == null) return null;
+      final chart = charts.cast<FloatingChartData?>().firstWhere(
+        (c) => c?.id == selectedId,
+        orElse: () => null,
+      );
+      if (chart == null) return null;
+      return (id: chart.id, type: chart.type, dataset: chart.dataset);
+    }));
+
+    // Состояние графика – обновляется только при вызове updateChartState
+    final chartState = ref.watch(chartsProvider.select((charts) {
+      if (selectedId == null) return null;
+      final chart = charts.cast<FloatingChartData?>().firstWhere(
+        (c) => c?.id == selectedId,
+        orElse: () => null,
+      );
+      return chart?.state;
+    }));
+
+    // Собираем временный объект для панели (положение/размер игнорируются)
+    FloatingChartData? selectedChart;
+    if (chartInfo != null && chartState != null) {
+      selectedChart = FloatingChartData(
+        id: chartInfo.id,
+        type: chartInfo.type,
+        dataset: chartInfo.dataset,
+        state: chartState,
+        position: Offset.zero,
+        size: Size.zero,
+      );
+    }
 
     return RepaintBoundary(
       child: ContextPanel(
@@ -237,6 +276,10 @@ class _LeftPanel extends ConsumerWidget {
   }
 }
 
+/// {@template canvas_area}
+/// Область канваса, содержащая все плавающие графики.
+/// Управляет выбором, перемещением, изменением размера, закрытием и полноэкранным режимом.
+/// {@endtemplate}
 class _CanvasArea extends ConsumerWidget {
   const _CanvasArea();
 
@@ -246,32 +289,34 @@ class _CanvasArea extends ConsumerWidget {
     final selectedId = ref.watch(selectedChartIdProvider);
     final dataset = ref.watch(datasetProvider);
 
-    /// Обработчики событий для графиков на канвасе
-    
+    /// Обработчик выбора графика.
     void onSelectChart(int id) {
       ref.read(chartsProvider.notifier).selectChart(id);
       ref.read(selectedChartIdProvider.notifier).state = id;
     }
 
+    /// Обработчик изменения позиции графика.
     void onPositionChanged(int id, Offset pos) {
       ref.read(chartsProvider.notifier).updatePosition(id, pos);
     }
 
+    /// Обработчик изменения размера графика.
     void onSizeChanged(int id, Size size) {
       ref.read(chartsProvider.notifier).updateSize(id, size);
     }
 
+    /// Обработчик закрытия графика.
+    /// При закрытии выбранного графика автоматически выбирается последний из оставшихся (если есть).
     void onCloseChart(int id) {
       ref.read(chartsProvider.notifier).removeChart(id);
       if (selectedId == id) {
-        final newSelectedChart = chartIds.isNotEmpty
-          ? chartIds.last
-          : null;
+        final newSelectedChart = chartIds.isNotEmpty ? chartIds.last : null;
         ref.read(selectedChartIdProvider.notifier).state = newSelectedChart;
       }
     }
 
-    void onFullscreen(int id){
+    /// Обработчик открытия графика в полноэкранном режиме.
+    void onFullscreen(int id) {
       final charts = ref.read(chartsProvider);
       final chart = charts.firstWhere((c) => c.id == id);
       Navigator.push(
@@ -281,12 +326,13 @@ class _CanvasArea extends ConsumerWidget {
           builder: (context) => FullscreenChart(
             title: chart.type.name,
             child: ChartRenderer.build(chart),
-          )
+          ),
         ),
       );
     }
 
-    if (chartIds.isEmpty && dataset != null){
+    // Если нет графиков, но датасет загружен — показываем подсказку
+    if (chartIds.isEmpty && dataset != null) {
       return const _EmptyCanvasState();
     }
 
@@ -305,13 +351,15 @@ class _CanvasArea extends ConsumerWidget {
       );
     }).toList();
 
-    return CanvasWorkspace(
-      children: children
-    );
+    return CanvasWorkspace(children: children);
   }
 }
 
-class _EmptyCanvasState extends StatelessWidget{
+/// {@template empty_canvas_state}
+/// Состояние канваса при отсутствии графиков.
+/// Отображает приглашение добавить первый график.
+/// {@endtemplate}
+class _EmptyCanvasState extends StatelessWidget {
   const _EmptyCanvasState();
 
   @override
@@ -328,12 +376,15 @@ class _EmptyCanvasState extends StatelessWidget{
             style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 16),
           ),
         ],
-      )
+      ),
     );
   }
 }
 
-
+/// {@template full_table_area}
+/// Область отображения полной таблицы данных в режиме просмотра.
+/// Используется при переключении на вкладку "Таблица" в верхней панели.
+/// {@endtemplate}
 class _FullTableArea extends ConsumerWidget {
   const _FullTableArea();
 

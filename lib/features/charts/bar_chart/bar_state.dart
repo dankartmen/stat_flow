@@ -86,7 +86,7 @@ class BarState extends ChartState {
     this.spacing = 0.2,
     this.sortDescending = true,
   });
-
+  
   /// Создаёт копию состояния с изменёнными полями.
   @override
   BarState copyWith({
@@ -121,7 +121,39 @@ class BarState extends ChartState {
     );
   }
 
+  /// Сбрасывает группировку, оставляя остальные настройки неизменными.
+  /// 
+  /// Полезно при переключении между группированным и негруппированным режимом.
+  /// 
+  /// Возвращает:
+  /// - новый экземпляр [BarState] с [groupByColumn] = null.
+  BarState resetGroupBy() {
+    return BarState(
+      columnName: columnName,
+      groupByColumn: null,
+      stacked: stacked,
+      showValues: showValues,
+      barWidth: barWidth,
+      alignment: alignment,
+      binCount: binCount,
+      maxCategories: maxCategories,
+      showTrack: showTrack,
+      borderRadius: borderRadius,
+      borderWidth: borderWidth,
+      spacing: spacing,
+      sortDescending: sortDescending,
+    );
+  }
+  
   /// Обновляет состояние при выборе колонки из панели управления.
+  /// 
+  /// Принимает:
+  /// - [columnName] — имя выбранной колонки
+  /// - [type] — тип колонки (категориальная, текстовая, числовая)
+  /// 
+  /// Возвращает:
+  /// - новое состояние с обновлённой колонкой, если тип поддерживается,
+  ///   иначе текущее состояние без изменений.
   @override
   BarState withField(String columnName, {ColumnType? type}) {
     if (type == ColumnType.categorical || 
@@ -134,6 +166,6 @@ class BarState extends ChartState {
 
   @override
   String toString() {
-    return 'BarState(columnName: $columnName, showValues: $showValues, barWidth: $barWidth, alignment: $alignment)';
+    return 'BarState(columnName: $columnName, groupByColumn: $groupByColumn, showValues: $showValues, barWidth: $barWidth, alignment: $alignment)';
   }
 }

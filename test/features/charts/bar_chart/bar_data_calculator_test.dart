@@ -5,7 +5,7 @@ import 'package:stat_flow/features/charts/bar_chart/bar_state.dart';
 
 void main() {
   group('BarDataCalculator', () {
-    test('empty state returns empty data', () {
+    test('пустое состояние возвращает пустые данные', () {
       final dataset = Dataset(name: 'test', columns: []);
       final state = BarState();
       final result = BarDataCalculator.calculate(dataset: dataset, state: state);
@@ -13,7 +13,7 @@ void main() {
       expect(result.isSampled, false);
     });
 
-    test('numeric column produces histogram bins', () {
+    test('числовой столбец создает интервалы гистограммы', () {
       final values = [1.0, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0];
       final numericCol = NumericColumn('num', values.map((v) => v as double?).toList());
       final dataset = Dataset(name: 'test', columns: [numericCol]);
@@ -29,7 +29,7 @@ void main() {
       expect(total, values.length.toDouble());
     });
 
-    test('categorical column without grouping produces frequency bars', () {
+    test('категориальный столбец без группировки создает столбцы частот', () {
       final data = ['A', 'B', 'A', 'C', 'B', 'A', 'D', 'D'];
       final catCol = CategoricalColumn('cat', data);
       final dataset = Dataset(name: 'test', columns: [catCol]);
@@ -47,7 +47,7 @@ void main() {
       expect(result.isSampled, true); // т.к. maxCategories=3, а всего 4
     });
 
-    test('grouped categorical columns produce multiple series', () {
+    test('сгруппированные категориальные столбцы создают несколько рядов', () {
       final mainData = ['X', 'X', 'Y', 'Y', 'X'];
       final groupData = ['G1', 'G2', 'G1', 'G2', 'G1'];
       final mainCol = CategoricalColumn('main', mainData);
@@ -72,7 +72,7 @@ void main() {
       expect(yBar.value, 1.0);
     });
 
-    test('stacked flag does not affect data calculation (only rendering)', () {
+    test('флаг stacked не влияет на вычисление данных (только на отображение)', () {
       // stacked влияет только на отображение, данные те же
       final mainData = ['A', 'A', 'B'];
       final groupData = ['G1', 'G2', 'G1'];

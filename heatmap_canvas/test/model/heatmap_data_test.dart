@@ -41,7 +41,6 @@ void main() {
 
     test('normalize total', () {
       final normalized = testData.normalize(NormalizeMode.total);
-      final total = 1+2+3+4+5+6+7+8+9; // 45
       expect(normalized.values[0][0], closeTo(1/45, 1e-6));
     });
 
