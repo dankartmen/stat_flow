@@ -20,7 +20,7 @@ import 'core/providers/theme_provider.dart';
       final theme = ref.watch(currentThemeProvider);
 
       return MaterialApp(
-        showPerformanceOverlay: false,
+        showPerformanceOverlay: true,
         title: 'StatFlow',
         localizationsDelegates: const [
           GlobalMaterialLocalizations.delegate,

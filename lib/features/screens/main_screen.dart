@@ -9,6 +9,9 @@ import '../bars/top_nav_bar.dart';
 import '../charts/chart_registry.dart';
 import '../charts/chart_state.dart';
 import '../charts/chart_type.dart';
+import '../charts/pairplot/pairplot_state.dart';
+import '../charts/pairplot/pairplot_view.dart';
+import '../charts/scatterplot/scatter_state.dart';
 import '../table/widget/full_table_screen.dart';
 import '../charts/floating_chart/floating_chart_container.dart';
 import '../charts/floating_chart/floating_chart_data.dart';
@@ -81,17 +84,18 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     }
   }
 
-  /// Создает новый график указанного типа.
+  /// Создаёт новый график указанного типа.
   /// 
   /// Процесс создания:
   /// 1. Получает плагин для типа графика из реестра
-  /// 2. Создает начальное состояние графика
+  /// 2. Создаёт начальное состояние графика
   /// 3. Генерирует уникальный ID и начальную позицию
   /// 4. Добавляет график в список и выбирает его
   /// 
-  /// Особое поведение для тепловой карты (heatmap):
-  /// - Размер вычисляется динамически на основе количества колонок
-  /// - Желаемый размер ячейки ~20px + место для подписей и легенды (~140px)
+  /// Особое поведение для разных типов графиков:
+  /// - Тепловая карта (heatmap): размер вычисляется динамически на основе количества колонок
+  /// - Pair Plot (pairplotchart): фиксированный размер 700x600
+  /// - Остальные: стандартный размер 520x380
   void _addChart(ChartType type) {
     final dataset = ref.read(datasetProvider);
     if (dataset == null) return;
@@ -111,6 +115,9 @@ class _MainScreenState extends ConsumerState<MainScreen> {
         contentWidth.clamp(420.0, 1200.0),
         contentHeight.clamp(380.0, 1000.0),
       );
+    } else if (type == ChartType.pairplotchart) {
+      // Pair Plot требует больше места для матрицы
+      initialSize = const Size(700, 600);
     } else {
       initialSize = const Size(520, 380);
     }
@@ -122,10 +129,38 @@ class _MainScreenState extends ConsumerState<MainScreen> {
       state: plugin.createState(),
       position: Offset(50 + _nextChartId * 20.0, 50 + _nextChartId * 20.0),
       size: initialSize,
+      onCellTap: type == ChartType.pairplotchart ? _onPairPlotCellTap : null,
+      onUpdateState: (newState) {
+        ref.read(chartsProvider.notifier).updateChartState(_nextChartId++, newState);
+      },
     );
 
     ref.read(chartsProvider.notifier).addChart(newChart, ref);
     ref.read(selectedChartIdProvider.notifier).state = newChart.id;
+  }
+
+  /// Обработчик тапа на ячейку Pair Plot.
+  /// 
+  /// Создаёт новый scatter plot для выбранной пары колонок
+  /// и добавляет его на канвас.
+  void _onPairPlotCellTap(String xCol, String yCol) {
+    final dataset = ref.read(datasetProvider);
+    if (dataset == null) return;
+
+    final newScatter = FloatingChartData(
+      id: _nextChartId++,
+      type: ChartType.scatter,
+      dataset: dataset,
+      state: ScatterState(firstColumnName: xCol, secondColumnName: yCol),
+      position: Offset(100 + _nextChartId * 20.0, 100 + _nextChartId * 20.0),
+      size: const Size(500, 400),
+      onUpdateState: (newState) {
+        ref.read(chartsProvider.notifier).updateChartState(_nextChartId++, newState);
+      },
+    );
+
+    ref.read(chartsProvider.notifier).addChart(newScatter, ref);
+    ref.read(selectedChartIdProvider.notifier).state = newScatter.id;
   }
 
   /// Отображает диалог с информацией о приложении.
@@ -330,6 +365,19 @@ class _CanvasArea extends ConsumerWidget {
       );
     }
 
+    /// Строит виджет для графика с учётом его типа.
+    /// Pair Plot использует специальный виджет с поддержкой onCellTap.
+    Widget buildChartWidget(FloatingChartData chart) {
+      if (chart.type == ChartType.pairplotchart) {
+        return PairPlotView(
+          dataset: chart.dataset,
+          state: chart.state as PairPlotState,
+          onCellTap: chart.onCellTap,
+        );
+      }
+      return ChartRenderer.build(chart);
+    }
+
     // Если нет графиков, но датасет загружен — показываем подсказку
     if (chartIds.isEmpty && dataset != null) {
       return const _EmptyCanvasState();
@@ -346,7 +394,7 @@ class _CanvasArea extends ConsumerWidget {
         onSelect: () => onSelectChart(chart.id),
         onClose: () => onCloseChart(chart.id),
         onFullscreen: () => onFullscreen(chart.id),
-        child: ChartRenderer.build(chart),
+        child: buildChartWidget(chart),
       );
     }).toList();
 

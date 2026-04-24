@@ -1,3 +1,5 @@
+import 'package:stat_flow/features/charts/pairplot/pairplot_plugin.dart';
+
 import 'bar_chart/bar_plugin.dart';
 import 'boxplot/boxplot_plugin.dart';
 import 'chart_registry.dart';
@@ -16,7 +18,7 @@ import 'scatterplot/scatter_plugin.dart';
 /// - Диаграммы рассеяния ([ScatterPlugin])
 /// - Линейного графика ([LinePlugin])
 /// - Столбчатой диаграммы ([BarPlugin])
-/// 
+/// - Матрица диаграммы рассеяния ([PairPlotPlugin])
 /// 
 /// Плагины регистрируются в [ChartRegistry] для последующего
 /// динамического создания графиков по типу.
@@ -28,4 +30,5 @@ void registerCharts() {
   ChartRegistry.register(ScatterPlugin());
   ChartRegistry.register(LinePlugin());
   ChartRegistry.register(BarPlugin());
+  ChartRegistry.register(PairPlotPlugin());
 }

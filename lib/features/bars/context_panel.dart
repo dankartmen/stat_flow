@@ -219,6 +219,8 @@ class _NoChartContent extends StatelessWidget {
         return Icons.line_axis;
       case ChartType.barchart:
         return Icons.insert_chart;
+      case ChartType.pairplotchart:
+        return Icons.grid_view;
     }
   }
 
