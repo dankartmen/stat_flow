@@ -17,16 +17,17 @@ import '../table/widget/table_preview_screen.dart';
 import 'welcome_dialog.dart';
 
 /// {@template main_screen}
-/// Главный экран приложения Stat Flow
+/// Главный экран приложения Stat Flow.
 /// 
 /// Представляет собой рабочую область с:
-/// - Левая боковая панель навигации (загрузка данных, создание графиков)
+/// - Левая боковая панель (контекстное меню для добавления и настройки графиков)
 /// - Центральный канвас для размещения и взаимодействия с графиками
-/// - Правая панель с информацией о загруженном датасете (сворачиваемая)
-/// - Верхняя контекстная панель управления выбранным графиком
+/// - Верхняя панель навигации (загрузка данных, переключение между канвасом и таблицей)
 /// 
 /// Экран управляет жизненным циклом графиков, их созданием,
 /// выбором и открытием в полноэкранном режиме.
+/// 
+/// TODO: Левая панель должна быть только при типе отображаемого графика Canvas
 /// {@endtemplate}
 class MainScreen extends ConsumerStatefulWidget {
   /// {@macro main_screen}
@@ -69,7 +70,6 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   /// 
   /// После успешной загрузки:
   /// - Сохраняет датасет в провайдере
-  /// - Разворачивает правую панель для отображения данных
   Future<void> _loadDataset() async {
     final result = await Navigator.push(
       context,
@@ -78,7 +78,6 @@ class _MainScreenState extends ConsumerState<MainScreen> {
 
     if (result != null && result is Dataset) {
       ref.read(datasetProvider.notifier).state = result;
-      ref.read(rightPanelExpandedProvider.notifier).state = true;
     }
   }
 
@@ -92,7 +91,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   /// 
   /// Особое поведение для тепловой карты (heatmap):
   /// - Размер вычисляется динамически на основе количества колонок
-  /// - Ожидаемый размер ячейки ~38px + место для подписей и легенды (~140px)
+  /// - Желаемый размер ячейки ~20px + место для подписей и легенды (~140px)
   void _addChart(ChartType type) {
     final dataset = ref.read(datasetProvider);
     if (dataset == null) return;
@@ -180,7 +179,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
           Expanded(
             child: Row(
               children: [
-                // Левая контекстная панель
+                // Левая контекстная панель (настройки выбранного графика)
                 _LeftPanel(
                   onAddChart: _addChart,
                   onUpdateChartState: (id, newState) {
@@ -231,7 +230,7 @@ class _LeftPanel extends ConsumerWidget {
     final dataset = ref.watch(datasetProvider);
     final selectedId = ref.watch(selectedChartIdProvider);
 
-    // Выбираем только стабильные данные: id, type, dataset (позиция/размер не важны)
+    // Выбираем только стабильные данные: id, type, dataset (позиция/размер не важны для панели)
     final chartInfo = ref.watch(chartsProvider.select((charts) {
       if (selectedId == null) return null;
       final chart = charts.cast<FloatingChartData?>().firstWhere(

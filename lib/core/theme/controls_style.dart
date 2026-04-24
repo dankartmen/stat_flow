@@ -81,6 +81,7 @@ Widget buildDropdown<T>({
   required List<T> items,
   required ValueChanged<T?> onChanged,
   String Function(T)? displayName,
+  bool nullable = false,
 }) {
   final safeInitialValue = (initialValue == null || items.contains(initialValue)) ? initialValue : null;
   final theme = Theme.of(context);
@@ -107,15 +108,20 @@ Widget buildDropdown<T>({
               color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
             ),
           ),
-          items: items.map((item) {
-            final text = item == null
-                ? 'Не выбрано'
-                : (displayName != null ? displayName(item as T) : item.toString());
-            return DropdownItem<T?>(
-              value: item,
-              child: Text(text, style: const TextStyle(fontSize: 15.5)),
-            );
-          }).toList(),
+          items: [
+            if (nullable)
+              DropdownItem<T?>(
+                value: null,
+                child: Text('Не выбрано', style: const TextStyle(fontSize: 15.5)),
+              ),
+            ...items.map((item) {
+              final text = displayName != null ? displayName(item) : item.toString();
+              return DropdownItem<T?>(
+                value: item,
+                child: Text(text, style: const TextStyle(fontSize: 15.5)),
+              );
+            }),
+          ],
           onChanged: (newValue) {
             valueListenable.value = newValue;
             onChanged(newValue);

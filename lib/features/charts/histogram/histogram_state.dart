@@ -1,3 +1,4 @@
+// ignore_for_file: public_member_api_docs, sort_constructors_first
 import '../chart_state.dart';
 
 /// {@template histogram_state}
@@ -15,6 +16,9 @@ class HistogramState extends ChartState {
   /// Имя выбранной числовой колонки
   String? columnName;
 
+  /// Поле для разделения
+  String? splitByColumn;
+
   /// Показывать кривую нормального распределения (bell curve)
   bool showNormalDistributionCurve;
 
@@ -31,6 +35,7 @@ class HistogramState extends ChartState {
   HistogramState({
     this.bins = 15,
     this.columnName,
+    this.splitByColumn,
     this.showNormalDistributionCurve = false,
     this.binInterval,
     this.borderWidth = 2.0,
@@ -39,16 +44,18 @@ class HistogramState extends ChartState {
 
   @override
   HistogramState copyWith({
-    String? columnName,
     int? bins,
+    String? columnName,
+    String? splitByColumn,
     bool? showNormalDistributionCurve,
     double? binInterval,
     double? borderWidth,
     bool? showDataLabels,
   }) {
     return HistogramState(
-      columnName: columnName ?? this.columnName,
       bins: bins ?? this.bins,
+      columnName: columnName ?? this.columnName,
+      splitByColumn: splitByColumn ?? this.splitByColumn,
       showNormalDistributionCurve: showNormalDistributionCurve ?? this.showNormalDistributionCurve,
       binInterval: binInterval ?? this.binInterval,
       borderWidth: borderWidth ?? this.borderWidth,
@@ -62,5 +69,18 @@ class HistogramState extends ChartState {
       return copyWith(columnName: columnName);
     }
     return this;
+  }
+
+  // Сброс splitByColumn
+  HistogramState resetSplitBy() {
+    return HistogramState(
+      columnName: columnName,
+      bins: bins,
+      splitByColumn: null,
+      showNormalDistributionCurve: showNormalDistributionCurve,
+      binInterval: binInterval,
+      borderWidth: borderWidth,
+      showDataLabels: showDataLabels,
+    );
   }
 }

@@ -32,6 +32,12 @@ class HistogramControls {
     final theme = Theme.of(context);
     final activeThumbColor = theme.colorScheme.primary;
 
+    // Колонки, доступные для разделения (категориальные и текстовые)
+    final splitColumns = dataset.columns
+        .where((c) => c is CategoricalColumn || c is TextColumn)
+        .map((c) => c.name)
+        .toList();
+
     return [
       const SizedBox(height: 8),
 
@@ -45,26 +51,51 @@ class HistogramControls {
           label: 'Числовая колонка',
           initialValue: state.columnName,
           items: numericColumns.map((c) => c.name).toList(),
-          onChanged: (value) => onChanged(state.copyWith(columnName: value)),
+          onChanged: (value) {
+            var newState = state.copyWith(columnName: value);
+            // Если сбрасываем колонку, сбрасываем и split
+            if (value == null) {
+              newState = newState.resetSplitBy();
+            }
+            onChanged(newState);
+          },
         ),
       ),
 
-      // 2. Количество корзин + интервал
+      // Разделение по категориальной переменной
+      if (state.columnName != null && splitColumns.isNotEmpty)
+        buildSection(
+          context: context,
+          title: 'Разделение',
+          icon: Icons.call_split_rounded,
+          child: buildDropdown<String>(
+            context: context,
+            label: 'Группировать по',
+            initialValue: state.splitByColumn,
+            items: splitColumns,
+            nullable: true,
+            onChanged: (value) {
+              if (value == null) {
+                onChanged(state.resetSplitBy());
+              } else {
+                onChanged(state.copyWith(splitByColumn: value));
+              }
+            },
+          ),
+        ),
+
+      // Основные настройки (количество корзин, кривая и т.д.)
       buildSection(
         context: context,
-        title: 'Корзины и интервал',
-        icon: Icons.grid_on_rounded,
+        title: 'Основные настройки',
+        icon: Icons.tune_rounded,
         child: Column(
           children: [
-            // Слайдер количества корзин
             Row(
               children: [
-                const Text('Количество корзин', style: TextStyle(fontSize: 15)),
+                const Text('Количество корзин'),
                 const Spacer(),
-                Text(
-                  state.bins.toString(),
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
+                Text(state.bins.toString()),
               ],
             ),
             Slider(
@@ -72,47 +103,31 @@ class HistogramControls {
               min: 5,
               max: 50,
               divisions: 45,
-              label: state.bins.toString(),
               onChanged: (v) => onChanged(state.copyWith(bins: v.toInt())),
             ),
-
-            const SizedBox(height: 16),
-
-            // Прямое управление интервалом (опционально)
-            buildDropdown<double?>(
-              context: context,
-              label: 'Интервал корзины (binInterval)',
-              initialValue: state.binInterval,
-              items: const [5.0, 10.0, 20.0, 50.0],
-              onChanged: (value) => onChanged(state.copyWith(binInterval: value)),
-              displayName: (v) => v == null ? 'Авто' : v.toStringAsFixed(1),
+            SwitchListTile(
+              title: const Text('Кривая нормального распределения'),
+              value: state.showNormalDistributionCurve,
+              onChanged: (v) => onChanged(state.copyWith(showNormalDistributionCurve: v)),
+              activeThumbColor: theme.primaryColor,
+            ),
+            SwitchListTile(
+              title: const Text('Показывать значения'),
+              value: state.showDataLabels,
+              onChanged: (v) => onChanged(state.copyWith(showDataLabels: v)),
+              activeThumbColor: theme.primaryColor,
             ),
           ],
         ),
       ),
 
-      // 3. Внешний вид
+      // Внешний вид
       buildSection(
         context: context,
         title: 'Внешний вид',
         icon: Icons.format_paint_rounded,
         child: Column(
           children: [
-            SwitchListTile(
-              title: const Text('Кривая нормального распределения'),
-              value: state.showNormalDistributionCurve,
-              onChanged: (v) => onChanged(state.copyWith(showNormalDistributionCurve: v)),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-              activeThumbColor: activeThumbColor,
-            ),
-            SwitchListTile(
-              title: const Text('Подписи значений'),
-              value: state.showDataLabels,
-              onChanged: (v) => onChanged(state.copyWith(showDataLabels: v)),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-              activeThumbColor: activeThumbColor,
-            ),
-            const SizedBox(height: 8),
             Row(
               children: [
                 const Text('Толщина границы'),
@@ -122,10 +137,9 @@ class HistogramControls {
             ),
             Slider(
               value: state.borderWidth,
-              min: 0,
-              max: 6,
-              divisions: 12,
-              label: state.borderWidth.toStringAsFixed(1),
+              min: 0.5,
+              max: 5.0,
+              divisions: 9,
               onChanged: (v) => onChanged(state.copyWith(borderWidth: v)),
             ),
           ],
