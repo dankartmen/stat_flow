@@ -50,7 +50,7 @@ class CsvLoader {
   Future<Dataset> getDataset({
     void Function(double progress)? onProgress,
   }) async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['csv'],
       withReadStream: true,

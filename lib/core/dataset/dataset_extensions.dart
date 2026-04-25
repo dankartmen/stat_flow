@@ -102,30 +102,6 @@ extension DatasetFilter on Dataset {
   }
 }
 
-/// {@template numeric_column_stats}
-/// Расширение для статистического анализа числовых колонок
-/// {@endtemplate}
-extension NumericColumnStats on NumericColumn {
-  /// Возвращает полную статистику по колонке
-  StatisticResult describe() {
-    return StatisticCalculator().calculate(this);
-  }
-
-  /// Среднее арифметическое
-  double? mean() => describe().mean;
-
-  /// Медиана
-  double? median() => describe().median;
-
-  /// Стандартное отклонение
-  double? std() => describe().std;
-
-  /// Минимальное значение
-  double? min() => describe().min;
-
-  /// Максимальное значение
-  double? max() => describe().max;
-}
 
 /// {@template row_getters}
 /// Расширение для типизированного получения значений из строки

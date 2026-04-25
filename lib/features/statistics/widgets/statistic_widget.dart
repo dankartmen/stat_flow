@@ -1,52 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:stat_flow/core/dataset/dataset.dart' hide DataColumn;
-import 'package:stat_flow/features/statistics/statistic_calculator.dart';
-import 'package:stat_flow/features/statistics/statistic_result.dart';
 
-/// {@template statistic_metric}
-/// Перечисление доступных статистических метрик для отображения в таблице.
-/// 
-/// Каждая метрика имеет человеко-читаемую подпись ([label]),
-/// используемую в заголовках колонок и фильтрах-чипсах.
-/// 
-/// Значения:
-/// - [count] — количество валидных значений
-/// - [mean] — среднее арифметическое
-/// - [std] — стандартное отклонение
-/// - [min] — минимум
-/// - [q1] — первый квартиль (25%)
-/// - [median] — медиана (50%)
-/// - [q3] — третий квартиль (75%)
-/// - [max] — максимум
-/// - [missing] — процент пропущенных (null) значений
-/// {@endtemplate}
-enum StatisticMetric {
-  count('Кол-во'),
-  mean('Среднее'),
-  std('Стд.откл.'),
-  min('Мин'),
-  q1('25%'),
-  median('50%'),
-  q3('75%'),
-  max('Макс'),
-  missing('Пропуски%');
-
-  /// Отображаемое название метрики.
-  final String label;
-  const StatisticMetric(this.label);
-}
+import '../column_statistics.dart';
+import '../statistic_calculator.dart';
+import '../statistic_metrics.dart';
 
 /// {@template statistics_table}
-/// Виджет для отображения сводной таблицы описательных статистик с возможностью выбора метрик.
-/// 
-/// Особенности:
-/// - Пользователь может выбирать, какие статистические метрики показывать, с помощью чипсов.
-/// - Таблица автоматически обновляется при изменении набора выбранных метрик.
-/// - Поддерживает горизонтальную и вертикальную прокрутку при большом количестве колонок или строк.
-/// - Для каждой числовой колонки датасета рассчитываются все метрики,
-///   но отображаются только выбранные.
-/// 
-/// Использует [StatisticCalculator] для расчёта статистик и [StatisticResult] для хранения.
+/// Виджет отображения описательной статистики для всех колонок датасета.
+///
+/// Позволяет выбрать набор статистических метрик (среднее, медиана, количество пропусков и т.д.),
+/// которые будут показаны в таблице. Метрики фильтруются по типу колонки (числовая, категориальная и т.п.).
 /// {@endtemplate}
 class StatisticsTable extends StatefulWidget {
   /// Датасет, для которого строится таблица статистик.
@@ -59,112 +22,141 @@ class StatisticsTable extends StatefulWidget {
   State<StatisticsTable> createState() => _StatisticsTableState();
 }
 
-/// Состояние виджета [StatisticsTable].
-/// Отвечает за хранение выбранных метрик и перестроение таблицы при их изменении.
 class _StatisticsTableState extends State<StatisticsTable> {
-  /// Множество выбранных статистических метрик.
-  /// Изначально выбраны все доступные метрики.
-  final Set<StatisticMetric> _selectedMetrics = StatisticMetric.values.toSet();
+  /// Набор выбранных пользователем статистических метрик.
+  /// Изначально выбраны все возможные метрики.
+  Set<StatisticMetric> _selectedMetrics = StatisticMetric.values.toSet();
 
   @override
   Widget build(BuildContext context) {
-    final numericColumns = widget.dataset.numericColumns;
-    if (numericColumns.isEmpty) {
-      return const Center(child: Text('Нет числовых колонок'));
-    }
+    final calculator = StatisticsCalculator();
+    // Рассчитываем статистику для каждой колонки
+    final allStats = widget.dataset.columns.map((col) => calculator.calculate(col)).toList();
 
-    final calculator = StatisticCalculator();
-    final stats = <String, StatisticResult>{};
-    for (final col in numericColumns) {
-      stats[col.name] = calculator.calculate(col);
-    }
+    // Определяем, какие метрики доступны для текущего датасета (хотя бы одна колонка подходит под тип метрики)
+    final availableMetrics = StatisticMetric.values.where((metric) {
+      return allStats.any((stat) => metric.allowedTypes & _typeToFlag(stat.columnType) != 0);
+    }).toList();
 
-    // Динамическое формирование списка колонок DataTable на основе _selectedMetrics
+    // Формируем заголовки таблицы
     final dataColumns = <DataColumn>[
-      const DataColumn(label: Text('Колонка')),
-      if (_selectedMetrics.contains(StatisticMetric.count))
-        const DataColumn(label: Text('Кол-во')),
-      if (_selectedMetrics.contains(StatisticMetric.mean))
-        const DataColumn(label: Text('Среднее')),
-      if (_selectedMetrics.contains(StatisticMetric.std))
-        const DataColumn(label: Text('Стд.откл.')),
-      if (_selectedMetrics.contains(StatisticMetric.min))
-        const DataColumn(label: Text('Мин')),
-      if (_selectedMetrics.contains(StatisticMetric.q1))
-        const DataColumn(label: Text('25%')),
-      if (_selectedMetrics.contains(StatisticMetric.median))
-        const DataColumn(label: Text('50%')),
-      if (_selectedMetrics.contains(StatisticMetric.q3))
-        const DataColumn(label: Text('75%')),
-      if (_selectedMetrics.contains(StatisticMetric.max))
-        const DataColumn(label: Text('Макс')),
-      if (_selectedMetrics.contains(StatisticMetric.missing))
-        const DataColumn(label: Text('Пропуски%')),
+      const DataColumn(label: Text('Колонка', style: TextStyle(fontWeight: FontWeight.bold))),
+      for (final metric in _selectedMetrics.where(availableMetrics.contains))
+        DataColumn(label: Text(metric.label, style: const TextStyle(fontWeight: FontWeight.bold))),
     ];
+
+    // Формируем строки таблицы: для каждой колонки — значения выбранных метрик
+    final rows = allStats.map((stat) {
+      final cells = <DataCell>[
+        DataCell(Text(stat.columnName)),
+      ];
+      for (final metric in _selectedMetrics.where(availableMetrics.contains)) {
+        cells.add(DataCell(Text(_formatValue(stat, metric))));
+      }
+      return DataRow(cells: cells);
+    }).toList();
 
     return Column(
       children: [
-        // Панель фильтров (выбор метрик)
-        Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Wrap(
-            spacing: 8.0,
-            children: StatisticMetric.values.map((metric) {
-              final selected = _selectedMetrics.contains(metric);
-              return FilterChip(
-                label: Text(metric.label),
-                selected: selected,
-                onSelected: (value) {
-                  setState(() {
-                    if (value) {
-                      _selectedMetrics.add(metric);
-                    } else {
-                      _selectedMetrics.remove(metric);
-                    }
-                  });
-                },
-              );
-            }).toList(),
-          ),
-        ),
+        // Панель выбора метрик временно отключена (закомментирована).
+        // TODO: Реализовать интерактивный выбор метрик, возможно, через PopupMenuButton или отдельный виджет.
+        // Padding(
+        //   padding: const EdgeInsets.all(8.0),
+        //   child: Wrap(
+        //     spacing: 8.0,
+        //     children: availableMetrics.map((metric) {
+        //       final selected = _selectedMetrics.contains(metric);
+        //       return FilterChip(
+        //         label: Text(metric.label),
+        //         selected: selected,
+        //         onSelected: (value) {
+        //           setState(() {
+        //             if (value) {
+        //               _selectedMetrics.add(metric);
+        //             } else {
+        //               _selectedMetrics.remove(metric);
+        //             }
+        //           });
+        //         },
+        //       );
+        //     }).toList(),
+        //   ),
+        // ),
         Expanded(
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: SingleChildScrollView(
               child: DataTable(
                 columns: dataColumns,
-                rows: stats.entries.map((entry) {
-                  final name = entry.key;
-                  final s = entry.value;
-                  // Формируем список ячеек строки в соответствии с выбранными метриками
-                  final cells = <DataCell>[
-                    DataCell(Text(name)),
-                    if (_selectedMetrics.contains(StatisticMetric.count))
-                      DataCell(Text(s.validCount.toString())),
-                    if (_selectedMetrics.contains(StatisticMetric.mean))
-                      DataCell(Text(s.mean?.toStringAsFixed(2) ?? '—')),
-                    if (_selectedMetrics.contains(StatisticMetric.std))
-                      DataCell(Text(s.std?.toStringAsFixed(2) ?? '—')),
-                    if (_selectedMetrics.contains(StatisticMetric.min))
-                      DataCell(Text(s.min?.toStringAsFixed(2) ?? '—')),
-                    if (_selectedMetrics.contains(StatisticMetric.q1))
-                      DataCell(Text(s.q1?.toStringAsFixed(2) ?? '—')),
-                    if (_selectedMetrics.contains(StatisticMetric.median))
-                      DataCell(Text(s.median?.toStringAsFixed(2) ?? '—')),
-                    if (_selectedMetrics.contains(StatisticMetric.q3))
-                      DataCell(Text(s.q3?.toStringAsFixed(2) ?? '—')),
-                    if (_selectedMetrics.contains(StatisticMetric.max))
-                      DataCell(Text(s.max?.toStringAsFixed(2) ?? '—')),
-                    if (_selectedMetrics.contains(StatisticMetric.missing))
-                      DataCell(Text('${s.emptyPercentage.toStringAsFixed(1)}%')),
-                  ];
-                  return DataRow(cells: cells);
-                }).toList(),
+                rows: rows,
+                columnSpacing: 20,
+                horizontalMargin: 12,
               ),
             ),
           ),
         ),
       ],
     );
+  }
+
+  /// Преобразует [ColumnType] в битовый флаг, определённый в [ColumnTypeFlags].
+  /// Это необходимо для проверки совместимости метрики с типом колонки.
+  int _typeToFlag(ColumnType type) {
+    switch (type) {
+      case ColumnType.numeric:
+        return ColumnTypeFlags.numeric;
+      case ColumnType.categorical:
+        return ColumnTypeFlags.categorical;
+      case ColumnType.text:
+        return ColumnTypeFlags.text;
+      case ColumnType.datetime:
+        return ColumnTypeFlags.datetime;
+    }
+  }
+
+  /// Возвращает строковое представление значения статистики [metric] для колонки [stat].
+  /// Для разных типов метрик используются разные поля [ColumnStatistics].
+  /// Если значение отсутствует, возвращается '—'.
+  String _formatValue(ColumnStatistics stat, StatisticMetric metric) {
+    switch (metric) {
+      case StatisticMetric.count:
+        return stat.validCount.toString();
+      case StatisticMetric.missing:
+        return '${stat.emptyPercentage.toStringAsFixed(1)}%';
+      case StatisticMetric.mean:
+        return stat.mean?.toStringAsFixed(2) ?? '—';
+      case StatisticMetric.std:
+        return stat.std?.toStringAsFixed(2) ?? '—';
+      case StatisticMetric.min:
+        if (stat.columnType == ColumnType.datetime)
+          return stat.minDate != null ? '${stat.minDate!.toLocal().toString().substring(0, 10)}' : '—';
+        return stat.min?.toStringAsFixed(2) ?? '—';
+      case StatisticMetric.max:
+        if (stat.columnType == ColumnType.datetime)
+          return stat.maxDate != null ? '${stat.maxDate!.toLocal().toString().substring(0, 10)}' : '—';
+        return stat.max?.toStringAsFixed(2) ?? '—';
+      case StatisticMetric.q1:
+        return stat.q1?.toStringAsFixed(2) ?? '—';
+      case StatisticMetric.median:
+        return stat.median?.toStringAsFixed(2) ?? '—';
+      case StatisticMetric.q3:
+        return stat.q3?.toStringAsFixed(2) ?? '—';
+      case StatisticMetric.unique:
+        return stat.uniqueValues?.toString() ?? '—';
+      case StatisticMetric.top:
+        return stat.mostFrequent ?? '—';
+      case StatisticMetric.topFreq:
+        return stat.mostFrequentCount?.toString() ?? '—';
+      case StatisticMetric.minLength:
+        return stat.minLength?.toString() ?? '—';
+      case StatisticMetric.maxLength:
+        return stat.maxLength?.toString() ?? '—';
+      case StatisticMetric.minDate:
+        return stat.minDate != null ? '${stat.minDate!.toLocal().toString().substring(0, 10)}' : '—';
+      case StatisticMetric.maxDate:
+        return stat.maxDate != null ? '${stat.maxDate!.toLocal().toString().substring(0, 10)}' : '—';
+      case StatisticMetric.daysRange:
+        return stat.daysRange?.toString() ?? '—';
+    }
   }
 }

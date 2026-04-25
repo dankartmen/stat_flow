@@ -143,18 +143,31 @@ class _HeatmapViewState extends State<HeatmapView> {
 
     // 1. Режим корреляции (все числовые колонки)
     if (state.useCorrelation) {
-      final numericColumns = dataset.numericColumns;
-      if (numericColumns.length < 2) {
+      final allColumns = <List<double?>>[];
+      final columnNames = <String>[];
+
+      for (final col in widget.dataset.columns) {
+        if (col is NumericColumn) {
+          allColumns.add(col.data.map((e) => e?.toDouble()).toList());
+          columnNames.add(col.name);
+        } else if (col is CategoricalColumn || col is TextColumn) {
+          // Получаем сырые строковые значения
+          final rawData = col is CategoricalColumn ? col.data : (col as TextColumn).data;
+          final uniqueValues = rawData.whereType<String>().toSet().toList()..sort(); // сортируем для детерминированного порядка
+          final codeMap = {for (int i = 0; i < uniqueValues.length; i++) uniqueValues[i]: i};
+          final encoded = rawData.map((e) => e != null ? codeMap[e]!.toDouble() : null).toList();
+          allColumns.add(encoded);
+          columnNames.add(col.name);
+        }
+      }
+
+      if (allColumns.length < 2) {
         return HeatmapData(rowLabels: [], columnLabels: [], values: []);
       }
 
-      // Извлекаем данные в формате List<List<double?>>
-      final columnsData = numericColumns.map((col) => col.data).toList();
-      final columnNames = numericColumns.map((col) => col.name).toList();
-
       // Используем встроенный билдер корреляции (асинхронная версия для больших данных)
       final data = await HeatmapDataBuilder.pearsonCorrelationAsync(
-        columnsData,
+        allColumns,
         columnNames: columnNames,
       );
 

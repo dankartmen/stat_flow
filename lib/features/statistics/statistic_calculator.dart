@@ -1,70 +1,59 @@
 import 'dart:math';
-
 import '../../core/dataset/dataset.dart';
-import 'statistic_result.dart';
+import 'column_statistics.dart';
 
-/// {@template statistic_calculator}
-/// Калькулятор для расчёта описательной статистики числовой колонки.
-/// 
-/// Автоматически отфильтровывает null-значения при расчёте метрик,
-/// но учитывает их в подсчёте общего количества наблюдений.
-/// 
-/// Поддерживаемые метрики:
-/// - Количество (общее, валидных, пустых)
-/// - Минимум, максимум
-/// - Среднее арифметическое
-/// - Медиана
-/// - Стандартное отклонение (генеральная совокупность)
-/// - Первый и третий квартили (25% и 75% перцентили)
+/// {@template statistics_calculator}
+/// Класс для вычисления описательной статистики по колонкам датасета.
+/// Поддерживает числовые, категориальные, текстовые колонки и колонки с датами.
 /// {@endtemplate}
-class StatisticCalculator {
-  /// Рассчитывает полную статистику для числовой колонки.
-  /// 
-  /// Принимает:
-  /// - [column] — колонка с числовыми данными (может содержать null).
-  /// 
-  /// Возвращает:
-  /// - [StatisticResult] со всеми рассчитанными метриками.
-  ///   Если передан пустой список, возвращается результат только с общим количеством.
-  StatisticResult calculate(NumericColumn column) {
-    final values = column.data;
-
-    if (values.isEmpty) {
-      return StatisticResult(totalCount: 0);
+class StatisticsCalculator {
+  /// Вычисляет статистику для одной колонки [column] в зависимости от её реального типа.
+  ColumnStatistics calculate(DataColumn column) {
+    if (column is NumericColumn) {
+      return _calculateNumeric(column);
+    } else if (column is CategoricalColumn) {
+      return _calculateCategorical(column);
+    } else if (column is TextColumn) {
+      return _calculateText(column);
+    } else if (column is DateTimeColumn) {
+      return _calculateDateTime(column);
     }
+    throw Exception('Unknown column type');
+  }
 
+  /// Вычисляет статистику для числовой колонки.
+  ColumnStatistics _calculateNumeric(NumericColumn column) {
+    final values = column.data;
     final totalCount = values.length;
-    
-    // Фильтруем только валидные (не-null) значения
     final validValues = values.whereType<double>().toList();
     final validCount = validValues.length;
     final emptyCount = totalCount - validCount;
 
     if (validValues.isEmpty) {
-      return StatisticResult(
+      return ColumnStatistics(
+        columnName: column.name,
+        columnType: ColumnType.numeric,
         totalCount: totalCount,
-        emptyCount: emptyCount,
         validCount: validCount,
+        emptyCount: emptyCount,
       );
     }
 
-    // Сортируем для квартилей и медианы
     final sorted = List<double>.from(validValues)..sort();
-
     final min = sorted.first;
     final max = sorted.last;
-
-    final mean = _mean(validValues);
+    final mean = validValues.reduce((a, b) => a + b) / validCount;
     final median = _median(sorted);
     final std = _std(validValues, mean);
-
     final q1 = _percentile(sorted, 0.25);
     final q3 = _percentile(sorted, 0.75);
-    
-    return StatisticResult(
+
+    return ColumnStatistics(
+      columnName: column.name,
+      columnType: ColumnType.numeric,
       totalCount: totalCount,
-      emptyCount: emptyCount,
       validCount: validCount,
+      emptyCount: emptyCount,
       min: min,
       max: max,
       mean: mean,
@@ -75,70 +64,138 @@ class StatisticCalculator {
     );
   }
 
-  /// Вычисляет среднее арифметическое.
-  /// 
-  /// Принимает:
-  /// - [values] — список валидных чисел (не пустой).
-  /// 
-  /// Возвращает:
-  /// - среднее значение (сумма / количество).
-  double _mean(List<double> values) {
-    final sum = values.fold(0.0, (a, b) => a + b);
-    return sum / values.length;
-  }
+  /// Вычисляет статистику для категориальной колонки (строки с ограниченным набором значений).
+  ColumnStatistics _calculateCategorical(CategoricalColumn column) {
+    final values = column.data;
+    final totalCount = values.length;
+    final validValues = values.whereType<String>().toList();
+    final validCount = validValues.length;
+    final emptyCount = totalCount - validCount;
 
-  /// Вычисляет медиану (значение, делящее выборку на две равные части).
-  /// 
-  /// Принимает:
-  /// - [sortedValues] — отсортированный по возрастанию список валидных чисел.
-  /// 
-  /// Возвращает:
-  /// - медиану: для нечётного количества — центральный элемент,
-  ///   для чётного — среднее арифметическое двух центральных.
-  double _median(List<double> sortedValues) {
-    final n = sortedValues.length;
-    final mid = n ~/ 2;
-
-    if (n.isOdd) {
-      return sortedValues[mid];
+    if (validValues.isEmpty) {
+      return ColumnStatistics(
+        columnName: column.name,
+        columnType: ColumnType.categorical,
+        totalCount: totalCount,
+        validCount: validCount,
+        emptyCount: emptyCount,
+      );
     }
 
-    return (sortedValues[mid - 1] + sortedValues[mid]) / 2;
+    // Подсчёт частоты каждого значения
+    final freq = <String, int>{};
+    for (final v in validValues) freq[v] = (freq[v] ?? 0) + 1;
+    final uniqueValues = freq.length;
+    // Находим самое частое значение
+    final mostFrequentEntry = freq.entries.reduce((a, b) => a.value > b.value ? a : b);
+
+    return ColumnStatistics(
+      columnName: column.name,
+      columnType: ColumnType.categorical,
+      totalCount: totalCount,
+      validCount: validCount,
+      emptyCount: emptyCount,
+      uniqueValues: uniqueValues,
+      mostFrequent: mostFrequentEntry.key,
+      mostFrequentCount: mostFrequentEntry.value,
+    );
   }
 
-  /// Вычисляет стандартное отклонение (меру разброса значений относительно среднего).
-  /// 
-  /// Принимает:
-  /// - [values] — список валидных чисел.
-  /// - [mean] — среднее арифметическое этих чисел (предвычисленное).
-  /// 
-  /// Возвращает:
-  /// - стандартное отклонение по формуле для генеральной совокупности:
-  ///   σ = sqrt( Σ(x - mean)² / n )
-  double _std(List<double> values, double mean) {
-    final sumSquaredDiff = values.fold(
-      0.0,
-      (sum, v) {
-        final diff = v - mean;
-        return sum + diff * diff;
-      },
+  /// Вычисляет статистику для текстовой колонки (длины строк, частоты и т.д.).
+  ColumnStatistics _calculateText(TextColumn column) {
+    final values = column.data;
+    final totalCount = values.length;
+    final validValues = values.whereType<String>().toList();
+    final validCount = validValues.length;
+    final emptyCount = totalCount - validCount;
+
+    if (validValues.isEmpty) {
+      return ColumnStatistics(
+        columnName: column.name,
+        columnType: ColumnType.text,
+        totalCount: totalCount,
+        validCount: validCount,
+        emptyCount: emptyCount,
+      );
+    }
+
+    final uniqueValues = validValues.toSet().length;
+    final lengths = validValues.map((s) => s.length);
+    final minLength = lengths.reduce((a, b) => a < b ? a : b);
+    final maxLength = lengths.reduce((a, b) => a > b ? a : b);
+
+    final freq = <String, int>{};
+    for (final v in validValues) freq[v] = (freq[v] ?? 0) + 1;
+    final mostFrequentEntry = freq.entries.reduce((a, b) => a.value > b.value ? a : b);
+
+    return ColumnStatistics(
+      columnName: column.name,
+      columnType: ColumnType.text,
+      totalCount: totalCount,
+      validCount: validCount,
+      emptyCount: emptyCount,
+      uniqueValues: uniqueValues,
+      mostFrequent: mostFrequentEntry.key,
+      mostFrequentCount: mostFrequentEntry.value,
+      minLength: minLength,
+      maxLength: maxLength,
     );
-    return sqrt(sumSquaredDiff / values.length);
   }
-  
-  /// Вычисляет перцентиль по отсортированному списку.
-  /// 
-  /// Принимает:
-  /// - [sorted] — отсортированный по возрастанию список валидных чисел.
-  /// - [fraction] — доля от 0.0 до 1.0 (например, 0.25 для 25-го перцентиля).
-  /// 
-  /// Возвращает:
-  /// - значение перцентиля с линейной интерполяцией между ближайшими элементами.
-  /// 
-  /// Алгоритм:
-  /// 1. Вычисляет позицию: index = (n - 1) * fraction
-  /// 2. Если index целое — возвращает элемент по этому индексу.
-  /// 3. Иначе — линейно интерполирует между элементами floor и ceil.
+
+  /// Вычисляет статистику для колонки с датами (мин, макс, диапазон в днях).
+  ColumnStatistics _calculateDateTime(DateTimeColumn column) {
+    final values = column.data;
+    final totalCount = values.length;
+    final validValues = values.whereType<DateTime>().toList();
+    final validCount = validValues.length;
+    final emptyCount = totalCount - validCount;
+
+    if (validValues.isEmpty) {
+      return ColumnStatistics(
+        columnName: column.name,
+        columnType: ColumnType.datetime,
+        totalCount: totalCount,
+        validCount: validCount,
+        emptyCount: emptyCount,
+      );
+    }
+
+    final minDate = validValues.reduce((a, b) => a.isBefore(b) ? a : b);
+    final maxDate = validValues.reduce((a, b) => a.isAfter(b) ? a : b);
+    final daysRange = maxDate.difference(minDate).inDays;
+
+    return ColumnStatistics(
+      columnName: column.name,
+      columnType: ColumnType.datetime,
+      totalCount: totalCount,
+      validCount: validCount,
+      emptyCount: emptyCount,
+      minDate: minDate,
+      maxDate: maxDate,
+      daysRange: daysRange,
+    );
+  }
+
+  /// Вычисляет медиану для отсортированного списка чисел [sorted].
+  double _median(List<double> sorted) {
+    final n = sorted.length;
+    final mid = n ~/ 2;
+    if (n.isOdd) return sorted[mid];
+    return (sorted[mid - 1] + sorted[mid]) / 2;
+  }
+
+  /// Вычисляет стандартное отклонение (для генеральной совокупности, деление на n).
+  double _std(List<double> values, double mean) {
+    final sumSqDiff = values.fold(0.0, (sum, v) {
+      final diff = v - mean;
+      return sum + diff * diff;
+    });
+    return sqrt(sumSqDiff / values.length);
+  }
+
+  /// Вычисляет заданный перцентиль (квантиль) для отсортированного списка [sorted].
+  /// [fraction] — значение от 0 до 1 (например, 0.25 для 25-го перцентиля).
+  /// Используется линейная интерполяция между соседними элементами.
   double _percentile(List<double> sorted, double fraction) {
     if (sorted.isEmpty) return 0.0;
     final index = (sorted.length - 1) * fraction;

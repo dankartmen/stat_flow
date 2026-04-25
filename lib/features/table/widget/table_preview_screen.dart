@@ -74,7 +74,7 @@ class _TablePreviewScreenState extends State<TablePreviewScreen> {
   /// - Обрабатывает отмену выбора файла и возвращается на предыдущий экран без ошибок
   /// - При выборе файла сразу начинает загрузку данных для предпросмотра
   Future<void> _pickFile() async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['csv'],
     );
@@ -214,7 +214,7 @@ class _TablePreviewScreenState extends State<TablePreviewScreen> {
                       : SfDataGrid(
                           source: _dataSource!,
                           columns: _gridColumns,
-                          columnWidthMode: ColumnWidthMode.auto,
+                          columnWidthMode: ColumnWidthMode.fill,
                           gridLinesVisibility: GridLinesVisibility.both,
                           headerGridLinesVisibility: GridLinesVisibility.both,
                           allowSorting: true,

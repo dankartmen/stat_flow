@@ -1,7 +1,4 @@
-﻿import '../../features/statistics/statistic_result.dart';
-import '../../features/statistics/statistic_calculator.dart';
-
-part 'dataset_extensions.dart';
+﻿part 'dataset_extensions.dart';
 
 /// {@template dataset}
 /// Основной контейнер для данных, загруженных из CSV-файла

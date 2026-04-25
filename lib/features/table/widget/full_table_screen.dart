@@ -3,23 +3,24 @@ import 'package:stat_flow/core/dataset/dataset.dart';
 import 'package:stat_flow/features/table/grid/syncfusion_grid_data.dart';
 import 'package:syncfusion_flutter_datagrid/datagrid.dart';
 
+import '../../insights/insights_panel.dart';
 import '../../statistics/widgets/statistic_widget.dart';
 
 /// {@template full_table_screen}
 /// Экран полного отображения таблицы данных с расширенными возможностями.
-/// 
+///
 /// Предоставляет:
 /// - Отображение всех строк и колонок датасета в Syncfusion DataGrid.
 /// - Выбор отображаемых колонок через боковую панель (планируется).
 /// - Сортировку, фильтрацию и изменение размера колонок.
 /// - Множественный выбор записей.
 /// - Экспорт данных в различные форматы (PDF, CSV, изображение) — через стандартные возможности DataGrid.
-/// 
-/// Экран имеет две вкладки: "Данные" (таблица) и "Статистика" (сводка по числовым колонкам).
+///
+/// Экран имеет три вкладки: "Данные" (таблица), "Статистика" (сводка по числовым колонкам) и "Выводы".
 /// Открывается в полноэкранном режиме поверх основного интерфейса.
-/// 
-/// TODO: Добавить панель выбора отображаемых колонок
-/// TODO: Реализовать экспорт данных
+///
+/// TODO(developer): Добавить панель выбора отображаемых колонок
+/// TODO(developer): Реализовать экспорт данных
 /// {@endtemplate}
 class FullTableScreen extends StatefulWidget {
   /// Датасет для отображения.
@@ -39,7 +40,7 @@ class FullTableScreen extends StatefulWidget {
 /// Управляет подготовкой данных для DataGrid и переключением между вкладками.
 class _FullTableScreenState extends State<FullTableScreen> {
   /// Подготовленные данные и колонки для Syncfusion DataGrid.
-  /// 
+  ///
   /// Создаётся в [initState] с помощью [SyncfusionGridConverter].
   /// Утилизируется в [dispose] через вызов [dispose] у источника данных.
   late SyncfusionGridData _gridData;
@@ -56,18 +57,19 @@ class _FullTableScreenState extends State<FullTableScreen> {
     _gridData.source.dispose();
     super.dispose();
   }
-  
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);  
+    final theme = Theme.of(context);
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Column(
         children: [
           const TabBar(
             tabs: [
               Tab(text: 'Данные'),
               Tab(text: 'Статистика'),
+              Tab(text: 'Выводы'),
             ],
           ),
           Expanded(
@@ -104,6 +106,7 @@ class _FullTableScreenState extends State<FullTableScreen> {
                   ),
                 ),
                 StatisticsTable(dataset: widget.dataset),
+                InsightsPanel(dataset: widget.dataset),
               ],
             ),
           ),
@@ -114,14 +117,15 @@ class _FullTableScreenState extends State<FullTableScreen> {
 }
 
 /// {@template table_header}
-/// Заголовок экрана полной таблицы с названием и кнопкой закрытия.
-/// 
+/// Внутренний виджет заголовка экрана полной таблицы с названием и кнопкой закрытия.
+///
 /// Расположен в верхней части экрана и обеспечивает быстрый доступ к закрытию просмотра таблицы.
 /// Содержит:
 /// - Название "Таблица данных".
 /// - Кнопку "Закрыть", которая закрывает экран и возвращает пользователя к основному интерфейсу.
 /// {@endtemplate}
 class _TableHeader extends StatelessWidget {
+  /// {@macro table_header}
   const _TableHeader();
 
   @override

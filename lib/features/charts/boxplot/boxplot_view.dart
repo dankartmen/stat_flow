@@ -143,10 +143,11 @@ class _BoxPlotViewState extends State<BoxPlotView> {
                 showMean: widget.state.showMean,
                 markerSettings: MarkerSettings(
                   isVisible: widget.state.showOutliers,
+                  color: Colors.red,
                   width: widget.state.outlierSize,
                   height: widget.state.outlierSize,
                   shape: DataMarkerType.circle,
-                  borderColor: theme.colorScheme.error,
+                  borderColor: Colors.red,
                 ),
               ),
             ],

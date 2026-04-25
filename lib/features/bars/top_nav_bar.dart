@@ -2,27 +2,32 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/providers/providers.dart';
 import '../settings/settings_screen.dart';
+import '../training/model_training_screen.dart';
 
 /// {@template top_nav_bar}
-/// Верхняя навигационная панель приложения
+/// Верхняя навигационная панель приложения.
 ///
 /// Содержит:
-/// - Логотип приложения
-/// - Переключатели между основными экранами (графики / данные), доступные только после загрузки датасета
-/// - Кнопку загрузки датасета
-/// - Кнопку информации о приложении
+/// - Логотип приложения.
+/// - Переключатели между основными экранами (графики / данные), доступные только после загрузки датасета.
+/// - Кнопку загрузки датасета.
+/// - Кнопку информации о приложении.
+/// - Кнопку настроек.
+/// - Кнопку для перехода к обучению нейросети.
+/// 
+/// Использует Riverpod для отслеживания состояния загрузки датасета.
 /// {@endtemplate}
 class TopNavBar extends ConsumerWidget {
-  /// Коллбек для загрузки датасета
+  /// Колбэк для загрузки датасета.
   final VoidCallback onLoadDataset;
 
-  /// Коллбек для отображения информационного диалога
+  /// Колбэк для отображения информационного диалога.
   final VoidCallback onShowInfo;
 
-  /// Текущий активный экран
+  /// Текущий активный экран (канвас или таблица данных).
   final ScreenType currentScreen;
 
-  /// Коллбек для изменения активного экрана
+  /// Колбэк для изменения активного экрана.
   final ValueChanged<ScreenType> onScreenChanged;
 
   /// {@macro top_nav_bar}
@@ -54,7 +59,7 @@ class TopNavBar extends ConsumerWidget {
       ),
       child: Row(
         children: [
-          // Логотип или название
+          // Логотип или название приложения
           Text(
             'Stat Flow',
             style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
@@ -84,12 +89,13 @@ class TopNavBar extends ConsumerWidget {
             onPressed: onLoadDataset,
           ),
           const SizedBox(width: 8),
-          // Кнопка информации
+          // Кнопка информации о приложении
           IconButton(
             tooltip: 'О приложении',
             icon: const Icon(Icons.info_outline),
             onPressed: onShowInfo,
           ),
+          // Кнопка настроек
           IconButton(
             tooltip: 'Настройки',
             icon: const Icon(Icons.settings_outlined),
@@ -100,6 +106,17 @@ class TopNavBar extends ConsumerWidget {
               );
             },
           ),
+          // Кнопка для перехода к обучению нейросети
+          IconButton(
+            tooltip: 'Обучение нейросети',
+            icon: const Icon(Icons.model_training),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ModelTrainingScreen()),
+              );
+            },
+          ),
         ],
       ),
     );
@@ -107,25 +124,25 @@ class TopNavBar extends ConsumerWidget {
 }
 
 /// {@template screen_toggle_button}
-/// Кнопка-переключатель между экранами в верхней панели
+/// Кнопка-переключатель между экранами в верхней панели.
 ///
 /// Используется для навигации между основными режимами работы:
 /// - Режим графиков (канвас)
 /// - Режим просмотра данных (таблица)
 ///
-/// Отображается с иконкой и текстом. Активная кнопка имеет синий цвет и фоновую подсветку.
+/// Отображается с иконкой и текстом. Активная кнопка имеет цвет темы и фоновую подсветку.
 /// {@endtemplate}
 class _ScreenToggleButton extends StatelessWidget {
-  /// Текст кнопки
+  /// Текст кнопки.
   final String label;
 
-  /// Иконка для кнопки
+  /// Иконка для кнопки.
   final IconData icon;
 
-  /// Флаг активного состояния (выбран ли этот экран)
+  /// Флаг активного состояния (выбран ли этот экран).
   final bool isActive;
 
-  /// Коллбек при нажатии
+  /// Колбэк при нажатии.
   final VoidCallback onTap;
 
   /// {@macro screen_toggle_button}

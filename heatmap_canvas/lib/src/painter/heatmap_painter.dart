@@ -170,12 +170,12 @@ class HeatmapPainter extends CustomPainter {
     // Горизонтальные линии
     for (int i = 0; i <= rowCount; i++) {
       final y = topPadding + i * cellHeight;
-      canvas.drawLine(Offset(leftPadding - 15, y), Offset(totalSize.width - rightPadding, y), gridPaint);
+      canvas.drawLine(Offset(leftPadding - 10, y), Offset(totalSize.width - rightPadding, y), gridPaint);
     }
     // Вертикальные линии
     for (int i = 0; i <= colCount; i++) {
       final x = leftPadding + i * cellWidth;
-      canvas.drawLine(Offset(x, topPadding), Offset(x, totalSize.height), gridPaint);
+      canvas.drawLine(Offset(x, topPadding), Offset(x, totalSize.height - 15), gridPaint);
     }
     
     return recorder.endRecording();
