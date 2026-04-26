@@ -32,7 +32,7 @@ class PairPlotControls {
   }) {
     final theme = Theme.of(context);
     final numericColumns = dataset.numericColumns.map((c) => c.name).toList();
-
+    final allColumns = dataset.columns.map((c) => c.name).toList();
     return [
       const SizedBox(height: 8),
 
@@ -54,6 +54,7 @@ class PairPlotControls {
                   label: Text(name),
                   selected: selected,
                   onSelected: (value) {
+                    // Создаём копию текущего списка выбранных колонок или инициализируем всеми
                     final newList = state.selectedColumns != null
                         ? List<String>.from(state.selectedColumns!)
                         : List<String>.from(numericColumns);
@@ -114,7 +115,32 @@ class PairPlotControls {
           ],
         ),
       ),
-      
+      buildSection(
+        context: context,
+        title: 'Окраска точек',
+        icon: Icons.palette_rounded,
+        child: Column(
+          children: [
+            SwitchListTile(
+              title: const Text('Включить окраску по колонке'),
+              value: state.useHue,
+              onChanged: (v) => onChanged(state.copyWith(useHue: v)),
+              activeThumbColor: theme.primaryColor,
+            ),
+            if (state.useHue)
+              // buildDropdown — внешний виджет (предположительно из controls_style.dart),
+              // создающий выпадающий список с меткой.
+              buildDropdown<String>(
+                context: context, 
+                label: 'Колонка для окраски', 
+                initialValue: state.hueColumn, 
+                nullable: true, 
+                items: allColumns,
+                onChanged: (value) => onChanged(state.copyWith(hueColumn: value))
+              )
+          ],
+        ),
+      ),
       // Настройки производительности
       buildSection(
         context: context,
@@ -179,7 +205,7 @@ class PairPlotControls {
 
       const SizedBox(height: 24),
       
-      // Кнопка сброса
+      // Кнопка сброса всех настроек в исходное состояние
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8),
         child: OutlinedButton.icon(

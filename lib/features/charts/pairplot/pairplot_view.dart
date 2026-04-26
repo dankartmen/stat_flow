@@ -58,7 +58,8 @@ class _PairPlotViewState extends State<PairPlotView> {
   @override
   void didUpdateWidget(covariant PairPlotView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Пересчитываем данные при изменении ключевых параметров
+    // Пересчитываем данные только при изменении выбора колонок или лимита точек,
+    // так как остальные параметры (размер, прозрачность) влияют только на отрисовку.
     if (oldWidget.dataset != widget.dataset ||
         oldWidget.state.selectedColumns != widget.state.selectedColumns ||
         oldWidget.state.maxPoints != widget.state.maxPoints) {
@@ -185,56 +186,125 @@ class _PairPlotViewState extends State<PairPlotView> {
   }
 
   /// Строит виджет scatter plot для недиагональной ячейки.
+  /// В зависимости от наличия и типа hue-колонки выбирает соответствующую реализацию.
   Widget _buildScatterCell(PairPlotCellData cellData, ThemeData theme, bool enableTooltips) {
     // Преобразуем данные для SyncFusion
     final points = <_SPoint>[];
     for (int i = 0; i < cellData.xValues.length; i++) {
       points.add(_SPoint(cellData.xValues[i], cellData.yValues[i]));
     }
+    // Если окраска не используется или нет данных – обычный scatter
+    final useHue = cellData.hueValues != null && cellData.hueValues!.isNotEmpty;
+    if (!useHue) {
+      return _buildSimpleScatter(cellData, points, theme, enableTooltips);
+    }
 
-    return Stack(
-      children: [
-        SfCartesianChart(
-          margin: EdgeInsets.zero,
-          plotAreaBorderWidth: 0,
-          primaryXAxis: NumericAxis(isVisible: false),
-          primaryYAxis: NumericAxis(isVisible: false),
-          tooltipBehavior: TooltipBehavior(
-            enable: enableTooltips,
-            format: '${cellData.xColumn}: point.x\n${cellData.yColumn}: point.y',
+    // Определяем палитру и маппер в зависимости от типа hue
+    if (cellData.hueIsNumeric) {
+      return _buildNumericHueScatter(cellData, points, theme, enableTooltips);
+    } else {
+      return _buildCategoricalHueScatter(cellData, points, theme, enableTooltips);
+    }
+  }
+  
+  /// Scatter plot без окраски (одноточечный цвет).
+  Widget _buildSimpleScatter(PairPlotCellData cellData, List<_SPoint> points, ThemeData theme, bool enableTooltips) {
+    return SfCartesianChart(
+      margin: EdgeInsets.zero,
+      plotAreaBorderWidth: 0,
+      primaryXAxis: NumericAxis(isVisible: false),
+      primaryYAxis: NumericAxis(isVisible: false),
+      tooltipBehavior: TooltipBehavior(enable: enableTooltips),
+      series: <ScatterSeries<_SPoint, double>>[
+        ScatterSeries<_SPoint, double>(
+          dataSource: points,
+          xValueMapper: (p, _) => p.x,
+          yValueMapper: (p, _) => p.y,
+          color: theme.colorScheme.primary.withValues(alpha: widget.state.pointOpacity),
+          markerSettings: MarkerSettings(
+            isVisible: true,
+            shape: DataMarkerType.circle,
+            width: widget.state.pointSize,
+            height: widget.state.pointSize,
           ),
-          series: <ScatterSeries<_SPoint, double>>[
-            ScatterSeries<_SPoint, double>(
-              dataSource: points,
-              xValueMapper: (p, _) => p.x,
-              yValueMapper: (p, _) => p.y,
-              color: theme.colorScheme.primary.withValues(alpha: widget.state.pointOpacity),
-              markerSettings: MarkerSettings(
-                isVisible: true,
-                shape: DataMarkerType.circle,
-                width: widget.state.pointSize,
-                height: widget.state.pointSize,
-              ),
-            ),
-          ],
         ),
-        // Отображение коэффициента корреляции в правом верхнем углу
-        if (widget.state.showCorrelation)
-          Positioned(
-            top: 2,
-            right: 2,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surface.withValues(alpha: 0.8),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                _correlation(cellData.xValues, cellData.yValues).toStringAsFixed(2),
-                style: TextStyle(fontSize: 10, color: theme.colorScheme.onSurface),
-              ),
-            ),
+      ],
+    );
+  }
+
+  /// Scatter plot с непрерывной цветовой шкалой (числовая hue-колонка).
+  /// Цвет точки линейно интерполируется между синим (min) и красным (max).
+  Widget _buildNumericHueScatter(PairPlotCellData cellData, List<_SPoint> points, ThemeData theme, bool enableTooltips) {
+    final hueValues = cellData.hueValues!.cast<double>();
+    final minHue = hueValues.reduce((a,b) => a < b ? a : b);
+    final maxHue = hueValues.reduce((a,b) => a > b ? a : b);
+    final range = maxHue - minHue;
+    
+    return SfCartesianChart(
+      margin: EdgeInsets.zero,
+      plotAreaBorderWidth: 0,
+      primaryXAxis: NumericAxis(isVisible: false),
+      primaryYAxis: NumericAxis(isVisible: false),
+      tooltipBehavior: TooltipBehavior(enable: enableTooltips),
+      series: <ScatterSeries<_SPoint, double>>[
+        ScatterSeries<_SPoint, double>(
+          dataSource: points,
+          xValueMapper: (p, _) => p.x,
+          yValueMapper: (p, _) => p.y,
+          pointColorMapper: (p, index) {
+            final hue = hueValues[index];
+            final t = range == 0 ? 0.5 : (hue - minHue) / range; // нормализация от 0 до 1
+            // Градиент от синего (0) к красному (1)
+            return Color.lerp(Colors.blue, Colors.red, t)!;
+          },
+          markerSettings: MarkerSettings(
+            isVisible: true,
+            shape: DataMarkerType.circle,
+            width: widget.state.pointSize,
+            height: widget.state.pointSize,
           ),
+        ),
+      ],
+    );
+  }
+
+  /// Scatter plot с дискретной цветовой шкалой (категориальная hue-колонка).
+  /// Каждой уникальной категории назначается цвет из фиксированного списка.
+  Widget _buildCategoricalHueScatter(PairPlotCellData cellData, List<_SPoint> points, ThemeData theme, bool enableTooltips) {
+    final rawHue = cellData.hueValues!.cast<String>();
+    final uniqueCategories = rawHue.toSet().toList();
+    final colorMap = <String, Color>{};
+    // Предопределённая палитра для категорий
+    final presetColors = [
+      Colors.blue, Colors.red, Colors.green, Colors.orange, Colors.purple,
+      Colors.teal, Colors.pink, Colors.brown, Colors.indigo, Colors.cyan,
+    ];
+    for (int i = 0; i < uniqueCategories.length; i++) {
+      colorMap[uniqueCategories[i]] = presetColors[i % presetColors.length];
+    }
+    
+    return SfCartesianChart(
+      margin: EdgeInsets.zero,
+      plotAreaBorderWidth: 0,
+      primaryXAxis: NumericAxis(isVisible: false),
+      primaryYAxis: NumericAxis(isVisible: false),
+      tooltipBehavior: TooltipBehavior(enable: enableTooltips),
+      series: <ScatterSeries<_SPoint, double>>[
+        ScatterSeries<_SPoint, double>(
+          dataSource: points,
+          xValueMapper: (p, _) => p.x,
+          yValueMapper: (p, _) => p.y,
+          pointColorMapper: (p, index) {
+            final cat = rawHue[index];
+            return colorMap[cat] ?? Colors.grey;
+          },
+          markerSettings: MarkerSettings(
+            isVisible: true,
+            shape: DataMarkerType.circle,
+            width: widget.state.pointSize,
+            height: widget.state.pointSize,
+          ),
+        ),
       ],
     );
   }
@@ -268,9 +338,11 @@ class _PairPlotViewState extends State<PairPlotView> {
   }
 
   /// Реализация квадратного корня с защитой от отрицательных значений.
+  /// Используется метод Ньютона для вычисления.
+  /// Написана вручную, чтобы избежать возможных конфликтов импорта dart:math
+  /// и обеспечить безопасность при отрицательном аргументе (возвращает 0).
   double sqrt(double v) {
     if (v <= 0) return 0;
-    // Метод Ньютона для вычисления квадратного корня
     double x = v;
     for (int i = 0; i < 20; i++) {
       x = 0.5 * (x + v / x);

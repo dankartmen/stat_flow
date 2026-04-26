@@ -18,7 +18,8 @@ class PairPlotDataCalculator {
   /// Данные для отображения (матрица ячеек).
   final PairPlotData data;
 
-  /// Флаг, указывающий, что данные были сэмплированы.
+  /// Флаг, указывающий, что данные были сэмплированы (уменьшены).
+  /// TODO(developer): Использовать этот флаг для отображения предупреждения пользователю.
   final bool isSampled;
 
   /// Сообщение об ошибке (если есть).
@@ -60,6 +61,21 @@ class PairPlotDataCalculator {
       );
     }
 
+    // Получаем hue-колонку, если требуется
+    DataColumn? hueColumn;
+    bool hueIsNumeric = false;
+    if (state.useHue && state.hueColumn != null) {
+      hueColumn = dataset.column(state.hueColumn!);
+      if (hueColumn == null) {
+        return PairPlotDataCalculator._(
+          PairPlotData(columnNames: [], matrix: []),
+          false,
+          'Колонка "${state.hueColumn}" для окраски не найдена',
+        );
+      }
+      hueIsNumeric = hueColumn is NumericColumn;
+    }
+
     final columnNames = selectedColumns.map((c) => c.name).toList();
     final n = columnNames.length;
 
@@ -71,6 +87,7 @@ class PairPlotDataCalculator {
 
         final xValues = <double>[];
         final yValues = <double>[];
+        final hueValues = <dynamic>[];
 
         // Собираем только пары, где оба значения не null
         final minLength = xCol.data.length < yCol.data.length
@@ -80,22 +97,36 @@ class PairPlotDataCalculator {
         for (int k = 0; k < minLength; k++) {
           final x = xCol.data[k];
           final y = yCol.data[k];
-          if (x != null && y != null) {
-            xValues.add(x);
-            yValues.add(y);
+          if (x == null || y == null) continue;
+
+          if (hueColumn != null){
+            final hue = hueColumn.data[k];
+            if (hue == null) continue; // пропускаем тройные null (x, y, hue)
+            if (hueIsNumeric) {
+              hueValues.add(hue as double);
+            } else {
+              hueValues.add(hue.toString());
+            }
           }
+          xValues.add(x);
+          yValues.add(y);
         }
 
         // Применяем сэмплирование, если нужно
         final maxPoints = state.maxPoints > 0 ? state.maxPoints : 5000;
         List<double> sampledX = xValues;
         List<double> sampledY = yValues;
+        List<dynamic> sampledHue = hueValues;
 
         if (xValues.length > maxPoints) {
           final indices = List.generate(xValues.length, (i) => i);
+          // Метод sample (предположительно, расширение для List) случайно выбирает maxPoints элементов
           final sampledIndices = indices.sample(maxPoints);
           sampledX = sampledIndices.map((i) => xValues[i]).toList();
           sampledY = sampledIndices.map((i) => yValues[i]).toList();
+          if (hueColumn != null) {
+            sampledHue = sampledIndices.map((i) => hueValues[i]).toList();
+          }
         }
 
         return PairPlotCellData(
@@ -103,13 +134,15 @@ class PairPlotDataCalculator {
           yColumn: columnNames[j],
           xValues: sampledX,
           yValues: sampledY,
+          hueValues: hueColumn != null ? sampledHue : null,
+          hueIsNumeric: hueIsNumeric,
         );
       });
     });
 
     return PairPlotDataCalculator._(
       PairPlotData(columnNames: columnNames, matrix: matrix),
-      false, // Сэмплирование обрабатывается на уровне отдельных ячеек
+      false,
       null,
     );
   }
