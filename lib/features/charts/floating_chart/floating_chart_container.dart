@@ -102,14 +102,16 @@ class _FloatingChartState extends State<FloatingChart> {
   @override
   void didUpdateWidget(covariant FloatingChart oldWidget) {
     super.didUpdateWidget(oldWidget);
-
-    if (oldWidget.data.position != widget.data.position) {
-      _position = widget.data.position;
-    }
-
-    if (oldWidget.data.size != widget.data.size) {
-      _size = widget.data.size;
-    }
+    final posChanged = oldWidget.data.position != widget.data.position;
+    final sizeChanged = oldWidget.data.size != widget.data.size;
+    final stateChanged = oldWidget.data.state != widget.data.state;
+    final selectedChanged = oldWidget.isSelected != widget.isSelected;
+    
+    debugPrint('[FloatingChart] didUpdateWidget id=${widget.data.id}: '
+        'posChanged=$posChanged, sizeChanged=$sizeChanged, stateChanged=$stateChanged, selectedChanged=$selectedChanged');
+    
+    if (posChanged) _position = widget.data.position;
+    if (sizeChanged) _size = widget.data.size;
   }
 
   /// Возвращает границы рабочей области или очень большое значение по умолчанию
@@ -212,6 +214,7 @@ class _FloatingChartState extends State<FloatingChart> {
 
   @override
   Widget build(BuildContext context) {
+    debugPrint('[FloatingChart] build id=${widget.data.id}, pos=${_position}, size=${_size}, isSelected=${widget.isSelected}');
     final theme = Theme.of(context);
     return Positioned(
       left: _position.dx,

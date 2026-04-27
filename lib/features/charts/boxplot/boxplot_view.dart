@@ -57,11 +57,14 @@ class _BoxPlotViewState extends State<BoxPlotView> {
   @override
   void didUpdateWidget(covariant BoxPlotView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final datasetChanged = oldWidget.dataset != widget.dataset;
+    final colChanged = oldWidget.state.columnName != widget.state.columnName;
+    final groupChanged = oldWidget.state.groupByColumn != widget.state.groupByColumn;
+    final maxPointsChanged = oldWidget.state.maxPoints != widget.state.maxPoints;
+
+    debugPrint('[BoxPlotView] didUpdateWidget id=${widget.key}: datasetChanged=$datasetChanged, colChanged=$colChanged, groupChanged=$groupChanged');
     // Пересчитываем данные при изменении ключевых параметров
-    if (oldWidget.state.columnName != widget.state.columnName ||
-        oldWidget.state.groupByColumn != widget.state.groupByColumn ||
-        oldWidget.state.maxPoints != widget.state.maxPoints ||
-        oldWidget.dataset != widget.dataset) {
+    if (datasetChanged || colChanged || groupChanged || maxPointsChanged) {
       _prepareData();
     }
   }

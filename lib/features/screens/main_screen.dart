@@ -255,6 +255,7 @@ class _LeftPanel extends ConsumerWidget {
   /// Колбэк для обновления состояния выбранного графика.
   final void Function(int, ChartState) onUpdateChartState;
 
+  /// {@macro left_panel}
   const _LeftPanel({
     required this.onAddChart,
     required this.onUpdateChartState,
@@ -313,53 +314,101 @@ class _LeftPanel extends ConsumerWidget {
 /// {@template canvas_area}
 /// Область канваса, содержащая все плавающие графики.
 /// Управляет выбором, перемещением, изменением размера, закрытием и полноэкранным режимом.
+/// Теперь реагирует только на список идентификаторов, а не на полные данные графиков.
 /// {@endtemplate}
 class _CanvasArea extends ConsumerWidget {
   const _CanvasArea();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final chartIds = ref.watch(chartIdsProvider);
-    final selectedId = ref.watch(selectedChartIdProvider);
+    // Читаем ТОЛЬКО список идентификаторов, который меняется только при add/remove
+    final chartIds = ref.watch(chartIdListProvider);
     final dataset = ref.watch(datasetProvider);
 
+    // Если графиков нет, но датасет загружен — показываем приглашение
+    if (chartIds.isEmpty && dataset != null) {
+      return const _EmptyCanvasState();
+    }
+
+    // Строим легковесные обёртки для каждого id
+    final children = chartIds.map((id) => _ChartItem(id: id)).toList();
+
+    return CanvasWorkspace(children: children);
+  }
+}
+
+/// {@template chart_item}
+/// Отдельный наблюдатель за одним графиком на канвасе.
+/// Получает данные конкретного графика через select и реагирует только на его изменения.
+/// Содержит логику выбора, перемещения, изменения размера, закрытия и полноэкранного режима.
+/// {@endtemplate}
+class _ChartItem extends ConsumerWidget {
+  /// Идентификатор графика, за которым наблюдает этот виджет.
+  final int id;
+
+  /// {@macro chart_item}
+  const _ChartItem({required this.id});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Подписываемся только на свой объект FloatingChartData
+    final chart = ref.watch(chartsProvider.select((list) {
+      try {
+        return list.firstWhere((c) => c.id == id);
+      } catch (_) {
+        return null;
+      }
+    }));
+
+    // Если график исчез (например, удалён), ничего не рисуем
+    if (chart == null) {
+      return const SizedBox.shrink();
+    }
+
+    // Состояние выделения
+    final selectedId = ref.watch(selectedChartIdProvider);
+    final isSelected = selectedId == id;
+
     /// Обработчик выбора графика.
-    void onSelectChart(int id) {
+    void onSelect() {
       ref.read(chartsProvider.notifier).selectChart(id);
       ref.read(selectedChartIdProvider.notifier).state = id;
     }
 
     /// Обработчик изменения позиции графика.
-    void onPositionChanged(int id, Offset pos) {
+    void onPositionChanged(Offset pos) {
       ref.read(chartsProvider.notifier).updatePosition(id, pos);
     }
 
     /// Обработчик изменения размера графика.
-    void onSizeChanged(int id, Size size) {
+    void onSizeChanged(Size size) {
       ref.read(chartsProvider.notifier).updateSize(id, size);
     }
 
     /// Обработчик закрытия графика.
     /// При закрытии выбранного графика автоматически выбирается последний из оставшихся (если есть).
-    void onCloseChart(int id) {
-      ref.read(chartsProvider.notifier).removeChart(id);
+    void onClose() {
+      // Удаляем из основного хранилища и из списка идентификаторов
+      ref.read(chartsProvider.notifier).removeChart(id, ref);
+      
+      // Если закрыт выделенный график, переключаем выделение
       if (selectedId == id) {
-        final newSelectedChart = chartIds.isNotEmpty ? chartIds.last : null;
-        ref.read(selectedChartIdProvider.notifier).state = newSelectedChart;
+        final remainingIds = ref.read(chartIdListProvider);
+        ref.read(selectedChartIdProvider.notifier).state =
+            remainingIds.isNotEmpty ? remainingIds.last : null;
       }
     }
 
     /// Обработчик открытия графика в полноэкранном режиме.
-    void onFullscreen(int id) {
-      final charts = ref.read(chartsProvider);
-      final chart = charts.firstWhere((c) => c.id == id);
+    void onFullscreen() {
+      final fullscreenChart = chart;
       Navigator.push(
         context,
         MaterialPageRoute(
           fullscreenDialog: true,
           builder: (context) => FullscreenChart(
-            title: chart.type.name,
-            child: ChartRenderer.build(chart),
+            title: fullscreenChart.type.name,
+            child: ChartRenderer.build(fullscreenChart),
           ),
         ),
       );
@@ -378,27 +427,17 @@ class _CanvasArea extends ConsumerWidget {
       return ChartRenderer.build(chart);
     }
 
-    // Если нет графиков, но датасет загружен — показываем подсказку
-    if (chartIds.isEmpty && dataset != null) {
-      return const _EmptyCanvasState();
-    }
-
-    final charts = ref.watch(chartsProvider);
-    final children = charts.map((chart) {
-      return FloatingChart(
-        key: ValueKey(chart.id),
-        data: chart,
-        isSelected: chart.id == selectedId,
-        onPositionChanged: (pos) => onPositionChanged(chart.id, pos),
-        onSizeChanged: (size) => onSizeChanged(chart.id, size),
-        onSelect: () => onSelectChart(chart.id),
-        onClose: () => onCloseChart(chart.id),
-        onFullscreen: () => onFullscreen(chart.id),
-        child: buildChartWidget(chart),
-      );
-    }).toList();
-
-    return CanvasWorkspace(children: children);
+    return FloatingChart(
+      key: ValueKey(id),
+      data: chart,
+      isSelected: isSelected,
+      onPositionChanged: onPositionChanged,
+      onSizeChanged: onSizeChanged,
+      onSelect: onSelect,
+      onClose: onClose,
+      onFullscreen: onFullscreen,
+      child: buildChartWidget(chart),
+    );
   }
 }
 

@@ -5,8 +5,6 @@ import 'bar_data_calculator.dart';
 import 'bar_models.dart';
 import 'bar_state.dart';
 
-/// Максимальное количество точек для отображения на графике (используется в калькуляторе).
-const int _kMaxChartPoints = 5000;
 
 /// {@template bar_view}
 /// Виджет для отображения столбчатой диаграммы.
@@ -57,13 +55,18 @@ class _BarViewState extends State<BarView> {
   @override
   void didUpdateWidget(covariant BarView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final datasetChanged = oldWidget.dataset != widget.dataset;
+    final colChanged = oldWidget.state.columnName != widget.state.columnName;
+    final groupChanged = oldWidget.state.groupByColumn != widget.state.groupByColumn;
+    final binChanged = oldWidget.state.binCount != widget.state.binCount;
+    final maxCategoriesChanged = oldWidget.state.maxCategories != widget.state.maxCategories;
+    final sortChanged = oldWidget.state.sortDescending != widget.state.sortDescending;
+    
+
+    debugPrint('[BarView] didUpdateWidget id=${widget.key}: datasetChanged=$datasetChanged, colChanged=$colChanged, groupChanged=$groupChanged');
+    
     // Обновляем данные только если изменились параметры, влияющие на расчёт
-    if (oldWidget.dataset != widget.dataset ||
-        oldWidget.state.columnName != widget.state.columnName ||
-        oldWidget.state.groupByColumn != widget.state.groupByColumn ||
-        oldWidget.state.binCount != widget.state.binCount ||
-        oldWidget.state.maxCategories != widget.state.maxCategories ||
-        oldWidget.state.sortDescending != widget.state.sortDescending) {
+    if (datasetChanged || colChanged || groupChanged || binChanged || maxCategoriesChanged || sortChanged) {
       _updateData();
     }
   }

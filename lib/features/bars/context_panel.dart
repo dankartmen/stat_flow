@@ -318,7 +318,7 @@ class _AddChartSection extends StatelessWidget {
             children: [
               Icon(_iconForType(type), size: 20),
               const SizedBox(width: 12),
-              Text(type.name, style: const TextStyle(overflow: TextOverflow.ellipsis)),
+              Expanded(child: Text(type.name, style: const TextStyle(overflow: TextOverflow.ellipsis))),
             ],
           ),
         );

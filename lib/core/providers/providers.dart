@@ -14,19 +14,21 @@ import '../../features/charts/histogram/histogram_state.dart';
 import '../../features/charts/line_chart/line_state.dart';
 import '../../features/charts/scatterplot/scatter_state.dart';
 
-/// Тип текущего отображаемого экрана
+/// Тип текущего отображаемого экрана.
 enum ScreenType { canvas, data }
 
+/// Кэш для хранения сэмплированных версий датасетов.
+/// Ключ — исходный полный датасет, значение — его сэмплированная копия.
 final _sampledCache = <Dataset, Dataset>{};
 
-/// Провайдер для хранения текущего загруженного датасета
+/// Провайдер для хранения текущего загруженного датасета.
 /// 
 /// Изначально равен `null`. Устанавливается после успешной загрузки CSV-файла
 /// через [CsvLoader]. Используется всеми компонентами приложения для доступа
 /// к данным и их визуализации.
 final datasetProvider = StateProvider<Dataset?>((ref) => null);
 
-/// Провайдер для доступа к "выборке" датасета
+/// Провайдер для доступа к "выборке" датасета.
 /// Предоставляет оптимизированную версию датасета для быстрого отображения в графиках и таблицах.
 final sampledDatasetProvider = Provider<Dataset?>((ref) {
   final full = ref.watch(datasetProvider);
@@ -55,17 +57,17 @@ final sampledDatasetProvider = Provider<Dataset?>((ref) {
   return sampled;
 });
 
-/// Провайдер для доступа к полному датасету
-/// Используется в компонентах, которым необходим полный набор данных для анализа 
+/// Провайдер для доступа к полному датасету.
+/// Используется в компонентах, которым необходим полный набор данных для анализа.
 final fullDatasetProvider = Provider<Dataset?>((ref) => ref.watch(datasetProvider));
 
-/// Провайдер для управления состоянием правой панели с данными
+/// Провайдер для управления состоянием правой панели с данными.
 /// 
 /// Определяет, развернута ли правая панель (`true`) или свернута (`false`).
 /// Используется для анимации сворачивания/разворачивания панели с колонками датасета.
 final rightPanelExpandedProvider = StateProvider<bool>((ref) => true);
 
-/// Провайдер для хранения идентификатора выбранного графика
+/// Провайдер для хранения идентификатора выбранного графика.
 /// 
 /// Хранит `id` текущего активного графика. Используется для:
 /// - Подсветки выбранного графика
@@ -73,28 +75,15 @@ final rightPanelExpandedProvider = StateProvider<bool>((ref) => true);
 /// - Определения, какой график получает фокус при взаимодействии
 final selectedChartIdProvider = StateProvider.autoDispose<int?>((ref) => null);
 
-/// Провайдер для получения списка идентификаторов всех графиков
-/// Используется для:
-/// - Быстрой проверки наличия графиков на канвасе
-/// - Управления порядком отображения графиков (выбор/фокус)
-/// - Определения занятых полей в датасете (через usedFieldsProvider)
-/// При загрузке нового графика автоматически обновляется список идентификаторов.
-/// При удалении графика его идентификатор удаляется из списка.
-final chartIdsProvider = Provider<List<int>>((ref) {
-  final charts = ref.watch(chartsProvider);
-  return charts.map((c) => c.id).toList();
-});
-
-/// Провайдер текущего экрана
+/// Провайдер текущего экрана.
 /// 
 /// Хранит тип текущего отображаемого экрана (канвас или данные). Используется для
 /// переключения между основным рабочим пространством (канвасом) и панелью с данными (список колонок, предпросмотр данных).
 /// При загрузке приложения по умолчанию установлен на `ScreenType.canvas`.
 final currentScreenProvider = StateProvider.autoDispose<ScreenType>((ref) => ScreenType.canvas);
 
-
 /// {@template charts_notifier}
-/// Управляет списком плавающих графиков на канвасе
+/// Управляет списком плавающих графиков на канвасе.
 /// 
 /// Отвечает за:
 /// - Добавление новых графиков
@@ -107,7 +96,14 @@ class ChartsNotifier extends StateNotifier<List<FloatingChartData>> {
   /// {@macro charts_notifier}
   ChartsNotifier() : super([]);
 
-  /// Добавляет новый график в список
+  /// Добавляет новый график в список.
+  /// 
+  /// Принимает:
+  /// - [chart] — данные нового графика.
+  /// - [ref] — объект [WidgetRef] для доступа к провайдерам.
+  /// 
+  /// Для большинства типов графиков используется сэмплированный датасет,
+  /// за исключением тепловой карты (heatmap), для которой требуется полный датасет.
   void addChart(FloatingChartData chart, WidgetRef ref) {
     final sampled = ref.read(sampledDatasetProvider);
 
@@ -117,18 +113,20 @@ class ChartsNotifier extends StateNotifier<List<FloatingChartData>> {
       updatedChart = chart.copyWith(dataset: chart.dataset);
     }
     else{
-      log("Передан сэплированный датасет");
+      log("Передан сэмплированный датасет");
       updatedChart = chart.copyWith(dataset: sampled ?? chart.dataset);
     }
     state = [...state, updatedChart];
+    ref.read(chartIdListProvider.notifier).addId(updatedChart.id);
   }
 
-  /// Удаляет график с указанным идентификатором
-  void removeChart(int id) {
+  /// Удаляет график с указанным идентификатором.
+  void removeChart(int id, WidgetRef ref) {
     state = state.where((c) => c.id != id).toList();
+    ref.read(chartIdListProvider.notifier).removeId(id);
   }
 
-  /// Обновляет позицию графика на канвасе
+  /// Обновляет позицию графика на канвасе.
   void updatePosition(int id, Offset position) {
     state = [
       for (final chart in state)
@@ -136,7 +134,7 @@ class ChartsNotifier extends StateNotifier<List<FloatingChartData>> {
     ];
   }
 
-  /// Обновляет размер графика
+  /// Обновляет размер графика.
   void updateSize(int id, Size size) {
     state = [
       for (final chart in state)
@@ -144,9 +142,9 @@ class ChartsNotifier extends StateNotifier<List<FloatingChartData>> {
     ];
   }
 
-  /// Обновляет внутреннее состояние графика (выбранные колонки, параметры)
+  /// Обновляет внутреннее состояние графика (выбранные колонки, параметры).
   void updateChartState(int id, ChartState newState) {
-    log('[ChartsNotifier.updateChartState] id=$id, newState type=${newState.runtimeType}, groupByColumn=${(newState is BarState) ? newState.groupByColumn : 'N/A'}');
+    log('[ChartsNotifier.updateChartState] id=$id, newState type=${newState.runtimeType}');
     state = [
       for (final chart in state)
         if (chart.id == id) chart.copyWith(state: newState) else chart
@@ -154,7 +152,7 @@ class ChartsNotifier extends StateNotifier<List<FloatingChartData>> {
     log('[ChartsNotifier.updateChartState] обновлено состояние графика');
   }
 
-  /// Перемещает график в конец списка (делает его выбранным/поверх других)
+  /// Перемещает график в конец списка (делает его выбранным/поверх других).
   void selectChart(int id) {
     final index = state.indexWhere((c) => c.id == id);
     if (index == -1 || index == state.length - 1) return;
@@ -163,7 +161,32 @@ class ChartsNotifier extends StateNotifier<List<FloatingChartData>> {
   }
 }
 
-/// Провайдер для доступа к списку графиков
+/// Провайдер, хранящий только идентификаторы графиков.
+/// Меняется только при добавлении/удалении графика, но не при изменении его состояния.
+final chartIdListProvider = StateNotifierProvider<ChartIdListNotifier, List<int>>((_) {
+  return ChartIdListNotifier();
+});
+
+/// {@template chart_id_list_notifier}
+/// Управляет списком идентификаторов графиков на канвасе.
+/// Используется для минимизации перестроений при изменении состояния графиков.
+/// {@endtemplate}
+class ChartIdListNotifier extends StateNotifier<List<int>> {
+  /// {@macro chart_id_list_notifier}
+  ChartIdListNotifier() : super([]);
+
+  /// Добавляет идентификатор [id] в конец списка.
+  void addId(int id) {
+    state = [...state, id];
+  }
+
+  /// Удаляет идентификатор [id] из списка.
+  void removeId(int id) {
+    state = state.where((i) => i != id).toList();
+  }
+}
+
+/// Провайдер для доступа к списку графиков.
 /// 
 /// Предоставляет методы для управления графиками через [ChartsNotifier].
 /// Используется всеми компонентами, которым необходимо:
@@ -175,7 +198,7 @@ final chartsProvider = StateNotifierProvider<ChartsNotifier, List<FloatingChartD
 });
 
 /// {@template used_fields_provider}
-/// Провайдер для вычисления множества полей датасета, используемых в графиках
+/// Провайдер для вычисления множества полей датасета, используемых в графиках.
 /// 
 /// Анализирует все текущие графики и собирает имена колонок, которые:
 /// - Используются как основная переменная (гистограмма, ящик с усами)
