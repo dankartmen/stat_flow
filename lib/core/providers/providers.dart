@@ -13,6 +13,8 @@ import '../../features/charts/chart_state.dart';
 import '../../features/charts/histogram/histogram_state.dart';
 import '../../features/charts/line_chart/line_state.dart';
 import '../../features/charts/scatterplot/scatter_state.dart';
+import '../../features/screens/welcome_dialog.dart';
+import '../services/image_api_service.dart';
 
 /// Тип текущего отображаемого экрана.
 enum ScreenType { canvas, data }
@@ -226,4 +228,31 @@ final usedFieldsProvider = Provider.autoDispose<Set<String>>((ref) {
     }
   }
   return used;
+});
+
+/// Идентификатор загруженного датасета изображений (хранится в SharedPreferences).
+final imageDatasetIdProvider = StateProvider<String?>((ref) => null);
+
+/// Тип активной лабораторной работы: табличные данные или изображения.
+/// Используется для переключения режимов работы приложения.
+final activeLabProvider = StateProvider<LabType?>((ref) => null);
+
+/// Провайдер для табличных данных (CSV/датасет).
+/// Заменяет старый [datasetProvider] при работе с табличными лабораторными.
+final tabularDatasetProvider = StateProvider<Dataset?>((ref) => null);
+
+/// Провайдер для информации о датасете изображений (метаданные: имя, классы, пути).
+/// Используется вместо загрузки всех изображений в память.
+final imageDatasetInfoProvider = StateProvider<DatasetInfo?>((ref) => null);
+
+/// Провайдер для доступа к текущему активному датасету в зависимости от выбранной лабораторной.
+/// Возвращает:
+/// - [Dataset] для табличных лабораторных
+/// - [DatasetInfo] для лабораторных с изображениями
+/// - `null`, если лабораторная не выбрана или данные не загружены
+final currentDatasetProvider = Provider<Object?>((ref) {
+  final lab = ref.watch(activeLabProvider);
+  if (lab == LabType.tabular) return ref.watch(tabularDatasetProvider);
+  if (lab == LabType.image) return ref.watch(imageDatasetInfoProvider);
+  return null;
 });

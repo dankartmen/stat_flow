@@ -3,7 +3,6 @@ import 'package:stat_flow/core/dataset/dataset.dart';
 import 'package:stat_flow/features/table/grid/syncfusion_grid_data.dart';
 import 'package:syncfusion_flutter_datagrid/datagrid.dart';
 
-import '../../insights/insights_panel.dart';
 import '../../statistics/widgets/statistic_widget.dart';
 
 /// {@template full_table_screen}
@@ -62,14 +61,13 @@ class _FullTableScreenState extends State<FullTableScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return DefaultTabController(
-      length: 3,
+      length: 2,
       child: Column(
         children: [
           const TabBar(
             tabs: [
               Tab(text: 'Данные'),
               Tab(text: 'Статистика'),
-              Tab(text: 'Выводы'),
             ],
           ),
           Expanded(
@@ -106,7 +104,6 @@ class _FullTableScreenState extends State<FullTableScreen> {
                   ),
                 ),
                 StatisticsTable(dataset: widget.dataset),
-                InsightsPanel(dataset: widget.dataset),
               ],
             ),
           ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:stat_flow/core/dataset/dataset.dart';
 import 'package:stat_flow/features/canvas/canvas_workspace.dart';
 import 'package:stat_flow/features/charts/chart_renderer.dart';
@@ -12,6 +13,7 @@ import '../charts/chart_type.dart';
 import '../charts/pairplot/pairplot_state.dart';
 import '../charts/pairplot/pairplot_view.dart';
 import '../charts/scatterplot/scatter_state.dart';
+import '../lab2/image_lab_screen.dart';
 import '../table/widget/full_table_screen.dart';
 import '../charts/floating_chart/floating_chart_container.dart';
 import '../charts/floating_chart/floating_chart_data.dart';
@@ -46,33 +48,44 @@ class MainScreen extends ConsumerStatefulWidget {
 /// {@endtemplate}
 class _MainScreenState extends ConsumerState<MainScreen> {
   /// Счетчик для генерации уникальных идентификаторов графиков.
+  /// Увеличивается при каждом создании нового графика.
   int _nextChartId = 0;
 
   @override
   void initState() {
     super.initState();
-    // Показываем приветственный диалог после первой отрисовки
+    // Показываем приветственный диалог после первой отрисовки.
+    // Используем addPostFrameCallback, чтобы избежать вызова build до завершения инициализации.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _showWelcomeDialog();
+      _checkFirstLaunch();
     });
   }
 
-  /// Отображает приветственный диалог при первом запуске.
-  void _showWelcomeDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => WelcomeDialog(
-        onStart: () {},
-        onLoadDataset: _loadDataset,
-      ),
-    );
+  /// Проверяет, запускалось ли приложение ранее, и при необходимости показывает диалог выбора лабораторной.
+  /// - Если в SharedPreferences нет ключа 'active_lab' – первый запуск: показываем [WelcomeDialog].
+  /// - Иначе загружаем сохранённую лабораторную и устанавливаем в провайдер.
+  Future<void> _checkFirstLaunch() async {
+    final prefs = await SharedPreferences.getInstance();
+    final activeLabName = prefs.getString('active_lab');
+    if (activeLabName == null) {
+      // Первый запуск: показываем диалог выбора
+      final lab = await WelcomeDialog.show(context);
+      if (lab != null) {
+        ref.read(activeLabProvider.notifier).state = lab;
+      }
+    } else {
+      // Загружаем сохранённую лабораторную
+      final lab = LabType.values.firstWhere((e) => e.name == activeLabName);
+      ref.read(activeLabProvider.notifier).state = lab;
+    }
   }
 
   /// Загружает датасет через экран предпросмотра таблицы.
   /// 
-  /// После успешной загрузки:
-  /// - Сохраняет датасет в провайдере
+  /// Принимает:
+  /// - Результат навигации: объект [Dataset] при успешной загрузке.
+  /// 
+  /// После успешной загрузки сохраняет датасет в [tabularDatasetProvider].
   Future<void> _loadDataset() async {
     final result = await Navigator.push(
       context,
@@ -80,7 +93,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     );
 
     if (result != null && result is Dataset) {
-      ref.read(datasetProvider.notifier).state = result;
+      ref.read(tabularDatasetProvider.notifier).state = result;
     }
   }
 
@@ -97,7 +110,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   /// - Pair Plot (pairplotchart): фиксированный размер 700x600
   /// - Остальные: стандартный размер 520x380
   void _addChart(ChartType type) {
-    final dataset = ref.read(datasetProvider);
+    final dataset = ref.read(tabularDatasetProvider);
     if (dataset == null) return;
 
     final plugin = ChartRegistry.get(type);
@@ -141,10 +154,14 @@ class _MainScreenState extends ConsumerState<MainScreen> {
 
   /// Обработчик тапа на ячейку Pair Plot.
   /// 
+  /// Принимает:
+  /// - [xCol] – имя колонки для оси X.
+  /// - [yCol] – имя колонки для оси Y.
+  /// 
   /// Создаёт новый scatter plot для выбранной пары колонок
   /// и добавляет его на канвас.
   void _onPairPlotCellTap(String xCol, String yCol) {
-    final dataset = ref.read(datasetProvider);
+    final dataset = ref.read(tabularDatasetProvider);
     if (dataset == null) return;
 
     final newScatter = FloatingChartData(
@@ -197,31 +214,43 @@ class _MainScreenState extends ConsumerState<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final datasetExists = ref.watch(datasetProvider) != null;
+    final activeLab = ref.watch(activeLabProvider);
+
+    // Если лабораторная ещё не выбрана, показываем заглушку (хотя WelcomeDialog должен был выбрать)
+    if (activeLab == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    // Для изображений – отдельный экран
+    if (activeLab == LabType.image) {
+      return const ImageLabScreen();
+    }
+
+    // Для табличных данных – старый интерфейс (с небольшими правками)
+    return _buildTabularInterface();
+  }
+
+  /// Строит интерфейс для работы с табличными данными (CSV).
+  /// 
+  /// Возвращает [Scaffold] с верхней панелью, левой панелью управления
+  /// и областью канваса/таблицы.
+  Widget _buildTabularInterface() {
+    final datasetExists = ref.watch(tabularDatasetProvider) != null;
     final currentScreen = ref.watch(currentScreenProvider);
 
     return Scaffold(
       body: Column(
         children: [
-          // Верхняя панель навигации
-          TopNavBar(
-            onLoadDataset: _loadDataset,
-            onShowInfo: _showInfoDialog,
-            currentScreen: currentScreen,
-            onScreenChanged: (screen) =>
-                ref.read(currentScreenProvider.notifier).state = screen,
-          ),
+          const TopNavBar(),
           Expanded(
             child: Row(
               children: [
-                // Левая контекстная панель (настройки выбранного графика)
                 _LeftPanel(
                   onAddChart: _addChart,
                   onUpdateChartState: (id, newState) {
                     ref.read(chartsProvider.notifier).updateChartState(id, newState);
                   },
                 ),
-                // Центральная область с канвасом или полноэкранной таблицей
                 Expanded(
                   child: IndexedStack(
                     index: currentScreen == ScreenType.canvas ? 0 : 1,
@@ -263,7 +292,7 @@ class _LeftPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final dataset = ref.watch(datasetProvider);
+    final dataset = ref.watch(tabularDatasetProvider);
     final selectedId = ref.watch(selectedChartIdProvider);
 
     // Выбираем только стабильные данные: id, type, dataset (позиция/размер не важны для панели)
@@ -317,13 +346,14 @@ class _LeftPanel extends ConsumerWidget {
 /// Теперь реагирует только на список идентификаторов, а не на полные данные графиков.
 /// {@endtemplate}
 class _CanvasArea extends ConsumerWidget {
+  /// {@macro canvas_area}
   const _CanvasArea();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Читаем ТОЛЬКО список идентификаторов, который меняется только при add/remove
     final chartIds = ref.watch(chartIdListProvider);
-    final dataset = ref.watch(datasetProvider);
+    final dataset = ref.watch(tabularDatasetProvider);
 
     // Если графиков нет, но датасет загружен — показываем приглашение
     if (chartIds.isEmpty && dataset != null) {
@@ -446,6 +476,7 @@ class _ChartItem extends ConsumerWidget {
 /// Отображает приглашение добавить первый график.
 /// {@endtemplate}
 class _EmptyCanvasState extends StatelessWidget {
+  /// {@macro empty_canvas_state}
   const _EmptyCanvasState();
 
   @override
@@ -472,11 +503,12 @@ class _EmptyCanvasState extends StatelessWidget {
 /// Используется при переключении на вкладку "Таблица" в верхней панели.
 /// {@endtemplate}
 class _FullTableArea extends ConsumerWidget {
+  /// {@macro full_table_area}
   const _FullTableArea();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final dataset = ref.watch(datasetProvider);
+    final dataset = ref.watch(tabularDatasetProvider);
     return FullTableScreen(dataset: dataset!);
   }
 }
