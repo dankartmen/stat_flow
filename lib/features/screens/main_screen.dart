@@ -23,15 +23,15 @@ import 'welcome_dialog.dart';
 
 /// {@template main_screen}
 /// Главный экран приложения Stat Flow.
-/// 
+///
 /// Представляет собой рабочую область с:
 /// - Левая боковая панель (контекстное меню для добавления и настройки графиков)
 /// - Центральный канвас для размещения и взаимодействия с графиками
 /// - Верхняя панель навигации (загрузка данных, переключение между канвасом и таблицей)
-/// 
+///
 /// Экран управляет жизненным циклом графиков, их созданием,
 /// выбором и открытием в полноэкранном режиме.
-/// 
+///
 /// TODO: Левая панель должна быть только при типе отображаемого графика Canvas
 /// {@endtemplate}
 class MainScreen extends ConsumerStatefulWidget {
@@ -81,10 +81,10 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   }
 
   /// Загружает датасет через экран предпросмотра таблицы.
-  /// 
+  ///
   /// Принимает:
   /// - Результат навигации: объект [Dataset] при успешной загрузке.
-  /// 
+  ///
   /// После успешной загрузки сохраняет датасет в [tabularDatasetProvider].
   Future<void> _loadDataset() async {
     final result = await Navigator.push(
@@ -98,13 +98,13 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   }
 
   /// Создаёт новый график указанного типа.
-  /// 
+  ///
   /// Процесс создания:
   /// 1. Получает плагин для типа графика из реестра
   /// 2. Создаёт начальное состояние графика
   /// 3. Генерирует уникальный ID и начальную позицию
   /// 4. Добавляет график в список и выбирает его
-  /// 
+  ///
   /// Особое поведение для разных типов графиков:
   /// - Тепловая карта (heatmap): размер вычисляется динамически на основе количества колонок
   /// - Pair Plot (pairplotchart): фиксированный размер 700x600
@@ -153,11 +153,11 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   }
 
   /// Обработчик тапа на ячейку Pair Plot.
-  /// 
+  ///
   /// Принимает:
   /// - [xCol] – имя колонки для оси X.
   /// - [yCol] – имя колонки для оси Y.
-  /// 
+  ///
   /// Создаёт новый scatter plot для выбранной пары колонок
   /// и добавляет его на канвас.
   void _onPairPlotCellTap(String xCol, String yCol) {
@@ -231,7 +231,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   }
 
   /// Строит интерфейс для работы с табличными данными (CSV).
-  /// 
+  ///
   /// Возвращает [Scaffold] с верхней панелью, левой панелью управления
   /// и областью канваса/таблицы.
   Widget _buildTabularInterface() {
@@ -241,7 +241,11 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     return Scaffold(
       body: Column(
         children: [
-          const TopNavBar(),
+          TopNavBar(
+            currentScreen: currentScreen,
+            onScreenChanged: (screen) =>
+                ref.read(currentScreenProvider.notifier).state = screen,
+          ),
           Expanded(
             child: Row(
               children: [
@@ -420,7 +424,7 @@ class _ChartItem extends ConsumerWidget {
     void onClose() {
       // Удаляем из основного хранилища и из списка идентификаторов
       ref.read(chartsProvider.notifier).removeChart(id, ref);
-      
+
       // Если закрыт выделенный график, переключаем выделение
       if (selectedId == id) {
         final remainingIds = ref.read(chartIdListProvider);

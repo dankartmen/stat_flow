@@ -128,7 +128,10 @@ class _ImageLabScreenState extends ConsumerState<ImageLabScreen> {
 
   /// Запускает обучение модели на текущем датасете.
   /// Перед запуском проверяет, не существует ли уже эксперимента с такими же гиперпараметрами.
-  /// После запуска обучения необходимо обновить список экспериментов (TODO).
+  /// - Если эксперимент существует – сразу показывает диалог с деталями.
+  /// - Если нет – запускает новое обучение, затем отображает результат.
+  /// 
+  /// Так как обучение на сервере синхронное (блокирующее), результат доступен сразу после вызова.
   Future<void> _startTraining() async {
     if (_info == null) return;
     setState(() => _training = true);
@@ -172,13 +175,18 @@ class _ImageLabScreenState extends ConsumerState<ImageLabScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(child: Text(_error!))
+              ? Column(
+                  children: [
+                    const TopNavBar(), // Верхняя панель остаётся для навигации
+                    Center(child: Text(_error!)),
+                  ],
+                )
               : SingleChildScrollView(
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      TopNavBar(),
+                      const TopNavBar(),
                       if (_info == null)
                         ElevatedButton.icon(
                           icon: const Icon(Icons.upload_file),
@@ -201,20 +209,19 @@ class _ImageLabScreenState extends ConsumerState<ImageLabScreen> {
                             ),
                           ),
                         ),
-                        if (_info != null) ...[
-                          const SizedBox(height: 16),
-                          buildSection(
-                            context: context,
-                            title: 'Гиперпараметры модели',
-                            icon: Icons.tune,
-                            child: _buildHyperparamsForm(),
-                          ),
-                          const SizedBox(height: 16),
-                          ElevatedButton(
-                            onPressed: _training ? null : _startTraining,
-                            child: _training ? const CircularProgressIndicator() : const Text('Обучить модель'),
-                          ),
-                        ],
+                        const SizedBox(height: 16),
+                        // Секция гиперпараметров с использованием стандартных компонентов из controls_style
+                        buildSection(
+                          context: context,
+                          title: 'Гиперпараметры модели',
+                          icon: Icons.tune,
+                          child: _buildHyperparamsForm(),
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: _training ? null : _startTraining,
+                          child: _training ? const CircularProgressIndicator() : const Text('Обучить модель'),
+                        ),
                       ],
                     ],
                   ),
@@ -222,6 +229,8 @@ class _ImageLabScreenState extends ConsumerState<ImageLabScreen> {
     );
   }
 
+  /// Строит форму для настройки всех гиперпараметров модели.
+  /// Использует универсальные виджеты [buildDropdown] для выбора значений.
   Widget _buildHyperparamsForm() {
     return Column(
       children: [
@@ -234,7 +243,7 @@ class _ImageLabScreenState extends ConsumerState<ImageLabScreen> {
             if (val != null) {
               setState(() {
                 _hyperparams.convLayers = val;
-                // Автоматически корректируем фильтры
+                // Автоматически корректируем фильтры в зависимости от количества слоёв
                 if (val == 2) {
                   _hyperparams.filters = [32, 64];
                 } else {
